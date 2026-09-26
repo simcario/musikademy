@@ -16,7 +16,7 @@
     "emulators": "firebase emulators:start",
     "seed": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/seed.ts",
     "bootstrap-admin": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/bootstrap-admin.ts",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage"
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage --project musikademy-56b76"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
