@@ -7,6 +7,9 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- preload CommonJS caricato con node --require
 const fs = require("fs");
 
+// Segnala a next.config.ts di attivare la configurazione webpack per exFAT.
+process.env.VOCALIA_EXFAT = "1";
+
 function toEinval(err) {
   if (err && err.code === "EISDIR" && err.syscall === "readlink") {
     err.code = "EINVAL";

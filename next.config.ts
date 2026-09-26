@@ -27,11 +27,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Il progetto vive su un disco exFAT (niente symlink/junction): webpack non deve risolvere symlink.
-  webpack(config) {
-    config.resolve.symlinks = false;
-    return config;
-  },
+  // Solo in locale su disco exFAT (npm run dev:local / build:local): webpack non deve risolvere symlink.
+  // Altrove la chiave `webpack` non esiste, perché con Turbopack (build standard, App Hosting) la farebbe fallire.
+  ...(process.env.VOCALIA_EXFAT === "1"
+    ? {
+        webpack(config: { resolve: { symlinks?: boolean } }) {
+          config.resolve.symlinks = false;
+          return config;
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;
