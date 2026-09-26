@@ -33,28 +33,9 @@ npm install
 cp .env.example .env.local   # poi compila i valori (vedi sotto)
 ```
 
-## Configurazione Firebase (una tantum)
+## Configurazione Firebase
 
-1. **Authentication** → Sign-in method → abilita **Email/Password** (docenti/admin) e **Google** (studenti).
-   Settings → *Authorized domains*: aggiungi il dominio di produzione (App Hosting / dominio personalizzato),
-   altrimenti l'accesso con Google fallisce con `auth/unauthorized-domain`.
-   (Opzionale) Templates → personalizza in italiano l'email di reset password (invito dei docenti).
-2. **Firestore Database** → crea il database (modalità production, regione `europe-west`).
-3. **Storage** → crea il bucket.
-4. Pubblica rules e indici:
-   ```bash
-   npx firebase login
-   npm run deploy:rules
-   ```
-5. **Primo amministratore** (serve una chiave service account, *Impostazioni progetto → Account di servizio → Genera nuova chiave*,
-   salvata fuori dal repository):
-   ```bash
-   # PowerShell
-   $env:GOOGLE_APPLICATION_CREDENTIALS="C:\percorso\sicuro\service-account.json"
-   npm run bootstrap-admin -- --email tua@email.it --name Nome --surname Cognome
-   ```
-   Lo script stampa un link per impostare la password. Da quel momento studenti e docenti
-   si creano dall'app.
+Vedi [Deploy → A. Configurazione iniziale](#a-configurazione-iniziale-una-volta-sola): stessi passi per ambiente locale e produzione.
 
 ## Variabili d'ambiente
 
@@ -100,19 +81,75 @@ npm run build        # oppure build:local su exFAT
 
 ## Deploy (Firebase App Hosting)
 
-1. Carica il progetto su un repository GitHub.
-2. Console Firebase → **App Hosting** → *Crea backend* → collega il repository `simcario/musikademy`, branch `main`, cartella radice `/`.
-3. `apphosting.yaml` contiene già le variabili pubbliche. Il service account del backend
-   usa le credenziali di default per l'Admin SDK: concedigli il ruolo
-   **Firebase Authentication Admin** (per creare utenti) se non già presente, e il ruolo
-   **Service Account Token Creator** (`roles/iam.serviceAccountTokenCreator`) *su sé stesso*:
-   serve a firmare i custom token degli inviti Google. Senza, l'apertura del link d'invito dà errore 500.
-   ```bash
-   gcloud iam service-accounts add-iam-policy-binding firebase-app-hosting-compute@musikademy-56b76.iam.gserviceaccount.com \
-     --member="serviceAccount:firebase-app-hosting-compute@musikademy-56b76.iam.gserviceaccount.com" \
-     --role="roles/iam.serviceAccountTokenCreator"
+Il codice su GitHub (`simcario/musikademy`, branch `main`) è la sorgente del deploy:
+**ogni `git push` su `main` pubblica automaticamente una nuova versione.**
+
+### A. Configurazione iniziale (una volta sola)
+
+1. **Login della CLI** (apre il browser):
+   ```powershell
+   npx firebase login
    ```
-4. Ogni push sul branch collegato fa il deploy. Rules/indici: `npm run deploy:rules`.
+2. **Servizi Firebase** — Console → progetto `musikademy-56b76`:
+   - *Authentication → Metodo di accesso*: abilita **Email/password** e **Google**
+   - *Firestore Database*: crea il database (produzione, regione `europe-west`)
+   - *Storage*: crea il bucket
+3. **Backend App Hosting** — Console → *App Hosting → Crea backend*:
+   repository `simcario/musikademy`, branch `main`, cartella radice `/`, deploy automatici **attivi**.
+   Annota l'**ID del backend** (lo rivedi con `npx firebase apphosting:backends:list`).
+4. **Permessi dell'account di servizio** del backend — in [Cloud Shell](https://console.cloud.google.com/?project=musikademy-56b76)
+   (icona `>_` in alto a destra). Servono all'Admin SDK per creare utenti, assegnare ruoli,
+   scrivere su Firestore e firmare i token degli inviti:
+   ```bash
+   SA=firebase-app-hosting-compute@musikademy-56b76.iam.gserviceaccount.com
+   gcloud projects add-iam-policy-binding musikademy-56b76 --member="serviceAccount:$SA" --role="roles/firebaseauth.admin" --condition=None
+   gcloud projects add-iam-policy-binding musikademy-56b76 --member="serviceAccount:$SA" --role="roles/datastore.user" --condition=None
+   gcloud iam service-accounts add-iam-policy-binding $SA --project musikademy-56b76      --member="serviceAccount:$SA" --role="roles/iam.serviceAccountTokenCreator"
+   ```
+5. **Rules e indici** Firestore/Storage:
+   ```powershell
+   npm run deploy:rules
+   ```
+   Gli indici impiegano qualche minuto a costruirsi (*Firestore → Indici*): finché non sono pronti
+   alcune liste mostrano "configurazione del database incompleta".
+6. **Dominio autorizzato** — *Authentication → Impostazioni → Domini autorizzati*: aggiungi il dominio
+   del backend (es. `musikademy--musikademy-56b76.europe-west4.hosted.app`, lo vedi nella pagina App Hosting)
+   ed eventuali domini personalizzati. Senza, l'accesso con Google fallisce in produzione.
+7. **Primo amministratore** (chiave service account da *Impostazioni progetto → Account di servizio →
+   Genera nuova chiave*, salvata **fuori** dal progetto):
+   ```powershell
+   $env:GOOGLE_APPLICATION_CREDENTIALS="C:percorsosicuroservice-account.json"
+   npm run bootstrap-admin -- --email tua@email.it --name Nome --surname Cognome
+   ```
+
+### B. Pubblicare una nuova versione (ogni volta)
+
+1. Verifica in locale:
+   ```powershell
+   npm run typecheck; npm run lint; npm test; npm run build:local
+   ```
+2. Commit e push:
+   ```powershell
+   git add -A
+   git commit -m "Descrizione della modifica"
+   git push
+   ```
+3. Segui il rollout in *Console → App Hosting → backend → Rollout* (5–10 minuti).
+   In alternativa, dalla CLI:
+   ```powershell
+   npx firebase apphosting:rollouts:create <ID_BACKEND> --git-branch main --project musikademy-56b76
+   ```
+4. Se hai modificato `firestore.rules`, `storage.rules` o `firestore.indexes.json`, pubblicali a parte:
+   ```powershell
+   npm run deploy:rules
+   ```
+
+### C. Se qualcosa va storto
+
+- **Build fallita**: *App Hosting → Rollout → log di build*. Riproduci in locale con `npm run build:local`.
+- **Errori a runtime** (500 sulle API docente, inviti): *App Hosting → Log* oppure Cloud Logging.
+  Un `PERMISSION_DENIED` / `iam.serviceAccounts.signBlob` indica che manca un permesso del punto A.4.
+- **Tornare alla versione precedente**: *App Hosting → Rollout* → scegli un rollout precedente → *Rollback*.
 
 ## Struttura
 
