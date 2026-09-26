@@ -101,7 +101,7 @@ npm run build        # oppure build:local su exFAT
 ## Deploy (Firebase App Hosting)
 
 1. Carica il progetto su un repository GitHub.
-2. Console Firebase → **App Hosting** → *Crea backend* → collega il repository, cartella radice `vocalia`.
+2. Console Firebase → **App Hosting** → *Crea backend* → collega il repository `simcario/musikademy`, branch `main`, cartella radice `/`.
 3. `apphosting.yaml` contiene già le variabili pubbliche. Il service account del backend
    usa le credenziali di default per l'Admin SDK: concedigli il ruolo
    **Firebase Authentication Admin** (per creare utenti) se non già presente, e il ruolo
