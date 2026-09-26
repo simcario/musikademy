@@ -1,0 +1,32 @@
+# Firebase App Hosting — https://firebase.google.com/docs/app-hosting/configure
+runConfig:
+  minInstances: 0
+  maxInstances: 4
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # Config web pubblica (non segreta: la sicurezza è nelle Security Rules).
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyCmO0_oEPRGFw5e6iqt3ziIjydYZc1LER8
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: musikademy-56b76.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: musikademy-56b76
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: musikademy-56b76.firebasestorage.app
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "347060011812"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:347060011812:web:118d98f0a0d1dcb69ea9b1
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: G-YSNRZN6GTY
+    availability: [BUILD, RUNTIME]
+  # Admin SDK: su App Hosting usa le credenziali del service account del backend (nessun segreto).

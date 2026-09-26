@@ -1,0 +1,21 @@
+/** Chiavi TanStack Query centralizzate: invalidazione coerente dopo le mutazioni. */
+export const qk = {
+  me: (uid: string) => ["me", uid] as const,
+  student: (uid: string) => ["students", uid] as const,
+  studentNotes: (uid: string) => ["studentNotes", uid] as const,
+  students: (filters?: unknown) => ["students", "list", filters ?? {}] as const,
+  activeStudents: () => ["students", "active"] as const,
+  courses: () => ["courses"] as const,
+  teachers: () => ["teachers"] as const,
+  lessons: (scope: unknown) => ["lessons", scope] as const,
+  lesson: (id: string) => ["lessons", "one", id] as const,
+  attendance: (scope: unknown) => ["attendance", scope] as const,
+  materials: (scope: unknown) => ["materials", scope] as const,
+  material: (id: string) => ["materials", "one", id] as const,
+  materialUrl: (path: string) => ["materials", "url", path] as const,
+  assignments: (scope: unknown) => ["assignments", scope] as const,
+  payments: (scope: unknown) => ["payments", scope] as const,
+  announcements: (scope: unknown) => ["announcements", scope] as const,
+  stats: (name: string) => ["stats", name] as const,
+  search: (q: string) => ["search", q] as const,
+};

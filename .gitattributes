@@ -1,0 +1,5 @@
+# Fine riga LF nel repository (il progetto è su Windows, il build su Linux)
+* text=auto eol=lf
+*.png binary
+*.webp binary
+*.ico binary

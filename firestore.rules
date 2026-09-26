@@ -1,0 +1,199 @@
+rules_version = '2';
+
+// VOCALIA — Firestore Security Rules
+// Principio: negato per default. Il ruolo arriva dal custom claim `role` (ADR D1),
+// impostato solo dall'Admin SDK. Lo studente accede esclusivamente ai propri dati.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────────────────────── helper ─────────────────────────
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
+    function isAdmin() { return role() == 'admin'; }
+    // Estendere qui per ruoli futuri (assistant, secretary…).
+    function isStaff() { return role() in ['admin', 'teacher']; }
+    function isStudent() { return role() == 'student'; }
+    function uid() { return request.auth.uid; }
+    function isOwner(studentId) { return isStudent() && studentId == uid(); }
+
+    function studentCourses() {
+      return get(/databases/$(database)/documents/students/$(uid())).data.get('courseIds', []);
+    }
+
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function unchanged(key) {
+      return request.resource.data.get(key, null) == resource.data.get(key, null);
+    }
+    function str(key, max) {
+      return request.resource.data[key] is string && request.resource.data[key].size() <= max;
+    }
+    function requiredStr(key, max) {
+      return str(key, max) && request.resource.data[key].size() > 0;
+    }
+    function optStr(key, max) {
+      return !(key in request.resource.data) || str(key, max);
+    }
+    function optTimestamp(key) {
+      return !(key in request.resource.data) || request.resource.data[key] == null
+        || request.resource.data[key] is timestamp;
+    }
+
+    // ───────────────────────── users ─────────────────────────
+    match /users/{userId} {
+      allow read: if signedIn() && (userId == uid() || isStaff());
+      // Creazione/eliminazione solo via Admin SDK (route handler).
+      allow create, delete: if false;
+      // Profilo personale: solo campi anagrafici non sensibili (mai ruolo, email, stato).
+      allow update: if signedIn() && userId == uid()
+        && onlyChanges(['name', 'surname', 'phone', 'photoURL', 'updatedAt'])
+        && requiredStr('name', 60) && requiredStr('surname', 60) && optStr('phone', 30) && optStr('photoURL', 2048);
+      // Lo staff aggiorna l'anagrafica degli studenti.
+      allow update: if isStaff() && resource.data.role == 'student'
+        && onlyChanges(['name', 'surname', 'phone', 'updatedAt'])
+        && requiredStr('name', 60) && requiredStr('surname', 60) && optStr('phone', 30);
+
+      // Infrastruttura notifiche push (FCM).
+      match /fcmTokens/{token} {
+        allow read, write: if signedIn() && userId == uid();
+      }
+    }
+
+    // ───────────────────────── students ─────────────────────────
+    match /students/{studentId} {
+      allow read: if isStaff() || isOwner(studentId);
+      allow create, delete: if false; // Admin SDK; soft delete via `status`
+      allow update: if isStaff()
+        && onlyChanges(['name', 'surname', 'phone', 'courseIds', 'enrollmentDate', 'keywords', 'updatedAt'])
+        && requiredStr('name', 60) && requiredStr('surname', 60)
+        && request.resource.data.courseIds is list && request.resource.data.courseIds.size() <= 30;
+    }
+
+    // Note private del docente sullo studente: mai visibili allo studente (§40).
+    match /studentNotes/{studentId} {
+      allow read, write: if isStaff();
+    }
+
+    // ───────────────────────── teachers / courses ─────────────────────────
+    match /teachers/{teacherId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /courses/{courseId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && requiredStr('name', 100)
+        && request.resource.data.active is bool && request.resource.data.teacherIds is list;
+      allow delete: if false; // disattivare invece di cancellare (storico)
+    }
+
+    // ───────────────────────── lessons ─────────────────────────
+    function validLesson() {
+      let d = request.resource.data;
+      return d.studentId is string && d.teacherId is string
+        && requiredStr('title', 140) && optStr('notes', 5000)
+        && d.date is timestamp
+        && d.status in ['scheduled', 'completed', 'cancelled']
+        && d.materialIds is list;
+    }
+
+    match /lessons/{lessonId} {
+      allow read: if isStaff() || (signedIn() && isOwner(resource.data.studentId));
+      allow create, update: if isStaff() && validLesson();
+      allow delete: if isStaff();
+    }
+
+    // ───────────────────────── attendance ─────────────────────────
+    match /attendance/{lessonId} {
+      allow read: if isStaff() || (signedIn() && isOwner(resource.data.studentId));
+      allow create, update: if isStaff()
+        && request.resource.data.lessonId == lessonId
+        && request.resource.data.studentId is string
+        && request.resource.data.status in ['present', 'absent', 'excused', 'makeup', 'cancelled'];
+      allow delete: if isStaff();
+    }
+
+    // ───────────────────────── materials ─────────────────────────
+    function canReadMaterial(m) {
+      return isStaff()
+        || (isStudent() && (
+              m.visibility == 'all'
+              || uid() in m.get('studentIds', [])
+              || (m.visibility == 'course' && m.get('courseId', '') in studentCourses())
+           ));
+    }
+
+    match /materials/{materialId} {
+      allow read: if signedIn() && canReadMaterial(resource.data);
+      allow create, update: if isStaff()
+        && requiredStr('title', 140) && optStr('description', 2000)
+        && request.resource.data.visibility in ['all', 'course', 'student']
+        && request.resource.data.category in ['dispensa', 'ascolto', 'base', 'video', 'spartito', 'immagine', 'esercizio', 'altro']
+        && request.resource.data.studentIds is list
+        && request.resource.data.storagePath is string;
+      allow delete: if isStaff();
+    }
+
+    // ───────────────────────── assignments ─────────────────────────
+    match /assignments/{assignmentId} {
+      allow read: if isStaff() || (signedIn() && isOwner(resource.data.studentId));
+      allow create: if isStaff()
+        && request.resource.data.studentId is string && requiredStr('title', 140)
+        && request.resource.data.status in ['todo', 'in_progress', 'completed']
+        && request.resource.data.materialIds is list && optTimestamp('dueDate');
+      allow update: if isStaff() && requiredStr('title', 140) && unchanged('studentId');
+      // Lo studente può cambiare SOLO lo stato del proprio esercizio.
+      allow update: if signedIn() && isOwner(resource.data.studentId)
+        && onlyChanges(['status', 'updatedAt'])
+        && request.resource.data.status in ['todo', 'in_progress', 'completed'];
+      allow delete: if isStaff();
+    }
+
+    // ───────────────────────── payments ─────────────────────────
+    match /payments/{paymentId} {
+      // Lo studente legge solo i propri pagamenti; nessuna scrittura (§15).
+      allow read: if isStaff() || (signedIn() && isOwner(resource.data.studentId));
+      allow create, update: if isStaff()
+        && request.resource.data.studentId is string
+        && request.resource.data.amount is number && request.resource.data.amount >= 0
+        && request.resource.data.amount < 100000
+        && request.resource.data.dueDate is timestamp && optTimestamp('paidDate')
+        && request.resource.data.status in ['pending', 'paid', 'overdue', 'cancelled']
+        && (!('method' in request.resource.data) || request.resource.data.method == null
+            || request.resource.data.method in ['cash', 'bank_transfer', 'card', 'other']);
+      allow delete: if isStaff();
+    }
+
+    // ───────────────────────── announcements ─────────────────────────
+    function canReadAnnouncement(a) {
+      return isStaff()
+        || (isStudent() && (
+              a.targetType == 'all'
+              || (a.targetType == 'student' && a.get('targetId', '') == uid())
+              || (a.targetType == 'course' && a.get('targetId', '') in studentCourses())
+           ));
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn() && canReadAnnouncement(resource.data);
+      allow create, update: if isStaff()
+        && requiredStr('title', 140) && requiredStr('content', 10000)
+        && request.resource.data.targetType in ['all', 'course', 'student'];
+      allow delete: if isStaff();
+    }
+
+    // ───────────────────────── notifications (V2) ─────────────────────────
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && (isStaff() || resource.data.userId == uid());
+      allow update: if signedIn() && resource.data.userId == uid() && onlyChanges(['readAt']);
+      allow create, delete: if isStaff();
+    }
+
+    // ───────────────────────── invites ─────────────────────────
+    // Hash dei token d'invito: gestiti solo dai route handler (Admin SDK), mai dal client.
+    match /invites/{inviteId} {
+      allow read, write: if false;
+    }
+  }
+}

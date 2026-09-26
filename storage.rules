@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// VOCALIA — Storage Security Rules. Limiti allineati a src/lib/files.ts.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
+    function isStaff() { return role() in ['admin', 'teacher']; }
+    function isStudent() { return role() == 'student'; }
+    function mb(n) { return n * 1024 * 1024; }
+
+    function validMaterialUpload() {
+      let ct = request.resource.contentType;
+      let size = request.resource.size;
+      return (ct == 'application/pdf' && size <= mb(50))
+        || (ct.matches('audio/(mpeg|mp3|wav|x-wav|wave|mp4|x-m4a|m4a|aac)') && size <= mb(100))
+        || (ct.matches('video/(mp4|quicktime)') && size <= mb(500))
+        || (ct.matches('image/(jpeg|png|webp)') && size <= mb(20));
+    }
+
+    // Lo studente scarica un file solo se può leggere il documento `materials` corrispondente.
+    function studentCanReadMaterial(materialId) {
+      let m = firestore.get(/databases/(default)/documents/materials/$(materialId)).data;
+      return m.visibility == 'all'
+        || request.auth.uid in m.get('studentIds', [])
+        || (m.visibility == 'course'
+            && m.get('courseId', '') in firestore.get(/databases/(default)/documents/students/$(request.auth.uid)).data.get('courseIds', []));
+    }
+
+    match /materials/{materialId}/{fileName} {
+      allow read: if isStaff() || (isStudent() && studentCanReadMaterial(materialId));
+      allow create, update: if isStaff() && validMaterialUpload();
+      allow delete: if isStaff();
+    }
+
+    match /announcements/{announcementId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if isStaff() && request.resource.size <= mb(20);
+      allow delete: if isStaff();
+    }
+
+    match /users/{userId}/avatar/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && request.resource.size <= mb(5);
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

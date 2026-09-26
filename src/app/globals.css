@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * VOCALIA Design System — token derivati da stitch_musikademy_app_design/musikademy_vocal_platform/DESIGN.md
+ * Colori · Tipografia · Spaziature · Radius · Ombre. I componenti (Button, Input, Card, Badge,
+ * Dialog, Toast…) consumano solo questi token.
+ */
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand */
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-hover: var(--brand-hover);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-violet-ink: var(--violet-ink);
+  --color-indigo-soft: var(--indigo-soft);
+  --color-indigo-ink: var(--indigo-ink);
+
+  /* Superfici (surface-container-*) */
+  --color-surface: var(--background);
+  --color-surface-low: var(--surface-low);
+  --color-surface-mid: var(--surface-mid);
+  --color-surface-high: var(--surface-high);
+  --color-surface-highest: var(--surface-highest);
+
+  /* Stati funzionali: presenze, esercizi, pagamenti */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-makeup: var(--makeup);
+  --color-makeup-soft: var(--makeup-soft);
+
+  /* Radius: 8px interattivi, 16px contenitori, pill per badge */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+
+  /* Ombre leggere (Elevation & Depth) */
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-dock: 0 -4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-dialog: 0 20px 25px -5px rgba(15, 23, 42, 0.1);
+  --shadow-hero: 0 12px 32px -8px rgba(53, 37, 205, 0.45);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  --background: #fcf8ff;
+  --foreground: #1b1b24;
+  --card: #ffffff;
+  --card-foreground: #1b1b24;
+  --popover: #ffffff;
+  --popover-foreground: #1b1b24;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #f0ecf9;
+  --secondary-foreground: #3525cd;
+  --muted: #f5f2ff;
+  --muted-foreground: #5b5a6b;
+  --accent: #f0ecf9;
+  --accent-foreground: #3525cd;
+  --destructive: #ba1a1a;
+  --border: #e6e3f0;
+  --input: #e2e0ec;
+  --ring: #4f46e5;
+
+  --brand-ink: #3525cd;
+  --brand-hover: #4338ca;
+  --violet: #712ae2;
+  --violet-soft: #eaddff;
+  --violet-ink: #25005a;
+  --indigo-soft: #e2dfff;
+  --indigo-ink: #0f0069;
+
+  --surface-low: #f5f2ff;
+  --surface-mid: #f0ecf9;
+  --surface-high: #eae6f4;
+  --surface-highest: #e4e1ee;
+
+  /* Testo sugli sfondi soft: tonalità scure per contrasto AA */
+  --success: #047857;
+  --success-soft: #d1fae5;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --info: #1d4ed8;
+  --info-soft: #dbeafe;
+  --neutral: #475569;
+  --neutral-soft: #f1f5f9;
+  --makeup: #4338ca;
+  --makeup-soft: #e0e7ff;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    overscroll-behavior-y: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Section header: MAIUSCOLO con tracking (ARGOMENTI, MATERIALI, ESERCIZI…) */
+  .section-label {
+    @apply text-[11px] leading-4 font-bold tracking-[0.06em] uppercase text-muted-foreground;
+  }
+  .card-surface {
+    @apply rounded-xl border border-border/70 bg-card shadow-card;
+  }
+  .card-interactive {
+    @apply transition-shadow hover:shadow-card-hover;
+  }
+  .glass {
+    @apply bg-white/85 backdrop-blur-xl;
+  }
+  .hero-gradient {
+    background: linear-gradient(135deg, #4f46e5 0%, #3525cd 45%, #712ae2 100%);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
