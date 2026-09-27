@@ -1,7 +1,19 @@
-import { Timestamp, doc, getDoc, orderBy, serverTimestamp, setDoc, where, writeBatch, type QueryConstraint } from "firebase/firestore";
+import {
+  Timestamp,
+  deleteField,
+  doc,
+  getDoc,
+  orderBy,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+  type QueryConstraint,
+} from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import type { InviteInfo } from "@/lib/auth/invite-token";
-import type { Student, StudentStatus } from "@/types";
+import type { Student, StudentFee, StudentStatus } from "@/types";
 import { searchToken } from "@/utils/keywords";
 import { adminApi } from "./authService";
 import { COLLECTIONS, clean, getById, list, paginate, ref, touched } from "./base";
@@ -69,6 +81,10 @@ export const studentService = {
     batch.update(ref(COLLECTIONS.users, uid), { ...common, ...touched() });
     await batch.commit();
   },
+
+  /** Costo del corso (quota mensile); `null` lo rimuove. */
+  setFee: (uid: string, fee: StudentFee | null) =>
+    updateDoc(ref(COLLECTIONS.students, uid), { fee: fee ? clean({ ...fee }) : deleteField(), ...touched() }),
 
   async getNotes(uid: string): Promise<string> {
     const snap = await getDoc(notesRef(uid));

@@ -185,6 +185,24 @@ describe("docente", () => {
     await assertFails(setDoc(doc(teacher(), "payments", "str"), { ...p, amount: "80" }));
   });
 
+  it("registra versamenti parziali senza superare il dovuto", async () => {
+    const inst = { id: "i1", amount: 30, date: Timestamp.now(), method: "cash" };
+    const p = { studentId: ALICE, amount: 120, dueDate: Timestamp.now(), status: "partial", paidAmount: 30, installments: [inst] };
+    await assertSucceeds(setDoc(doc(teacher(), "payments", "partial"), p));
+    await assertFails(setDoc(doc(teacher(), "payments", "over"), { ...p, paidAmount: 150 }));
+    await assertFails(setDoc(doc(teacher(), "payments", "bad"), { ...p, installments: "x" }));
+  });
+
+  it("imposta il costo del corso con valori validi", async () => {
+    const ok = { monthlyAmount: 120, lessonPrice: 30, lessonsPerMonth: 4, dueDay: 10 };
+    await assertSucceeds(updateDoc(doc(teacher(), "students", ALICE), { fee: ok }));
+    await assertSucceeds(updateDoc(doc(teacher(), "students", ALICE), { fee: { monthlyAmount: 90, dueDay: 1 } }));
+    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, dueDay: 31 } }));
+    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, monthlyAmount: -1 } }));
+    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, extra: true } }));
+    await assertFails(updateDoc(doc(student(ALICE), "students", ALICE), { fee: { monthlyAmount: 1, dueDay: 1 } }));
+  });
+
   it("non crea utenti né cambia ruoli dal client", async () => {
     await assertFails(setDoc(doc(teacher(), "users", "new"), { role: "admin" }));
     await assertFails(updateDoc(doc(teacher(), "users", ALICE), { role: "admin" }));

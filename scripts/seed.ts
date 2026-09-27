@@ -68,15 +68,15 @@ async function main() {
   }
 
   const students = [
-    { email: "elena@vocalia.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567" },
-    { email: "luca@vocalia.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "" },
+    { email: "elena@vocalia.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567", fee: { monthlyAmount: 120, lessonPrice: 30, lessonsPerMonth: 4, dueDay: 10 } },
+    { email: "luca@vocalia.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "", fee: { monthlyAmount: 140, dueDay: 5 } },
   ];
   const studentIds: string[] = [];
   for (const s of students) {
     const uid = await account(s.email, s.name, s.surname, "student");
     studentIds.push(uid);
     await db.doc(`students/${uid}`).set({
-      userId: uid, name: s.name, surname: s.surname, email: s.email, phone: s.phone, courseIds: s.courseIds,
+      userId: uid, name: s.name, surname: s.surname, email: s.email, phone: s.phone, courseIds: s.courseIds, fee: s.fee,
       enrollmentDate: day(-60), status: "active", keywords: buildKeywords(s.name, s.surname, s.email),
       createdAt: now, updatedAt: now, ...demo,
     });
@@ -144,17 +144,22 @@ async function main() {
   }
 
   // ── Pagamenti ──
+  // Versamenti anche parziali (ADR D21): Elena paga lezione per lezione.
   const payments = [
-    { s: 0, description: "Quota mensile – mese scorso", amount: 120, due: -30, status: "paid", paid: -28, method: "bank_transfer" },
-    { s: 0, description: "Quota mensile – mese corrente", amount: 120, due: 5, status: "pending" },
-    { s: 1, description: "Quota mensile – mese scorso", amount: 140, due: -10, status: "pending" },
+    { s: 0, description: "Quota mensile – mese scorso", amount: 120, due: -30, paid: [{ amount: 120, day: -28, method: "bank_transfer" }] },
+    { s: 0, description: "Quota mensile – mese corrente (4 lezioni)", amount: 120, due: 5, paid: [{ amount: 30, day: -6, method: "cash", notes: "1ª lezione" }, { amount: 30, day: -1, method: "cash", notes: "2ª lezione" }] },
+    { s: 1, description: "Quota mensile – mese scorso", amount: 140, due: -10, paid: [] as { amount: number; day: number; method: string; notes?: string }[] },
   ];
   for (const [i, p] of payments.entries()) {
     const s = students[p.s];
+    const installments = p.paid.map((v, j) => ({ id: `demo-${i}-${j}`, amount: v.amount, date: day(v.day, 10), method: v.method, ...(v.notes ? { notes: v.notes } : {}) }));
+    const paidAmount = p.paid.reduce((sum, v) => sum + v.amount, 0);
+    const last = installments.at(-1);
     await db.doc(`payments/demo-payment-${i + 1}`).set({
       studentId: studentIds[p.s], studentName: `${s.name} ${s.surname}`, description: p.description, amount: p.amount,
-      dueDate: day(p.due, 0, 0), ...(p.paid !== undefined ? { paidDate: day(p.paid, 10), method: p.method } : {}),
-      status: p.status, notes: "", createdBy: adminId, createdAt: now, updatedAt: now, ...demo,
+      paidAmount, installments, dueDate: day(p.due, 0, 0), ...(last ? { paidDate: last.date, method: last.method } : {}),
+      status: paidAmount >= p.amount ? "paid" : paidAmount > 0 ? "partial" : "pending",
+      notes: "", createdBy: adminId, createdAt: now, updatedAt: now, ...demo,
     });
   }
 

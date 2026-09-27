@@ -139,7 +139,7 @@ function StudentProfile({ studentId }: { studentId: string }) {
         {tab === "attendance" && <StudentAttendanceTab studentId={studentId} />}
         {tab === "materials" && <StudentMaterialsTab studentId={studentId} studentName={name} />}
         {tab === "exercises" && <StudentAssignmentsTab studentId={studentId} />}
-        {tab === "payments" && <StudentPaymentsTab studentId={studentId} />}
+        {tab === "payments" && <StudentPaymentsTab student={s} />}
         {tab === "notes" && <StudentNotesTab studentId={studentId} initial={notes.data ?? ""} loading={notes.isPending} />}
       </div>
 

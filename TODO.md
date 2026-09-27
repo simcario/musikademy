@@ -35,6 +35,8 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 ## Miglioramenti V1 (non bloccanti)
 
 - ⬜ Allegati alle comunicazioni (modello e Storage rules già pronti, manca l'upload in UI)
+- ✅ Pagamenti: costo del corso per studente, "Genera quote del mese", versamenti parziali (ADR D21) — rules + unit test verdi; `deploy:rules` necessario (nuove regole su `students.fee` e `payments`)
+- ⬜ Generazione automatica mensile delle quote (oggi manuale con un clic; automatica = Cloud Function schedulata)
 - ⬜ Test E2E (Playwright) dei flussi principali
 - ⬜ Session cookie + `proxy.ts` per redirect lato server (oggi guard client + rules)
 

@@ -12,7 +12,7 @@ export default function AdminPaymentsPage() {
   const totals = usePaymentTotals();
   return (
     <PageContainer className="max-w-5xl">
-      <PageHeader title="Pagamenti" description="Registrazione manuale delle quote (pagamenti online non attivi nella V1)." />
+      <PageHeader title="Pagamenti" description="Quote mensili e versamenti, anche parziali (es. lezione per lezione). Pagamenti online non attivi nella V1." />
       {totals.isError ? (
         <ErrorState error={totals.error} onRetry={() => totals.refetch()} />
       ) : (

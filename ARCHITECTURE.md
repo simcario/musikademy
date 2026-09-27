@@ -35,7 +35,7 @@ Browser / PWA (Next.js App Router, React 19, Tailwind 4, shadcn/ui base-nova)
 | D3 | **Account creati solo dal docente/admin** (niente registrazione pubblica) | Piattaforma privata. `POST /api/admin/users` crea l'utente Auth, imposta il claim, crea `users` + `students`, genera il link di impostazione password. |
 | D4 | **Presenza = `attendance/{lessonId}`** | Le lezioni sono individuali (un `studentId` per lezione): un documento per lezione rende l'inserimento idempotente (upsert) e rapido. |
 | D5 | **Esercizio a più studenti = un documento `assignments` per studente** (batch) | Rispetta il modello dati (stato per-studente), rules semplici. |
-| D6 | **Stato "overdue" dei pagamenti derivato** a runtime (`pending` + scadenza passata), persistibile dal docente | Evita job schedulati nella V1; nessun dato incoerente. |
+| D6 | **Stato "overdue" dei pagamenti derivato** a runtime (`pending`/`partial` + scadenza passata), persistibile dal docente | Evita job schedulati nella V1; nessun dato incoerente. |
 | D7 | **Ricerca**: campo `keywords: string[]` (token normalizzati + prefissi) con `array-contains` | Compatibile con Firestore, indicizzato, nessun servizio esterno. Sostituibile con Algolia/Typesense senza toccare la UI (`searchService`). |
 | D8 | **Data layer**: `components → hooks (TanStack Query) → services → Firestore` | Separazione UI/logica (§47), cache, stati loading/error/success uniformi, invalidazione dopo mutazioni. |
 | D9 | **Paginazione a cursore** (`limit` + `startAfter`) nelle liste lunghe | §49: mai caricare tutti i materiali. |
@@ -49,6 +49,7 @@ Browser / PWA (Next.js App Router, React 19, Tailwind 4, shadcn/ui base-nova)
 | D18 | **Visibilità materiali additiva**: `studentIds` rende visibile un materiale ai singoli studenti qualunque sia `visibility` | Un materiale di corso può essere assegnato anche a uno studente esterno al corso senza duplicarlo. |
 | D19 | **Select native** nei form | Picker di sistema su mobile (UX touch migliore), accessibili senza JS. |
 | D20 | **Studenti: accesso con Google tramite invito**. Il docente crea l'account (UID stabile, ADR D2) e un invito monouso (7 gg) in `invites/{sha256(token)}`, inaccessibile ai client. `/invite#token` → `POST /api/invites/accept` restituisce un custom token → `signInWithCustomToken` (persistenza in memoria) → `linkWithPopup(Google)` → `POST /api/invites/complete` verifica il provider e chiude l'invito | Nessuna registrazione pubblica; l'account Google si aggancia all'UID già usato da lezioni e pagamenti; il token nel frammento non finisce nei log. Un login Google non invitato crea un utente senza ruolo che il client elimina subito. Richiede `roles/iam.serviceAccountTokenCreator` sul service account di App Hosting |
+| D21 | **Quote e versamenti parziali**. `students.fee` = costo del corso (`monthlyAmount` obbligatorio, `lessonPrice`/`lessonsPerMonth` facoltativi, `dueDay` 1–28). Un documento `payments` è una **quota** (il dovuto) con `installments[]` (versamenti) e `paidAmount` denormalizzato; `status` = `pending`/`partial`/`paid`/`cancelled`, ricalcolato in transazione a ogni versamento. Le quote mensili hanno ID `monthly_{uid}_{YYYY-MM}` | Pagamenti lezione per lezione senza una collezione in più: le quote di un mese hanno pochi versamenti. `paidAmount` permette i totali con `sum()` lato server. ID deterministico → "Genera quote del mese" è idempotente e non sovrascrive quote già pagate. I documenti precedenti senza `paidAmount` sono letti come interamente pagati se `paid` (ma non entrano nel totale "incassato" aggregato) |
 | D15 | Estensibilità ruoli | `ROLE_PERMISSIONS` in `src/lib/auth/roles.ts` mappa ruolo → capacità; aggiungere `superadmin/assistant/secretary` = nuova riga + funzione nelle rules. |
 
 ## 3. Ruoli e permessi
@@ -70,7 +71,8 @@ Collezioni come da spec §29–38, con queste aggiunte (motivate sopra):
 - `lessons`: `studentName` denormalizzato (liste docente senza N letture)
 - `materials`: `fileName`, `contentType`, `size`, `category` include `immagine`
 - `assignments`: `studentName`, `lessonTitle?` denormalizzati
-- `payments`: `studentName`, `description` (es. "Quota ottobre")
+- `payments`: `studentName`, `description` (es. "Quota ottobre"), `paidAmount`, `installments[]`, `period` (quote mensili)
+- `students.fee`: costo del corso (ADR D21)
 - `announcements`: `authorName`, `attachments?: {name,url,storagePath}[]`
 - `users/{uid}/fcmTokens/{token}`: infrastruttura notifiche
 - `notifications/{id}`: predisposta (V2)

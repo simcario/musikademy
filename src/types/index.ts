@@ -31,9 +31,21 @@ export interface Student {
   /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
   inviteStatus?: "pending" | "accepted";
   phone?: string;
+  /** Costo del corso: base per generare le quote mensili. */
+  fee?: StudentFee;
   keywords: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface StudentFee {
+  /** Quota dovuta ogni mese (es. 4 lezioni × 30 € = 120 €). */
+  monthlyAmount: number;
+  /** Facoltativi: costo a lezione e lezioni al mese, usati per proporre versamenti "a lezione". */
+  lessonPrice?: number;
+  lessonsPerMonth?: number;
+  /** Giorno del mese in cui scade la quota (1–28). */
+  dueDay: number;
 }
 
 export interface Teacher {
@@ -145,18 +157,37 @@ export interface Attendance {
   updatedAt: Timestamp;
 }
 
-export type PaymentStatus = "pending" | "paid" | "overdue" | "cancelled";
+/** `partial` = versamenti inferiori al dovuto; `overdue` è derivato a runtime (ADR D6). */
+export type PaymentStatus = "pending" | "partial" | "paid" | "overdue" | "cancelled";
 export const PAYMENT_METHODS = ["cash", "bank_transfer", "card", "other"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** Singolo versamento su una quota (es. una lezione pagata a mano). */
+export interface Installment {
+  id: string;
+  amount: number;
+  date: Timestamp;
+  method: PaymentMethod;
+  notes?: string;
+}
+
+/** Quota dovuta dallo studente, saldabile con uno o più versamenti (ADR D21). */
 export interface Payment {
   studentId: string;
   studentName: string;
   description: string;
+  /** Importo dovuto. */
   amount: number;
+  /** Somma dei versamenti, denormalizzata per le aggregazioni. Assente sui documenti precedenti. */
+  paidAmount?: number;
+  installments?: Installment[];
+  /** Mese di competenza `YYYY-MM` delle quote mensili generate. */
+  period?: string;
   dueDate: Timestamp;
+  /** Data dell'ultimo versamento. */
   paidDate?: Timestamp;
   status: PaymentStatus;
+  /** Metodo dell'ultimo versamento. */
   method?: PaymentMethod;
   notes?: string;
   createdBy: string;

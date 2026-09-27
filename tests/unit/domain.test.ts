@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { paymentFormSchema, parseAmount } from "@/features/payments/schemas";
+import { amountToInput, feeFormSchema, installmentSchema, paymentFormSchema, parseAmount } from "@/features/payments/schemas";
 import { lessonFormSchema, parseTopics } from "@/features/lessons/schemas";
 import { createUserSchema, studentFormSchema } from "@/features/students/schemas";
 import { checkFile, safeFileName } from "@/lib/files";
 import { buildKeywords, searchToken } from "@/utils/keywords";
-import { effectivePaymentStatus, summarizeAttendance } from "@/utils/status";
+import {
+  effectivePaymentStatus,
+  monthlyDueDate,
+  paidAmountOf,
+  periodLabel,
+  periodOf,
+  remainingOf,
+  storedPaymentStatus,
+  summarizeAttendance,
+} from "@/utils/status";
 
 const ts = (d: Date) => ({ toDate: () => d }) as unknown as import("firebase/firestore").Timestamp;
 
@@ -63,16 +72,54 @@ describe("pagamenti", () => {
     expect(schema.safeParse({ ...ok, amount: "abc" }).success).toBe(false);
   });
 
-  it("un pagamento saldato richiede data e metodo", () => {
-    expect(schema.safeParse({ ...ok, status: "paid" }).success).toBe(false);
-    expect(schema.safeParse({ ...ok, status: "paid", paidDate: "2026-10-01", method: "cash" }).success).toBe(true);
+  it("un versamento immediato richiede data e metodo e non supera la quota", () => {
+    expect(schema.safeParse({ ...ok, payNowAmount: "30" }).success).toBe(false);
+    expect(schema.safeParse({ ...ok, payNowAmount: "30", payNowDate: "2026-10-01", payNowMethod: "cash" }).success).toBe(true);
+    expect(schema.safeParse({ ...ok, payNowAmount: "90", payNowDate: "2026-10-01", payNowMethod: "cash" }).success).toBe(false);
   });
 
-  it("un pending con scadenza passata risulta scaduto", () => {
+  it("un versamento non supera il residuo", () => {
+    const s = installmentSchema(90);
+    const v = { amount: "30", date: "2026-10-01", method: "cash" };
+    expect(s.safeParse(v).success).toBe(true);
+    expect(s.safeParse({ ...v, amount: "90" }).success).toBe(true);
+    expect(s.safeParse({ ...v, amount: "90,01" }).success).toBe(false);
+  });
+
+  it("calcola incassato, residuo e stato dai versamenti", () => {
+    expect(paidAmountOf({ amount: 120, paidAmount: 60, status: "partial" })).toBe(60);
+    expect(remainingOf({ amount: 120, paidAmount: 60, status: "partial" })).toBe(60);
+    expect(remainingOf({ amount: 120, paidAmount: 0, status: "cancelled" })).toBe(0);
+    // Documenti precedenti ai versamenti: "paid" senza paidAmount vale l'intero importo.
+    expect(paidAmountOf({ amount: 80, status: "paid" })).toBe(80);
+    expect(remainingOf({ amount: 80, status: "pending" })).toBe(80);
+    expect(storedPaymentStatus(120, 0)).toBe("pending");
+    expect(storedPaymentStatus(120, 30)).toBe("partial");
+    expect(storedPaymentStatus(120, 120)).toBe("paid");
+    expect(storedPaymentStatus(0.3, 0.1 + 0.2)).toBe("paid");
+  });
+
+  it("una quota non saldata con scadenza passata risulta scaduta", () => {
     const now = new Date("2026-09-26T12:00:00");
     expect(effectivePaymentStatus({ status: "pending", dueDate: ts(new Date("2026-09-20")) }, now)).toBe("overdue");
+    expect(effectivePaymentStatus({ status: "partial", dueDate: ts(new Date("2026-09-20")) }, now)).toBe("overdue");
+    expect(effectivePaymentStatus({ status: "partial", dueDate: ts(new Date("2026-09-30")) }, now)).toBe("partial");
     expect(effectivePaymentStatus({ status: "pending", dueDate: ts(new Date("2026-09-26")) }, now)).toBe("pending");
     expect(effectivePaymentStatus({ status: "paid", dueDate: ts(new Date("2026-09-01")) }, now)).toBe("paid");
+  });
+
+  it("costo del corso e quote mensili", () => {
+    const fee = { lessonPrice: "30", lessonsPerMonth: "4", monthlyAmount: "120", dueDay: "10" };
+    expect(feeFormSchema.safeParse(fee).success).toBe(true);
+    expect(feeFormSchema.safeParse({ ...fee, lessonPrice: "", lessonsPerMonth: "" }).success).toBe(true);
+    expect(feeFormSchema.safeParse({ ...fee, dueDay: "31" }).success).toBe(false);
+    expect(feeFormSchema.safeParse({ ...fee, monthlyAmount: "" }).success).toBe(false);
+    expect(periodOf(new Date(2026, 0, 15))).toBe("2026-01");
+    expect(periodLabel("2026-10")).toBe("Ottobre 2026");
+    const due = monthlyDueDate("2026-02", 10);
+    expect([due.getFullYear(), due.getMonth(), due.getDate()]).toEqual([2026, 1, 10]);
+    expect(amountToInput(80.5)).toBe("80,50");
+    expect(amountToInput(120)).toBe("120");
   });
 });
 

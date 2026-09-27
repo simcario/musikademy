@@ -61,13 +61,28 @@ service cloud.firestore {
     }
 
     // ───────────────────────── students ─────────────────────────
+    function money(v) { return v is number && v >= 0 && v < 100000; }
+    // Costo del corso (ADR D21): quota mensile obbligatoria, costo a lezione facoltativo.
+    function validFee() {
+      let d = request.resource.data;
+      return !('fee' in d) || (
+        d.fee is map
+        && d.fee.keys().hasOnly(['monthlyAmount', 'lessonPrice', 'lessonsPerMonth', 'dueDay'])
+        && money(d.fee.monthlyAmount) && d.fee.monthlyAmount > 0
+        && (!('lessonPrice' in d.fee) || money(d.fee.lessonPrice))
+        && (!('lessonsPerMonth' in d.fee) || (d.fee.lessonsPerMonth is int && d.fee.lessonsPerMonth >= 1 && d.fee.lessonsPerMonth <= 31))
+        && d.fee.dueDay is int && d.fee.dueDay >= 1 && d.fee.dueDay <= 28
+      );
+    }
+
     match /students/{studentId} {
       allow read: if isStaff() || isOwner(studentId);
       allow create, delete: if false; // Admin SDK; soft delete via `status`
       allow update: if isStaff()
-        && onlyChanges(['name', 'surname', 'phone', 'courseIds', 'enrollmentDate', 'keywords', 'updatedAt'])
+        && onlyChanges(['name', 'surname', 'phone', 'courseIds', 'enrollmentDate', 'keywords', 'fee', 'updatedAt'])
         && requiredStr('name', 60) && requiredStr('surname', 60)
-        && request.resource.data.courseIds is list && request.resource.data.courseIds.size() <= 30;
+        && request.resource.data.courseIds is list && request.resource.data.courseIds.size() <= 30
+        && validFee();
     }
 
     // Note private del docente sullo studente: mai visibili allo studente (§40).
@@ -154,12 +169,16 @@ service cloud.firestore {
     match /payments/{paymentId} {
       // Lo studente legge solo i propri pagamenti; nessuna scrittura (§15).
       allow read: if isStaff() || (signedIn() && isOwner(resource.data.studentId));
+      // Versamenti parziali (ADR D21): `paidAmount` non supera mai il dovuto.
       allow create, update: if isStaff()
         && request.resource.data.studentId is string
-        && request.resource.data.amount is number && request.resource.data.amount >= 0
-        && request.resource.data.amount < 100000
+        && money(request.resource.data.amount)
+        && money(request.resource.data.get('paidAmount', 0))
+        && request.resource.data.get('paidAmount', 0) <= request.resource.data.amount
+        && request.resource.data.get('installments', []) is list
+        && request.resource.data.get('installments', []).size() <= 100
         && request.resource.data.dueDate is timestamp && optTimestamp('paidDate')
-        && request.resource.data.status in ['pending', 'paid', 'overdue', 'cancelled']
+        && request.resource.data.status in ['pending', 'partial', 'paid', 'overdue', 'cancelled']
         && (!('method' in request.resource.data) || request.resource.data.method == null
             || request.resource.data.method in ['cash', 'bank_transfer', 'card', 'other']);
       allow delete: if isStaff();

@@ -12,6 +12,7 @@ import { StaffAssignmentList } from "@/features/exercises/assignment-list";
 import { StaffLessonList } from "@/features/lessons/lesson-list";
 import { AssignMaterialsDialog } from "@/features/materials/assign-materials-dialog";
 import { MaterialRow } from "@/features/materials/material-card";
+import { StudentFeeCard } from "@/features/payments/fee-form";
 import { StaffPaymentList } from "@/features/payments/payment-list";
 import { qk } from "@/hooks/query-keys";
 import { assignmentService } from "@/services/assignmentService";
@@ -19,8 +20,9 @@ import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
+import type { Student, WithId } from "@/types";
 import { formatCurrency, formatDate, formatWeekday } from "@/utils/format";
-import { effectivePaymentStatus, summarizeAttendance } from "@/utils/status";
+import { remainingOf, summarizeAttendance } from "@/utils/status";
 
 export function StudentOverviewTab({ studentId }: { studentId: string }) {
   const att = useStudentAttendance(studentId);
@@ -33,9 +35,7 @@ export function StudentOverviewTab({ studentId }: { studentId: string }) {
 
   const s = summarizeAttendance((att.data ?? []).map((a) => a.status));
   const open = (assignments.data ?? []).filter((a) => a.status !== "completed").length;
-  const due = (payments.data ?? [])
-    .filter((p) => ["pending", "overdue"].includes(effectivePaymentStatus(p)))
-    .reduce((sum, p) => sum + p.amount, 0);
+  const due = (payments.data ?? []).reduce((sum, p) => sum + remainingOf(p), 0);
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -140,8 +140,13 @@ export function StudentAssignmentsTab({ studentId }: { studentId: string }) {
   return <StaffAssignmentList studentId={studentId} />;
 }
 
-export function StudentPaymentsTab({ studentId }: { studentId: string }) {
-  return <StaffPaymentList studentId={studentId} />;
+export function StudentPaymentsTab({ student }: { student: WithId<Student> }) {
+  return (
+    <div className="space-y-3">
+      <StudentFeeCard student={student} />
+      <StaffPaymentList studentId={student.id} />
+    </div>
+  );
 }
 
 export function StudentNotesTab({ studentId, initial, loading }: { studentId: string; initial: string; loading: boolean }) {
