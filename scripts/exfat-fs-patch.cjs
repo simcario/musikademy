@@ -8,7 +8,7 @@
 const fs = require("fs");
 
 // Segnala a next.config.ts di attivare la configurazione webpack per exFAT.
-process.env.VOCALIA_EXFAT = "1";
+process.env.MUSIKADEMY_EXFAT = "1";
 
 function toEinval(err) {
   if (err && err.code === "EISDIR" && err.syscall === "readlink") {

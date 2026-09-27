@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// VOCALIA — Firestore Security Rules
+// Musikademy — Firestore Security Rules
 // Principio: negato per default. Il ruolo arriva dal custom claim `role` (ADR D1),
 // impostato solo dall'Admin SDK. Lo studente accede esclusivamente ai propri dati.
 service cloud.firestore {

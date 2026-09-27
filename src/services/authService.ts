@@ -50,7 +50,7 @@ export const authService = {
     if (getAdditionalUserInfo(cred)?.isNewUser) await cred.user.delete().catch(() => undefined);
     await this.signOut();
     throw new AppError(
-      "Questo account Google non è collegato a VOCALIA. Apri il link d'invito ricevuto dalla scuola, oppure usa l'account Google con cui hai accettato l'invito.",
+      "Questo account Google non è collegato a Musikademy. Apri il link d'invito ricevuto dalla scuola, oppure usa l'account Google con cui hai accettato l'invito.",
     );
   },
 

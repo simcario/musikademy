@@ -35,7 +35,7 @@ export function inviteUrl(origin: string, token: string): string {
 export function inviteMessage(name: string, url: string, expiresAt: Date): string {
   const until = expiresAt.toLocaleDateString("it-IT", { day: "numeric", month: "long" });
   return (
-    `Ciao ${name}! Sei stato invitato su VOCALIA, l'app di Musikademy.\n` +
+    `Ciao ${name}! Sei stato invitato sull'app Musikademy.\n` +
     `Apri questo link e accedi con il tuo account Google (valido fino al ${until}):\n${url}`
   );
 }

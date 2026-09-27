@@ -1,10 +1,10 @@
-/* VOCALIA service worker (ADR D11).
+/* Musikademy service worker (ADR D11).
  * - Asset statici (/_next/static, /icons, /brand): cache-first (sono versionati/immutabili).
  * - Navigazioni: network-first con pagina offline di ripiego.
  * - Nessuna richiesta verso Firebase/API viene messa in cache: i dati personali restano
  *   gestiti dalla cache di Firestore, legata alla sessione.
  */
-const VERSION = "vocalia-v1";
+const VERSION = "musikademy-v1";
 const STATIC_CACHE = `${VERSION}-static`;
 const OFFLINE_URL = "/offline.html";
 
@@ -65,11 +65,11 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { notification: { title: "VOCALIA", body: event.data.text() } };
+    payload = { notification: { title: "Musikademy", body: event.data.text() } };
   }
   const n = payload.notification || {};
   event.waitUntil(
-    self.registration.showNotification(n.title || "VOCALIA", {
+    self.registration.showNotification(n.title || "Musikademy", {
       body: n.body || "",
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",

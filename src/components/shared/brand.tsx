@@ -6,21 +6,15 @@ import { initials } from "@/utils/format";
 
 export const BRAND = {
   school: "Musikademy",
-  product: "VOCALIA",
   tagline: "Learn. Practice. Grow.",
 } as const;
 
 export function BrandLockup({ href, context, className }: { href: string; context?: string; className?: string }) {
   return (
-    <Link href={href} className={cn("flex min-w-0 items-center gap-2", className)} aria-label={`${BRAND.product} – home`}>
+    <Link href={href} className={cn("flex min-w-0 items-center gap-2", className)} aria-label={`${BRAND.school} – home`}>
       <Image src="/brand/mark.webp" alt="" width={44} height={32} className="h-8 w-11 shrink-0" priority />
       <span className="flex min-w-0 flex-col">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-lg leading-none font-bold tracking-tight text-brand-ink">{BRAND.school}</span>
-          <span className="rounded-full bg-violet-soft px-1.5 py-0.5 text-[10px] leading-none font-semibold text-violet-ink">
-            {BRAND.product}
-          </span>
-        </span>
+        <span className="truncate text-lg leading-none font-bold tracking-tight text-brand-ink">{BRAND.school}</span>
         <span className="truncate text-[11px] font-medium text-muted-foreground">
           {BRAND.tagline}
           {context ? ` • ${context}` : ""}

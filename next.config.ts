@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
   },
   // Solo in locale su disco exFAT (npm run dev:local / build:local): webpack non deve risolvere symlink.
   // Altrove la chiave `webpack` non esiste, perché con Turbopack (build standard, App Hosting) la farebbe fallire.
-  ...(process.env.VOCALIA_EXFAT === "1"
+  ...(process.env.MUSIKADEMY_EXFAT === "1"
     ? {
         webpack(config: { resolve: { symlinks?: boolean } }) {
           config.resolve.symlinks = false;

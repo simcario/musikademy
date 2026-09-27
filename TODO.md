@@ -1,4 +1,4 @@
-# VOCALIA — TODO
+# Musikademy — TODO
 
 Legenda: ✅ fatto e verificato · 🟡 fatto, da verificare su Firebase reale/emulatore · ⬜ da fare
 

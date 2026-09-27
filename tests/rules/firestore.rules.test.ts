@@ -36,7 +36,7 @@ const anon = () => env.unauthenticatedContext().firestore();
 
 beforeAll(async () => {
   env = await initializeTestEnvironment({
-    projectId: "demo-vocalia",
+    projectId: "demo-musikademy",
     firestore: { rules: readFileSync("firestore.rules", "utf8") },
   });
 });

@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// VOCALIA — Storage Security Rules. Limiti allineati a src/lib/files.ts.
+// Musikademy — Storage Security Rules. Limiti allineati a src/lib/files.ts.
 service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() { return request.auth != null; }

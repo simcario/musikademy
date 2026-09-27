@@ -25,7 +25,7 @@ export function InviteShare({
   const text = inviteMessage(student.name, url, expires);
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
   const mailto = `mailto:${encodeURIComponent(student.email)}?subject=${encodeURIComponent(
-    "Il tuo invito a VOCALIA · Musikademy",
+    "Il tuo invito a Musikademy",
   )}&body=${encodeURIComponent(text)}`;
 
   return (
@@ -68,7 +68,7 @@ export function InviteShare({
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => navigator.share({ title: "Invito VOCALIA", text }).catch(() => undefined)}
+            onClick={() => navigator.share({ title: "Invito Musikademy", text }).catch(() => undefined)}
           >
             <Share2 aria-hidden /> Condividi…
           </Button>

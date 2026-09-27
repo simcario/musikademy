@@ -1,4 +1,4 @@
-# VOCALIA · Musikademy
+# Musikademy
 
 > **Learn. Practice. Grow.** — Piattaforma didattica privata per scuole di musica e canto.
 
@@ -8,7 +8,7 @@ PWA installabile, mobile-first.
 
 - Architettura e decisioni: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Stato dei lavori: [TODO.md](TODO.md)
-- Specifica: `../VOCALIA_Prompt_Master.md` · Design: `../stitch_musikademy_app_design/`
+- Specifica: `../Musikademy_Prompt_Master.md` · Design: `../stitch_musikademy_app_design/`
 
 ## Stack
 
@@ -66,7 +66,7 @@ npm run seed         # terminale 2 — rifiuta di scrivere su progetti reali
 npm run dev:local    # terminale 3
 ```
 
-Account demo (password `Vocalia2026!`): `admin@vocalia.test`, `elena@vocalia.test`, `luca@vocalia.test`.
+Account demo (password `Musikademy2026!`): `admin@musikademy.test`, `elena@musikademy.test`, `luca@musikademy.test`.
 Con il flag emulatori attivo anche le API admin (Admin SDK) usano automaticamente gli emulatori.
 
 ## Build e test

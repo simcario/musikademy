@@ -1,5 +1,5 @@
 {
-  "name": "vocalia",
+  "name": "musikademy",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,7 +12,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-vocalia \"vitest run --config vitest.rules.config.mts\"",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-musikademy \"vitest run --config vitest.rules.config.mts\"",
     "emulators": "firebase emulators:start",
     "seed": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/seed.ts",
     "bootstrap-admin": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/bootstrap-admin.ts",

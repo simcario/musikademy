@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
         <div className="flex flex-col items-center gap-2 text-center">
           <Image src="/brand/logo-full.webp" alt={BRAND.school} width={240} height={150} priority className="h-auto w-44" />
           <span className="rounded-full bg-violet-soft px-2.5 py-1 text-xs font-semibold text-violet-ink">
-            {BRAND.product} · {BRAND.tagline}
+            {BRAND.tagline}
           </span>
         </div>
         <div className="card-surface p-6 shadow-card-hover">{children}</div>

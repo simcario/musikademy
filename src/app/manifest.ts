@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "VOCALIA · Musikademy",
-    short_name: "VOCALIA",
+    name: "Musikademy",
+    short_name: "Musikademy",
     description: "Learn. Practice. Grow. — La piattaforma didattica di Musikademy.",
     lang: "it",
     start_url: "/",

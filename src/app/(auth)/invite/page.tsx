@@ -115,7 +115,7 @@ export default function InvitePage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{state.name ? `Ciao ${state.name}!` : "Benvenuto!"}</h1>
         <p className="text-sm text-muted-foreground">
-          Sei stato invitato su VOCALIA. Collega il tuo account Google: da quel momento accederai sempre con il
+          Sei stato invitato su Musikademy. Collega il tuo account Google: da quel momento accederai sempre con il
           pulsante «Accedi con Google».
         </p>
       </div>

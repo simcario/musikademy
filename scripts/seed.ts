@@ -15,7 +15,7 @@ import { cycleKey, cycleLabel } from "../src/utils/cycles";
 import { buildKeywords } from "../src/utils/keywords";
 import { initAdmin, usingEmulators } from "./lib/admin-env";
 
-const PASSWORD = "Vocalia2026!";
+const PASSWORD = "Musikademy2026!";
 
 function day(offset: number, h = 16, m = 30) {
   const d = new Date();
@@ -54,9 +54,9 @@ async function main() {
   }
 
   // ── Persone ──
-  const adminId = await account("admin@vocalia.test", "Marco", "Ferri", "admin");
+  const adminId = await account("admin@musikademy.test", "Marco", "Ferri", "admin");
   await db.doc(`teachers/${adminId}`).set({
-    userId: adminId, name: "Marco", surname: "Ferri", email: "admin@vocalia.test", courseIds: [], createdAt: now, updatedAt: now, ...demo,
+    userId: adminId, name: "Marco", surname: "Ferri", email: "admin@musikademy.test", courseIds: [], createdAt: now, updatedAt: now, ...demo,
   });
 
   // ── Corsi ──
@@ -69,8 +69,8 @@ async function main() {
   }
 
   const students = [
-    { email: "elena@vocalia.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567", fee: { cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, startDate: day(-14, 0, 0), dueAt: "end" } },
-    { email: "luca@vocalia.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "", fee: { cycleAmount: 140, startDate: day(-5, 0, 0), dueAt: "start" } },
+    { email: "elena@musikademy.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567", fee: { cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, startDate: day(-14, 0, 0), dueAt: "end" } },
+    { email: "luca@musikademy.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "", fee: { cycleAmount: 140, startDate: day(-5, 0, 0), dueAt: "start" } },
   ];
   const studentIds: string[] = [];
   for (const s of students) {
@@ -183,7 +183,7 @@ async function main() {
   });
 
   console.log(`\n✓ Dati demo creati. Password per tutti: ${PASSWORD}`);
-  console.log("  admin@vocalia.test (admin) · elena@vocalia.test · luca@vocalia.test (studenti)\n");
+  console.log("  admin@musikademy.test (admin) · elena@musikademy.test · luca@musikademy.test (studenti)\n");
 }
 
 /** WAV PCM mono 8kHz di silenzio (file audio valido e leggerissimo). */

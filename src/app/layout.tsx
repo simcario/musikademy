@@ -6,10 +6,10 @@ import "./globals.css";
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "VOCALIA · Musikademy", template: "%s · VOCALIA" },
-  description: "VOCALIA — Learn. Practice. Grow. La piattaforma didattica privata di Musikademy.",
-  applicationName: "VOCALIA",
-  appleWebApp: { capable: true, title: "VOCALIA", statusBarStyle: "default" },
+  title: { default: "Musikademy", template: "%s · Musikademy" },
+  description: "Musikademy — Learn. Practice. Grow. La piattaforma didattica privata.",
+  applicationName: "Musikademy",
+  appleWebApp: { capable: true, title: "Musikademy", statusBarStyle: "default" },
   formatDetection: { telephone: false },
   robots: { index: false, follow: false }, // piattaforma privata
 };

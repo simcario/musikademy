@@ -1,7 +1,7 @@
-# VOCALIA — Architettura tecnica
+# Musikademy — Architettura tecnica
 
-> Musikademy · VOCALIA — *Learn. Practice. Grow.*
-> Documento di riferimento tecnico. La specifica funzionale è `../VOCALIA_Prompt_Master.md`,
+> Musikademy — *Learn. Practice. Grow.*
+> Documento di riferimento tecnico. La specifica funzionale è `../Musikademy_Prompt_Master.md`,
 > il design di riferimento è `../stitch_musikademy_app_design/`.
 
 ## 1. Panoramica
