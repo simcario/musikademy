@@ -176,7 +176,7 @@ export function MaterialCard({ material, badge }: { material: WithId<Material>; 
 }
 
 /** Riga compatta per dettaglio lezione / esercizio. */
-export function MaterialRow({ material }: { material: WithId<Material> }) {
+export function MaterialRow({ material, action }: { material: WithId<Material>; action?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 rounded-lg bg-surface-low p-2.5">
       <MaterialIcon type={material.type} className="size-10 rounded-lg" />
@@ -187,6 +187,7 @@ export function MaterialRow({ material }: { material: WithId<Material> }) {
         </p>
       </div>
       <MaterialActions material={material} compact />
+      {action}
     </div>
   );
 }

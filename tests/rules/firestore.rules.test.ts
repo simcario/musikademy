@@ -194,13 +194,13 @@ describe("docente", () => {
   });
 
   it("imposta il costo del corso con valori validi", async () => {
-    const ok = { monthlyAmount: 120, lessonPrice: 30, lessonsPerMonth: 4, dueDay: 10 };
+    const ok = { cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, startDate: Timestamp.now(), dueAt: "start" };
     await assertSucceeds(updateDoc(doc(teacher(), "students", ALICE), { fee: ok }));
-    await assertSucceeds(updateDoc(doc(teacher(), "students", ALICE), { fee: { monthlyAmount: 90, dueDay: 1 } }));
-    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, dueDay: 31 } }));
-    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, monthlyAmount: -1 } }));
+    await assertSucceeds(updateDoc(doc(teacher(), "students", ALICE), { fee: { cycleAmount: 90, startDate: Timestamp.now(), dueAt: "end" } }));
+    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, dueAt: "mese" } }));
+    await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, cycleAmount: -1 } }));
     await assertFails(updateDoc(doc(teacher(), "students", ALICE), { fee: { ...ok, extra: true } }));
-    await assertFails(updateDoc(doc(student(ALICE), "students", ALICE), { fee: { monthlyAmount: 1, dueDay: 1 } }));
+    await assertFails(updateDoc(doc(student(ALICE), "students", ALICE), { fee: ok }));
   });
 
   it("non crea utenti né cambia ruoli dal client", async () => {

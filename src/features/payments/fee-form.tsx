@@ -1,62 +1,80 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarPlus, Pencil, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { FormActions, FormDialog } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
+import { ListSkeleton } from "@/components/shared/states";
 import { useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
+import { qk } from "@/hooks/query-keys";
+import { lessonService } from "@/services/lessonService";
 import { paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
 import type { Student, StudentFee, WithId } from "@/types";
-import { formatCurrency } from "@/utils/format";
-import { periodLabel, periodOf } from "@/utils/status";
+import { cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
+import { formatCurrency, formatDate, fromInputDate, toInputDate } from "@/utils/format";
 import { amountToInput, feeFormSchema, parseAmount, type FeeFormValues } from "./schemas";
+
+export const DUE_AT_LABEL = { start: "a inizio ciclo", end: "a fine ciclo" } as const;
 
 /** Riepilogo del costo del corso nella scheda studente, con impostazione e generazione della quota. */
 export function StudentFeeCard({ student }: { student: WithId<Student> }) {
   const { uid } = useSession();
   const [editing, setEditing] = useState(false);
-  const [period, setPeriod] = useState(() => periodOf(new Date()));
   const fee = student.fee;
+  const current = fee ? cycleStartAt(fee.startDate.toDate(), new Date()) : null;
+  // Ciclo scelto per la generazione: precedente, in corso o successivo.
+  const cycles = current
+    ? [-1, 0, 1]
+        .map((n) => ({ n, start: shiftCycle(current, n) }))
+        .filter((c) => c.start >= cycleStartAt(fee!.startDate.toDate(), fee!.startDate.toDate()))
+    : [];
+  const [chosen, setChosen] = useState(0);
+  const target = cycles.find((c) => c.n === chosen)?.start ?? current;
 
-  const generate = useStaffMutation(() => paymentService.generateMonthly([student], period, uid), {
-    success: (r) => (r.created ? `Quota di ${periodLabel(period).toLowerCase()} creata` : `La quota di ${periodLabel(period).toLowerCase()} esiste già`),
-    invalidate: [["payments"], ["stats"]],
-  });
+  const generate = useStaffMutation(
+    () => paymentService.generateCycles([student], target!, uid),
+    {
+      success: (r) => (r.created ? `Quota ${cycleLabel(target!)} creata` : `La quota ${cycleLabel(target!)} esiste già`),
+      invalidate: [["payments"], ["stats"]],
+    },
+  );
 
   return (
-    <div className="card-surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-      <Wallet className="hidden size-6 shrink-0 text-primary sm:block" aria-hidden />
+    <div className="card-surface flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
+      <Wallet className="hidden size-6 shrink-0 text-primary lg:block" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold text-muted-foreground">Costo del corso</p>
         {fee ? (
           <>
-            <p className="text-lg font-bold tabular-nums">{formatCurrency(fee.monthlyAmount)} / mese</p>
+            <p className="text-lg font-bold tabular-nums">{formatCurrency(fee.cycleAmount)} ogni 4 settimane</p>
             <p className="text-xs text-muted-foreground">
-              {fee.lessonPrice ? `${formatCurrency(fee.lessonPrice)} a lezione` : ""}
-              {fee.lessonPrice && fee.lessonsPerMonth ? ` × ${fee.lessonsPerMonth} lezioni · ` : fee.lessonPrice ? " · " : ""}
-              scadenza il {fee.dueDay} del mese
+              {fee.lessonPrice ? `${formatCurrency(fee.lessonPrice)} a lezione${fee.lessonsPerCycle ? ` × ${fee.lessonsPerCycle}` : ""} · ` : ""}
+              cicli dal {formatDate(fee.startDate, "d MMM yyyy")} · scadenza {DUE_AT_LABEL[fee.dueAt]}
             </p>
+            {current && <p className="text-xs font-medium">Ciclo in corso: {cycleLabel(current)}</p>}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Non impostato: le quote mensili non verranno generate.</p>
+          <p className="text-sm text-muted-foreground">Non impostato: le quote non verranno generate.</p>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {fee && student.status === "active" && (
+        {fee && student.status === "active" && cycles.length > 0 && (
           <>
-            <Input
-              type="month"
-              value={period}
-              onChange={(e) => e.target.value && setPeriod(e.target.value)}
-              aria-label="Mese della quota"
-              className="w-40"
-            />
+            <NativeSelect value={String(chosen)} onChange={(e) => setChosen(Number(e.target.value))} aria-label="Ciclo della quota" className="w-auto">
+              {cycles.map((c) => (
+                <option key={cycleKey(c.start)} value={c.n}>
+                  {c.n === 0 ? "In corso" : c.n < 0 ? "Precedente" : "Prossimo"} · {cycleLabel(c.start)}
+                </option>
+              ))}
+            </NativeSelect>
             <Button variant="secondary" size="sm" onClick={() => generate.mutate(undefined)} disabled={generate.isPending}>
               <CalendarPlus aria-hidden /> Genera quota
             </Button>
@@ -82,47 +100,78 @@ export function FeeDialog({
   studentId: string;
   fee?: StudentFee;
 }) {
+  // Senza costo impostato, la data di inizio si propone dalla prima lezione dello studente.
+  const first = useQuery({
+    queryKey: qk.lessons({ first: studentId }),
+    queryFn: () => lessonService.firstForStudent(studentId),
+    enabled: open && !fee,
+  });
   return (
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Costo del corso"
-      description="Base per le quote mensili. Lo studente potrà pagare anche a rate, ad esempio lezione per lezione."
+      description="Si paga a cicli di 4 settimane che partono dalla prima lezione, anche a rate (es. lezione per lezione)."
     >
-      <FeeForm key={String(open)} studentId={studentId} fee={fee} onDone={() => onOpenChange(false)} />
+      {open && !fee && first.isPending ? (
+        <ListSkeleton rows={2} />
+      ) : (
+        <FeeForm
+          key={String(open)}
+          studentId={studentId}
+          fee={fee}
+          firstLesson={first.data?.date.toDate()}
+          onDone={() => onOpenChange(false)}
+        />
+      )}
     </FormDialog>
   );
 }
 
-function FeeForm({ studentId, fee, onDone }: { studentId: string; fee?: StudentFee; onDone: () => void }) {
+function FeeForm({
+  studentId,
+  fee,
+  firstLesson,
+  onDone,
+}: {
+  studentId: string;
+  fee?: StudentFee;
+  firstLesson?: Date;
+  onDone: () => void;
+}) {
   const form = useForm<FeeFormValues>({
     resolver: zodResolver(feeFormSchema),
     defaultValues: {
       lessonPrice: amountToInput(fee?.lessonPrice),
-      lessonsPerMonth: fee?.lessonsPerMonth ? String(fee.lessonsPerMonth) : "",
-      monthlyAmount: amountToInput(fee?.monthlyAmount),
-      dueDay: String(fee?.dueDay ?? 10),
+      lessonsPerCycle: fee?.lessonsPerCycle ? String(fee.lessonsPerCycle) : "",
+      cycleAmount: amountToInput(fee?.cycleAmount),
+      startDate: toInputDate(fee?.startDate ?? firstLesson ?? new Date()),
+      dueAt: fee?.dueAt ?? "start",
     },
   });
   const { errors } = form.formState;
-  const [lessonPrice, lessonsPerMonth] = useWatch({ control: form.control, name: ["lessonPrice", "lessonsPerMonth"] });
+  const [lessonPrice, lessonsPerCycle, startDate] = useWatch({
+    control: form.control,
+    name: ["lessonPrice", "lessonsPerCycle", "startDate"],
+  });
 
-  // Costo a lezione × lezioni al mese → quota mensile (resta modificabile, es. per uno sconto).
-  const recompute = (price = lessonPrice, count = lessonsPerMonth) => {
+  // Costo a lezione × lezioni per ciclo → quota (resta modificabile, es. per uno sconto).
+  const recompute = (price = lessonPrice, count = lessonsPerCycle) => {
     const p = price && /^\d+([.,]\d{1,2})?$/.test(price.trim()) ? parseAmount(price) : 0;
     const n = Number(count);
     if (p > 0 && Number.isInteger(n) && n > 0) {
-      form.setValue("monthlyAmount", amountToInput(Math.round(p * n * 100) / 100), { shouldValidate: true });
+      form.setValue("cycleAmount", amountToInput(Math.round(p * n * 100) / 100), { shouldValidate: true });
     }
   };
 
   const save = useStaffMutation(
     (v: FeeFormValues) =>
       studentService.setFee(studentId, {
-        monthlyAmount: parseAmount(v.monthlyAmount),
+        cycleAmount: parseAmount(v.cycleAmount),
         lessonPrice: v.lessonPrice ? parseAmount(v.lessonPrice) : undefined,
-        lessonsPerMonth: v.lessonsPerMonth ? Number(v.lessonsPerMonth) : undefined,
-        dueDay: Number(v.dueDay),
+        lessonsPerCycle: v.lessonsPerCycle ? Number(v.lessonsPerCycle) : undefined,
+        startDate: fromInputDate(v.startDate),
+        dueAt: v.dueAt,
       }),
     { success: "Costo del corso salvato", invalidate: [["students"]], onSuccess: onDone },
   );
@@ -133,9 +182,22 @@ function FeeForm({ studentId, fee, onDone }: { studentId: string; fee?: StudentF
   });
 
   const price = form.register("lessonPrice");
-  const count = form.register("lessonsPerMonth");
+  const count = form.register("lessonsPerCycle");
+  const validStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate ?? "");
   return (
     <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4" noValidate>
+      <Field
+        label="Prima lezione (inizio dei cicli)"
+        error={errors.startDate?.message}
+        required
+        hint={
+          validStart
+            ? `Primo ciclo: ${cycleLabel(fromInputDate(startDate))}${firstLesson && !fee ? " · proposta dalla prima lezione in calendario" : ""}`
+            : undefined
+        }
+      >
+        {(p) => <Input {...p} type="date" {...form.register("startDate")} />}
+      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Costo a lezione (€)" error={errors.lessonPrice?.message}>
           {(p) => (
@@ -146,12 +208,12 @@ function FeeForm({ studentId, fee, onDone }: { studentId: string; fee?: StudentF
               {...price}
               onChange={(e) => {
                 price.onChange(e);
-                recompute(e.target.value, lessonsPerMonth);
+                recompute(e.target.value, lessonsPerCycle);
               }}
             />
           )}
         </Field>
-        <Field label="Lezioni al mese" error={errors.lessonsPerMonth?.message}>
+        <Field label="Lezioni ogni 4 settimane" error={errors.lessonsPerCycle?.message}>
           {(p) => (
             <Input
               {...p}
@@ -167,11 +229,16 @@ function FeeForm({ studentId, fee, onDone }: { studentId: string; fee?: StudentF
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Quota mensile (€)" error={errors.monthlyAmount?.message} required hint="Calcolata, ma modificabile">
-          {(p) => <Input {...p} inputMode="decimal" placeholder="120" {...form.register("monthlyAmount")} />}
+        <Field label="Quota 4 settimane (€)" error={errors.cycleAmount?.message} required hint="Calcolata, ma modificabile">
+          {(p) => <Input {...p} inputMode="decimal" placeholder="120" {...form.register("cycleAmount")} />}
         </Field>
-        <Field label="Scadenza (giorno del mese)" error={errors.dueDay?.message} required>
-          {(p) => <Input {...p} inputMode="numeric" {...form.register("dueDay")} />}
+        <Field label="Scadenza della quota" error={errors.dueAt?.message} required>
+          {(p) => (
+            <NativeSelect {...p} {...form.register("dueAt")}>
+              <option value="start">Inizio ciclo (anticipato)</option>
+              <option value="end">Fine ciclo (es. paga a lezione)</option>
+            </NativeSelect>
+          )}
         </Field>
       </div>
       {fee && (

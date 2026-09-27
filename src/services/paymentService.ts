@@ -17,7 +17,8 @@ import { firestore } from "@/lib/firebase/client";
 import type { Installment, Payment, PaymentMethod, PaymentStatus, Student, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { fullName } from "@/utils/format";
-import { monthlyDueDate, paidAmountOf, periodLabel, remainingOf, storedPaymentStatus } from "@/utils/status";
+import { cycleDueDate, cycleKey, cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { paidAmountOf, remainingOf, storedPaymentStatus } from "@/utils/status";
 import { COLLECTIONS, clean, col, list, paginate, ref, timestamps, touched } from "./base";
 
 /** Dati della quota (il dovuto). I versamenti si gestiscono a parte. */
@@ -96,7 +97,7 @@ function mutate(id: string, fn: (p: Payment) => Record<string, unknown>) {
   });
 }
 
-export const monthlyPaymentId = (studentId: string, period: string) => `monthly_${studentId}_${period}`;
+export const cyclePaymentId = (studentId: string, cycleStart: Date) => `cycle_${studentId}_${cycleKey(cycleStart)}`;
 
 export const paymentService = {
   /** Studente: solo lettura dei propri pagamenti. */
@@ -202,30 +203,31 @@ export const paymentService = {
     }),
 
   /**
-   * Genera le quote mensili del periodo `YYYY-MM` per gli studenti con un costo impostato.
+   * Genera, per ogni studente attivo con un costo impostato, la quota del ciclo di 4 settimane
+   * che contiene la data `at` (i cicli partono dalla prima lezione dello studente).
    * ID deterministico: rilanciarla non crea doppioni né tocca le quote esistenti.
    */
-  async generateMonthly(students: WithId<Student>[], period: string, createdBy: string) {
-    const eligible = students.filter((s) => s.status === "active" && (s.fee?.monthlyAmount ?? 0) > 0);
+  async generateCycles(students: WithId<Student>[], at: Date, createdBy: string) {
+    const eligible = students.filter((s) => s.status === "active" && (s.fee?.cycleAmount ?? 0) > 0 && s.fee?.startDate);
     let created = 0;
     await runTransaction(firestore(), async (tx) => {
       created = 0;
-      const refs = eligible.map((s) => ref(COLLECTIONS.payments, monthlyPaymentId(s.id, period)));
+      const starts = eligible.map((s) => cycleStartAt(s.fee!.startDate.toDate(), at));
+      const refs = eligible.map((s, i) => ref(COLLECTIONS.payments, cyclePaymentId(s.id, starts[i])));
       const snaps = await Promise.all(refs.map((r) => tx.get(r)));
       eligible.forEach((s, i) => {
         if (snaps[i].exists()) return;
         const fee = s.fee!;
-        const amount = cents(fee.monthlyAmount);
-        const detail = fee.lessonPrice && fee.lessonsPerMonth ? ` (${fee.lessonsPerMonth} lezioni)` : "";
+        const detail = fee.lessonsPerCycle ? ` (${fee.lessonsPerCycle} lezioni)` : "";
         tx.set(refs[i], {
           studentId: s.id,
           studentName: fullName(s),
-          description: `Quota ${periodLabel(period).toLowerCase()}${detail}`,
-          amount,
+          description: `Quota ${cycleLabel(starts[i])}${detail}`,
+          amount: cents(fee.cycleAmount),
           paidAmount: 0,
           installments: [],
-          period,
-          dueDate: Timestamp.fromDate(monthlyDueDate(period, fee.dueDay)),
+          period: cycleKey(starts[i]),
+          dueDate: Timestamp.fromDate(cycleDueDate(starts[i], fee.dueAt)),
           status: "pending",
           notes: "",
           createdBy,

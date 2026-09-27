@@ -1,4 +1,5 @@
 import {
+  arrayRemove,
   deleteDoc,
   doc,
   getDoc,
@@ -224,4 +225,8 @@ export const materialService = {
       studentIds: Array.from(new Set([...(material.studentIds ?? []), ...studentIds])),
       ...touched(),
     }),
+
+  /** Revoca l'assegnazione personale (resta visibile solo se è per tutti o per il corso dello studente). */
+  unassignFromStudent: (materialId: string, studentId: string) =>
+    updateDoc(ref(COLLECTIONS.materials, materialId), { studentIds: arrayRemove(studentId), ...touched() }),
 };

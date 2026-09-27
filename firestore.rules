@@ -62,16 +62,17 @@ service cloud.firestore {
 
     // ───────────────────────── students ─────────────────────────
     function money(v) { return v is number && v >= 0 && v < 100000; }
-    // Costo del corso (ADR D21): quota mensile obbligatoria, costo a lezione facoltativo.
+    // Costo del corso (ADR D21): quota per ciclo di 4 settimane dalla prima lezione.
     function validFee() {
       let d = request.resource.data;
       return !('fee' in d) || (
         d.fee is map
-        && d.fee.keys().hasOnly(['monthlyAmount', 'lessonPrice', 'lessonsPerMonth', 'dueDay'])
-        && money(d.fee.monthlyAmount) && d.fee.monthlyAmount > 0
+        && d.fee.keys().hasOnly(['cycleAmount', 'lessonPrice', 'lessonsPerCycle', 'startDate', 'dueAt'])
+        && money(d.fee.cycleAmount) && d.fee.cycleAmount > 0
         && (!('lessonPrice' in d.fee) || money(d.fee.lessonPrice))
-        && (!('lessonsPerMonth' in d.fee) || (d.fee.lessonsPerMonth is int && d.fee.lessonsPerMonth >= 1 && d.fee.lessonsPerMonth <= 31))
-        && d.fee.dueDay is int && d.fee.dueDay >= 1 && d.fee.dueDay <= 28
+        && (!('lessonsPerCycle' in d.fee) || (d.fee.lessonsPerCycle is int && d.fee.lessonsPerCycle >= 1 && d.fee.lessonsPerCycle <= 28))
+        && d.fee.startDate is timestamp
+        && d.fee.dueAt in ['start', 'end']
       );
     }
 

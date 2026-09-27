@@ -24,7 +24,8 @@ import {
 } from "./schemas";
 import { formatCurrency, formatDate, fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { PaymentProgress } from "./payment-progress";
-import { PAYMENT_METHOD_LABEL, paidAmountOf, periodLabel, periodOf, remainingOf } from "@/utils/status";
+import { cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { PAYMENT_METHOD_LABEL, paidAmountOf, remainingOf } from "@/utils/status";
 
 const INVALIDATE = [["payments"], ["stats"]];
 
@@ -93,8 +94,8 @@ function PaymentForm({
   const applyFee = (id: string) => {
     const fee = students.data?.find((s) => s.id === id)?.fee;
     if (!fee || payment) return;
-    if (!form.getValues("amount")) form.setValue("amount", amountToInput(fee.monthlyAmount));
-    if (!form.getValues("description")) form.setValue("description", `Quota ${periodLabel(periodOf(new Date())).toLowerCase()}`);
+    if (!form.getValues("amount")) form.setValue("amount", amountToInput(fee.cycleAmount));
+    if (!form.getValues("description")) form.setValue("description", `Quota ${cycleLabel(cycleStartAt(fee.startDate.toDate(), new Date()))}`);
   };
 
   const save = useStaffMutation(
@@ -142,7 +143,7 @@ function PaymentForm({
           label="Importo dovuto (€)"
           error={errors.amount?.message}
           required
-          hint={selected?.fee && !payment ? `Quota mensile: ${formatCurrency(selected.fee.monthlyAmount)}` : undefined}
+          hint={selected?.fee && !payment ? `Quota 4 settimane: ${formatCurrency(selected.fee.cycleAmount)}` : undefined}
         >
           {(p) => <Input {...p} inputMode="decimal" placeholder="120" {...form.register("amount")} />}
         </Field>

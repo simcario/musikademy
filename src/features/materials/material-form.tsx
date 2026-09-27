@@ -29,11 +29,8 @@ const schema = z
     visibility: z.enum(["all", "course", "student"]),
     studentIds: z.array(z.string()),
   })
-  .refine((v) => v.visibility !== "course" || !!v.courseId, { path: ["courseId"], message: "Seleziona il corso" })
-  .refine((v) => v.visibility !== "student" || v.studentIds.length > 0, {
-    path: ["studentIds"],
-    message: "Seleziona almeno uno studente",
-  });
+  // "student" senza studenti = materiale non ancora visibile: lo si assegna dopo dalla scheda studente.
+  .refine((v) => v.visibility !== "course" || !!v.courseId, { path: ["courseId"], message: "Seleziona il corso" });
 type Values = z.infer<typeof schema>;
 
 export function MaterialFormDialog({
@@ -147,7 +144,7 @@ function MaterialForm({ material, onDone }: { material?: WithId<Material> | null
         <Field label="Visibilità">
           {(p) => (
             <NativeSelect {...p} {...form.register("visibility")}>
-              <option value="student">Studenti selezionati</option>
+              <option value="student">Solo studenti assegnati</option>
               <option value="course">Un corso</option>
               <option value="all">Tutti gli studenti</option>
             </NativeSelect>
@@ -159,15 +156,19 @@ function MaterialForm({ material, onDone }: { material?: WithId<Material> | null
       </div>
       <div className="space-y-1">
         <CheckList
-          label={visibility === "student" ? "Studenti" : "Assegna anche a studenti specifici (opzionale)"}
+          label={
+            visibility === "student"
+              ? "Rendi visibile subito a (opzionale)"
+              : "Assegna anche a studenti specifici (opzionale)"
+          }
           items={(students.data ?? []).map((s) => ({ id: s.id, label: fullName(s), sub: s.email }))}
           selected={watch_studentIds}
           onChange={(ids) => form.setValue("studentIds", ids, { shouldValidate: true })}
           maxHeight="max-h-44"
         />
-        {errors.studentIds && (
-          <p role="alert" className="text-xs font-medium text-danger">
-            {errors.studentIds.message}
+        {visibility === "student" && watch_studentIds.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Nessuno studente lo vedrà finché non lo assegni dalla scheda studente (Materiali → Assegna).
           </p>
         )}
       </div>

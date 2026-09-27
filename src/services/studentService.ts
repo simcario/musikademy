@@ -82,9 +82,12 @@ export const studentService = {
     await batch.commit();
   },
 
-  /** Costo del corso (quota mensile); `null` lo rimuove. */
-  setFee: (uid: string, fee: StudentFee | null) =>
-    updateDoc(ref(COLLECTIONS.students, uid), { fee: fee ? clean({ ...fee }) : deleteField(), ...touched() }),
+  /** Costo del corso (cicli di 4 settimane dalla prima lezione); `null` lo rimuove. */
+  setFee: (uid: string, fee: (Omit<StudentFee, "startDate"> & { startDate: Date }) | null) =>
+    updateDoc(ref(COLLECTIONS.students, uid), {
+      fee: fee ? clean({ ...fee, startDate: Timestamp.fromDate(fee.startDate) }) : deleteField(),
+      ...touched(),
+    }),
 
   async getNotes(uid: string): Promise<string> {
     const snap = await getDoc(notesRef(uid));

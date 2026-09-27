@@ -89,23 +89,6 @@ export function effectivePaymentStatus(p: Pick<Payment, "status" | "dueDate">, n
   return endOfDue < now ? "overdue" : p.status;
 }
 
-/** Periodo `YYYY-MM` di una data (fuso locale). */
-export function periodOf(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-export function periodLabel(period: string): string {
-  const [y, m] = period.split("-").map(Number);
-  const label = new Date(y, m - 1, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-/** Scadenza della quota mensile: il giorno indicato del mese di competenza. */
-export function monthlyDueDate(period: string, dueDay: number): Date {
-  const [y, m] = period.split("-").map(Number);
-  return new Date(y, m - 1, Math.min(Math.max(1, dueDay), 28), 0, 0, 0);
-}
-
 export interface AttendanceSummary {
   total: number;
   present: number;

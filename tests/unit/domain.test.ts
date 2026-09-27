@@ -3,13 +3,11 @@ import { amountToInput, feeFormSchema, installmentSchema, paymentFormSchema, par
 import { lessonFormSchema, parseTopics } from "@/features/lessons/schemas";
 import { createUserSchema, studentFormSchema } from "@/features/students/schemas";
 import { checkFile, safeFileName } from "@/lib/files";
+import { cycleDueDate, cycleEnd, cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
 import { buildKeywords, searchToken } from "@/utils/keywords";
 import {
   effectivePaymentStatus,
-  monthlyDueDate,
   paidAmountOf,
-  periodLabel,
-  periodOf,
   remainingOf,
   storedPaymentStatus,
   summarizeAttendance,
@@ -108,18 +106,33 @@ describe("pagamenti", () => {
     expect(effectivePaymentStatus({ status: "paid", dueDate: ts(new Date("2026-09-01")) }, now)).toBe("paid");
   });
 
-  it("costo del corso e quote mensili", () => {
-    const fee = { lessonPrice: "30", lessonsPerMonth: "4", monthlyAmount: "120", dueDay: "10" };
+  it("costo del corso a cicli di 4 settimane", () => {
+    const fee = { lessonPrice: "30", lessonsPerCycle: "4", cycleAmount: "120", startDate: "2026-10-15", dueAt: "start" };
     expect(feeFormSchema.safeParse(fee).success).toBe(true);
-    expect(feeFormSchema.safeParse({ ...fee, lessonPrice: "", lessonsPerMonth: "" }).success).toBe(true);
-    expect(feeFormSchema.safeParse({ ...fee, dueDay: "31" }).success).toBe(false);
-    expect(feeFormSchema.safeParse({ ...fee, monthlyAmount: "" }).success).toBe(false);
-    expect(periodOf(new Date(2026, 0, 15))).toBe("2026-01");
-    expect(periodLabel("2026-10")).toBe("Ottobre 2026");
-    const due = monthlyDueDate("2026-02", 10);
-    expect([due.getFullYear(), due.getMonth(), due.getDate()]).toEqual([2026, 1, 10]);
+    expect(feeFormSchema.safeParse({ ...fee, lessonPrice: "", lessonsPerCycle: "" }).success).toBe(true);
+    expect(feeFormSchema.safeParse({ ...fee, lessonsPerCycle: "29" }).success).toBe(false);
+    expect(feeFormSchema.safeParse({ ...fee, cycleAmount: "" }).success).toBe(false);
+    expect(feeFormSchema.safeParse({ ...fee, startDate: "" }).success).toBe(false);
     expect(amountToInput(80.5)).toBe("80,50");
     expect(amountToInput(120)).toBe("120");
+  });
+
+  it("i cicli partono dalla prima lezione, non dal mese", () => {
+    const first = new Date(2026, 9, 15, 16, 30); // 15 ottobre, a metà mese
+    const key = (d: Date) => cycleKey(d);
+    expect(key(cycleStartAt(first, new Date(2026, 9, 15)))).toBe("2026-10-15");
+    expect(key(cycleStartAt(first, new Date(2026, 10, 11, 23)))).toBe("2026-10-15"); // ultimo giorno del 1° ciclo
+    expect(key(cycleStartAt(first, new Date(2026, 10, 12)))).toBe("2026-11-12");
+    expect(key(cycleStartAt(first, new Date(2027, 0, 8)))).toBe("2027-01-07"); // 4° ciclo, a cavallo d'anno
+    expect(key(cycleStartAt(first, new Date(2026, 9, 1)))).toBe("2026-10-15"); // prima dell'inizio → primo ciclo
+    expect(key(cycleEnd(new Date(2026, 9, 15)))).toBe("2026-11-11");
+    expect(key(shiftCycle(new Date(2026, 9, 15), -1))).toBe("2026-09-17");
+    expect(key(cycleDueDate(new Date(2026, 9, 15), "start"))).toBe("2026-10-15");
+    expect(key(cycleDueDate(new Date(2026, 9, 15), "end"))).toBe("2026-11-11");
+    expect(cycleLabel(new Date(2026, 9, 15))).toBe("15 ott – 11 nov 2026");
+    expect(cycleLabel(new Date(2026, 11, 10))).toBe("10 dic 2026 – 6 gen 2027");
+    // Il cambio dell'ora legale (25 ottobre) non sposta i cicli.
+    expect(key(cycleStartAt(first, new Date(2026, 11, 10, 1)))).toBe("2026-12-10");
   });
 });
 

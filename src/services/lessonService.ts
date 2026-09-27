@@ -73,6 +73,17 @@ export const lessonService = {
     return r ?? null;
   },
 
+  /** Prima lezione non annullata: inizio dei cicli di pagamento (ADR D21). */
+  async firstForStudent(studentId: string) {
+    const rows = await list<Lesson>(
+      COLLECTIONS.lessons,
+      where("studentId", "==", studentId),
+      orderBy("date", "asc"),
+      limit(5),
+    );
+    return rows.find((l) => l.status !== "cancelled") ?? null;
+  },
+
   // ── Docente ──
   listInRange: (from: Date, days: number) => {
     const [start, end] = dayRange(from, days);

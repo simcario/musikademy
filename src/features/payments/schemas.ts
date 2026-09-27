@@ -43,19 +43,17 @@ export const installmentSchema = (max: number) =>
   });
 export type InstallmentFormValues = z.infer<ReturnType<typeof installmentSchema>>;
 
-/** Costo del corso: con costo a lezione e lezioni al mese la quota mensile si calcola da sola. */
+/** Costo del corso: con costo a lezione e lezioni per ciclo la quota si calcola da sola. */
 export const feeFormSchema = z.object({
   lessonPrice: optionalAmount,
-  lessonsPerMonth: z
+  lessonsPerCycle: z
     .string()
     .trim()
-    .regex(/^([1-9]|[12]\d|3[01])?$/, "Da 1 a 31")
+    .regex(/^([1-9]|1\d|2[0-8])?$/, "Da 1 a 28")
     .optional(),
-  monthlyAmount: amountField,
-  dueDay: z
-    .string()
-    .trim()
-    .regex(/^([1-9]|1\d|2[0-8])$/, "Giorno da 1 a 28"),
+  cycleAmount: amountField,
+  startDate: date,
+  dueAt: z.enum(["start", "end"]),
 });
 export type FeeFormValues = z.infer<typeof feeFormSchema>;
 

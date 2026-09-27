@@ -34,9 +34,11 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 
 ## Miglioramenti V1 (non bloccanti)
 
+- 🟡 Materiali caricati senza visibilità ("Solo studenti assegnati" senza studenti = "Non assegnato"), assegnati o nascosti poi dalla scheda studente — tsc/eslint/vitest ✅, da provare a mano; nessuna modifica alle rules
 - ⬜ Allegati alle comunicazioni (modello e Storage rules già pronti, manca l'upload in UI)
-- ✅ Pagamenti: costo del corso per studente, "Genera quote del mese", versamenti parziali (ADR D21) — rules + unit test verdi; `deploy:rules` necessario (nuove regole su `students.fee` e `payments`)
-- ⬜ Generazione automatica mensile delle quote (oggi manuale con un clic; automatica = Cloud Function schedulata)
+- ✅ Pagamenti: costo del corso per studente a cicli di 4 settimane dalla prima lezione, "Genera quote", versamenti parziali (ADR D21) — rules + unit test verdi; `deploy:rules` necessario (nuove regole su `students.fee` e `payments`)
+- ⬜ Generazione automatica delle quote dei cicli (oggi manuale con un clic; automatica = Cloud Function schedulata)
+- ⬜ Cicli: valutare se saltare le settimane di chiusura (festività) o le lezioni annullate — oggi il ciclo è sempre di 28 giorni
 - ⬜ Test E2E (Playwright) dei flussi principali
 - ⬜ Session cookie + `proxy.ts` per redirect lato server (oggi guard client + rules)
 

@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states
 import { PaymentBadge } from "@/components/shared/status-badge";
 import { PaymentProgress } from "@/features/payments/payment-progress";
 import { useMyPayments, useMyStudentProfile } from "@/features/student-area/hooks";
+import { cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf } from "@/utils/status";
 
@@ -28,12 +29,13 @@ export default function PaymentsPage() {
           {fee && (
             <div>
               <p className="text-sm text-muted-foreground">Costo del corso</p>
-              <p className="text-lg font-bold tabular-nums">{formatCurrency(fee.monthlyAmount)} / mese</p>
+              <p className="text-lg font-bold tabular-nums">{formatCurrency(fee.cycleAmount)} ogni 4 settimane</p>
               {fee.lessonPrice && (
                 <p className="text-xs text-muted-foreground">
-                  {formatCurrency(fee.lessonPrice)} a lezione{fee.lessonsPerMonth ? ` × ${fee.lessonsPerMonth}` : ""}
+                  {formatCurrency(fee.lessonPrice)} a lezione{fee.lessonsPerCycle ? ` × ${fee.lessonsPerCycle}` : ""}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground">Ciclo in corso: {cycleLabel(cycleStartAt(fee.startDate.toDate(), new Date()))}</p>
             </div>
           )}
         </div>

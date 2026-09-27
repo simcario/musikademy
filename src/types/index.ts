@@ -38,14 +38,17 @@ export interface Student {
   updatedAt: Timestamp;
 }
 
+/** Costo del corso a cicli di 4 settimane dalla prima lezione (ADR D21, utils/cycles). */
 export interface StudentFee {
-  /** Quota dovuta ogni mese (es. 4 lezioni × 30 € = 120 €). */
-  monthlyAmount: number;
-  /** Facoltativi: costo a lezione e lezioni al mese, usati per proporre versamenti "a lezione". */
+  /** Quota dovuta per ogni ciclo di 4 settimane (es. 4 lezioni × 30 € = 120 €). */
+  cycleAmount: number;
+  /** Facoltativi: costo a lezione e lezioni per ciclo, usati per proporre versamenti "a lezione". */
   lessonPrice?: number;
-  lessonsPerMonth?: number;
-  /** Giorno del mese in cui scade la quota (1–28). */
-  dueDay: number;
+  lessonsPerCycle?: number;
+  /** Prima lezione: da qui partono i cicli. */
+  startDate: Timestamp;
+  /** Scadenza della quota: primo o ultimo giorno del ciclo. */
+  dueAt: "start" | "end";
 }
 
 export interface Teacher {
@@ -181,7 +184,7 @@ export interface Payment {
   /** Somma dei versamenti, denormalizzata per le aggregazioni. Assente sui documenti precedenti. */
   paidAmount?: number;
   installments?: Installment[];
-  /** Mese di competenza `YYYY-MM` delle quote mensili generate. */
+  /** Primo giorno (`YYYY-MM-DD`) del ciclo di 4 settimane delle quote generate. */
   period?: string;
   dueDate: Timestamp;
   /** Data dell'ultimo versamento. */

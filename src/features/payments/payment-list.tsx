@@ -20,8 +20,9 @@ import { StudentSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { paymentService } from "@/services/paymentService";
 import type { Payment, PaymentStatus, WithId } from "@/types";
-import { formatCurrency, formatDate, fromInputDate } from "@/utils/format";
-import { PAYMENT_META, PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, periodLabel, periodOf, remainingOf } from "@/utils/status";
+import { cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { formatCurrency, formatDate, fromInputDate, fullName, toInputDate } from "@/utils/format";
+import { PAYMENT_META, PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf } from "@/utils/status";
 import { InstallmentDialog, PaymentFormDialog } from "./payment-form";
 
 const INVALIDATE = [["payments"], ["stats"]];
@@ -75,7 +76,7 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
         <div className="flex flex-wrap gap-2">
           {!studentId && (
             <Button variant="secondary" onClick={() => setGenerating(true)}>
-              <CalendarPlus aria-hidden /> Genera quote del mese
+              <CalendarPlus aria-hidden /> Genera quote
             </Button>
           )}
           <Button onClick={() => setCreating(true)}>
@@ -151,7 +152,7 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
       <PaymentFormDialog open={creating} onOpenChange={setCreating} defaultStudentId={studentId} />
       <PaymentFormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} payment={editing} />
       <InstallmentDialog payment={paying} onOpenChange={(o) => !o && setPayingId(null)} />
-      <GenerateMonthlyDialog open={generating} onOpenChange={setGenerating} />
+      <GenerateCyclesDialog open={generating} onOpenChange={setGenerating} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
@@ -166,19 +167,22 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
   );
 }
 
-/** Crea in un colpo le quote del mese per tutti gli studenti attivi con un costo impostato. */
-function GenerateMonthlyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+/**
+ * Crea le quote del ciclo di 4 settimane in corso alla data scelta, per tutti gli studenti attivi
+ * con un costo impostato. Ogni studente ha i suoi cicli (partono dalla sua prima lezione).
+ */
+function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { uid } = useSession();
   const students = useActiveStudents();
-  const [period, setPeriod] = useState(() => periodOf(new Date()));
-  const withFee = (students.data ?? []).filter((s) => (s.fee?.monthlyAmount ?? 0) > 0);
-  const total = withFee.reduce((s, st) => s + (st.fee?.monthlyAmount ?? 0), 0);
+  const [date, setDate] = useState(() => toInputDate(new Date()));
+  const withFee = (students.data ?? []).filter((s) => (s.fee?.cycleAmount ?? 0) > 0);
+  const total = withFee.reduce((s, st) => s + (st.fee?.cycleAmount ?? 0), 0);
 
-  const generate = useStaffMutation(() => paymentService.generateMonthly(students.data ?? [], period, uid), {
+  const generate = useStaffMutation(() => paymentService.generateCycles(students.data ?? [], fromInputDate(date), uid), {
     success: (r) =>
       r.created
         ? `${r.created} ${r.created === 1 ? "quota creata" : "quote create"}${r.existing ? ` (${r.existing} già presenti)` : ""}`
-        : "Tutte le quote del mese erano già presenti",
+        : "Tutte le quote erano già presenti",
     invalidate: INVALIDATE,
     onSuccess: () => onOpenChange(false),
   });
@@ -187,8 +191,8 @@ function GenerateMonthlyDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Genera quote del mese"
-      description="Crea una quota per ogni studente attivo con il costo del corso impostato. Le quote già create non vengono toccate."
+      title="Genera quote"
+      description="Per ogni studente attivo con il costo impostato crea la quota del suo ciclo di 4 settimane in corso alla data scelta. Le quote già create non vengono toccate: puoi lanciarla quando vuoi, ad esempio ogni lunedì."
     >
       <form
         className="space-y-4"
@@ -197,17 +201,35 @@ function GenerateMonthlyDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           generate.mutate(undefined);
         }}
       >
-        <Field label="Mese" required>
-          {(p) => <Input {...p} type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />}
+        <Field label="Cicli in corso al" required>
+          {(p) => <Input {...p} type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />}
         </Field>
-        <p className="text-sm text-muted-foreground">
-          {students.isPending
-            ? "Caricamento studenti…"
-            : `${periodLabel(period)}: ${withFee.length} studenti con costo impostato, totale ${formatCurrency(total)}.`}
-          {!students.isPending && (students.data?.length ?? 0) > withFee.length && (
-            <> {(students.data?.length ?? 0) - withFee.length} senza costo: impostalo dalla scheda studente, sezione Pagamenti.</>
-          )}
-        </p>
+        {students.isPending ? (
+          <p className="text-sm text-muted-foreground">Caricamento studenti…</p>
+        ) : (
+          <>
+            {withFee.length > 0 && (
+              <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-xl border border-border text-sm">
+                {withFee.map((s) => (
+                  <li key={s.id} className="flex justify-between gap-3 px-3 py-2">
+                    <span className="min-w-0 truncate">
+                      {fullName(s)}
+                      <span className="block text-xs text-muted-foreground">
+                        {cycleLabel(cycleStartAt(s.fee!.startDate.toDate(), fromInputDate(date)))}
+                      </span>
+                    </span>
+                    <span className="font-semibold tabular-nums">{formatCurrency(s.fee!.cycleAmount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {withFee.length} studenti con costo impostato, totale {formatCurrency(total)}.
+              {(students.data?.length ?? 0) > withFee.length &&
+                ` ${(students.data?.length ?? 0) - withFee.length} senza costo: impostalo dalla scheda studente, sezione Pagamenti.`}
+            </p>
+          </>
+        )}
         <FormActions onCancel={() => onOpenChange(false)} submitting={generate.isPending} submitLabel="Genera quote" />
       </form>
     </FormDialog>

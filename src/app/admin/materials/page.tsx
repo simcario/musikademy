@@ -109,10 +109,14 @@ function Materials() {
                   {CATEGORY_META[m.category].label} · {formatFileSize(m.size)} · {formatShortDate(m.createdAt)}
                 </p>
               </div>
-              <Pill tone="secondary">
-                {VISIBILITY_LABEL[m.visibility]}
-                {m.studentIds?.length ? ` · ${m.studentIds.length}` : ""}
-              </Pill>
+              {m.visibility === "student" && !m.studentIds?.length ? (
+                <Pill tone="warning">Non assegnato</Pill>
+              ) : (
+                <Pill tone="secondary">
+                  {VISIBILITY_LABEL[m.visibility]}
+                  {m.studentIds?.length ? ` · ${m.studentIds.length}` : ""}
+                </Pill>
+              )}
               <div className="flex items-center gap-1">
                 <MaterialActions material={m} compact />
                 <DropdownMenu>

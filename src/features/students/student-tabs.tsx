@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Library, Loader2, Plus } from "lucide-react";
+import { ClipboardCheck, EyeOff, Library, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
@@ -107,11 +107,16 @@ export function StudentMaterialsTab({ studentId, studentName }: { studentId: str
     getNextPageParam: (last) => last.cursor ?? undefined,
   });
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const unassign = useStaffMutation((materialId: string) => materialService.unassignFromStudent(materialId, studentId), {
+    success: `Materiale nascosto a ${studentName}`,
+    invalidate: [["materials"]],
+  });
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Assegnati personalmente. Lo studente vede anche i materiali del suo corso e quelli per tutti.
+          Assegnati personalmente: visibili allo studente. Assegna qui i materiali caricati prima della lezione. Lo
+          studente vede anche i materiali del suo corso e quelli per tutti.
         </p>
         <Button onClick={() => setAssigning(true)} className="shrink-0">
           <Plus aria-hidden /> Assegna
@@ -126,7 +131,22 @@ export function StudentMaterialsTab({ studentId, studentName }: { studentId: str
       ) : (
         <div className="space-y-2">
           {items.map((m) => (
-            <MaterialRow key={m.id} material={m} />
+            <MaterialRow
+              key={m.id}
+              material={m}
+              action={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Nascondi ${m.title} a ${studentName}`}
+                  title="Nascondi allo studente"
+                  disabled={unassign.isPending}
+                  onClick={() => unassign.mutate(m.id)}
+                >
+                  <EyeOff aria-hidden />
+                </Button>
+              }
+            />
           ))}
         </div>
       )}

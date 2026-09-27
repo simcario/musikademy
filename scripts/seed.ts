@@ -11,6 +11,7 @@
  */
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import { cycleKey, cycleLabel } from "../src/utils/cycles";
 import { buildKeywords } from "../src/utils/keywords";
 import { initAdmin, usingEmulators } from "./lib/admin-env";
 
@@ -68,8 +69,8 @@ async function main() {
   }
 
   const students = [
-    { email: "elena@vocalia.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567", fee: { monthlyAmount: 120, lessonPrice: 30, lessonsPerMonth: 4, dueDay: 10 } },
-    { email: "luca@vocalia.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "", fee: { monthlyAmount: 140, dueDay: 5 } },
+    { email: "elena@vocalia.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567", fee: { cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, startDate: day(-14, 0, 0), dueAt: "end" } },
+    { email: "luca@vocalia.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "", fee: { cycleAmount: 140, startDate: day(-5, 0, 0), dueAt: "start" } },
   ];
   const studentIds: string[] = [];
   for (const s of students) {
@@ -144,18 +145,24 @@ async function main() {
   }
 
   // ── Pagamenti ──
-  // Versamenti anche parziali (ADR D21): Elena paga lezione per lezione.
+  // Cicli di 4 settimane dalla prima lezione, versamenti anche parziali (ADR D21):
+  // Elena paga lezione per lezione (scadenza a fine ciclo), Luca in anticipo ed è in ritardo.
+  type Paid = { amount: number; day: number; method: string; notes?: string };
+  const cycle = (s: number, startDay: number) => ({ id: `cycle_${studentIds[s]}_${cycleKey(day(startDay).toDate())}`, label: cycleLabel(day(startDay).toDate()), period: cycleKey(day(startDay).toDate()) });
+  const elena = cycle(0, -14);
+  const luca = cycle(1, -5);
   const payments = [
-    { s: 0, description: "Quota mensile – mese scorso", amount: 120, due: -30, paid: [{ amount: 120, day: -28, method: "bank_transfer" }] },
-    { s: 0, description: "Quota mensile – mese corrente (4 lezioni)", amount: 120, due: 5, paid: [{ amount: 30, day: -6, method: "cash", notes: "1ª lezione" }, { amount: 30, day: -1, method: "cash", notes: "2ª lezione" }] },
-    { s: 1, description: "Quota mensile – mese scorso", amount: 140, due: -10, paid: [] as { amount: number; day: number; method: string; notes?: string }[] },
+    { id: "demo-payment-1", s: 0, description: "Iscrizione annuale", amount: 50, due: -14, paid: [{ amount: 50, day: -14, method: "card" }] as Paid[] },
+    { id: elena.id, period: elena.period, s: 0, description: `Quota ${elena.label} (4 lezioni)`, amount: 120, due: 13, paid: [{ amount: 30, day: -14, method: "cash", notes: "1ª lezione" }, { amount: 30, day: -7, method: "cash", notes: "2ª lezione" }] as Paid[] },
+    { id: luca.id, period: luca.period, s: 1, description: `Quota ${luca.label}`, amount: 140, due: -5, paid: [] as Paid[] },
   ];
   for (const [i, p] of payments.entries()) {
     const s = students[p.s];
     const installments = p.paid.map((v, j) => ({ id: `demo-${i}-${j}`, amount: v.amount, date: day(v.day, 10), method: v.method, ...(v.notes ? { notes: v.notes } : {}) }));
     const paidAmount = p.paid.reduce((sum, v) => sum + v.amount, 0);
     const last = installments.at(-1);
-    await db.doc(`payments/demo-payment-${i + 1}`).set({
+    await db.doc(`payments/${p.id}`).set({
+      ...(p.period ? { period: p.period } : {}),
       studentId: studentIds[p.s], studentName: `${s.name} ${s.surname}`, description: p.description, amount: p.amount,
       paidAmount, installments, dueDate: day(p.due, 0, 0), ...(last ? { paidDate: last.date, method: last.method } : {}),
       status: paidAmount >= p.amount ? "paid" : paidAmount > 0 ? "partial" : "pending",
