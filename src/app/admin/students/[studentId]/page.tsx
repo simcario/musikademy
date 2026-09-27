@@ -3,9 +3,16 @@
 import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Mail, Pencil, Phone, Power, Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { UserAvatar } from "@/components/shared/brand";
+import { ArrowLeft, CalendarDays, Mail, MoreVertical, Pencil, Phone, Power, Send } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ConfirmDialog, FormDialog } from "@/components/shared/dialogs";
 import { PageContainer } from "@/components/shared/page";
 import { FilterChips } from "@/components/shared/segmented";
@@ -86,44 +93,58 @@ function StudentProfile({ studentId }: { studentId: string }) {
         <ArrowLeft className="size-4" aria-hidden /> Studenti
       </Link>
 
-      <header className="card-surface flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-        <UserAvatar person={s} size="xl" />
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">{name}</h1>
-            <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
-              {s.status === "active" ? "Attivo" : "Disattivato"}
-            </Pill>
-            {s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
-          </div>
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            <a href={`mailto:${s.email}`} className="inline-flex items-center gap-1 hover:text-brand-ink">
-              <Mail className="size-4" aria-hidden /> {s.email}
-            </a>
-            {s.phone && (
-              <a href={`tel:${s.phone}`} className="inline-flex items-center gap-1 hover:text-brand-ink">
-                <Phone className="size-4" aria-hidden /> {s.phone}
-              </a>
+      <header className="card-surface flex items-center gap-2 px-4 py-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <h1 className="truncate text-xl font-bold tracking-tight">{name}</h1>
+          <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
+            {s.status === "active" ? "Attivo" : "Disattivato"}
+          </Pill>
+          {s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Dettagli e azioni per ${name}`}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-muted"
+          >
+            <MoreVertical className="size-5" aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-64 max-w-[calc(100vw-2rem)]">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Contatti</DropdownMenuLabel>
+              <DropdownMenuItem className="min-h-10" onClick={() => (window.location.href = `mailto:${s.email}`)}>
+                <Mail aria-hidden /> <span className="truncate">{s.email}</span>
+              </DropdownMenuItem>
+              {s.phone && (
+                <DropdownMenuItem className="min-h-10" onClick={() => (window.location.href = `tel:${s.phone}`)}>
+                  <Phone aria-hidden /> {s.phone}
+                </DropdownMenuItem>
+              )}
+              <p className="flex gap-1.5 px-1.5 py-2 text-xs text-muted-foreground">
+                <CalendarDays className="size-4 shrink-0" aria-hidden />
+                <span>
+                  Iscritto dal {formatDate(s.enrollmentDate)}
+                  {s.courseIds.length > 0 && ` · ${s.courseIds.map((c) => courses.get(c)?.name ?? "—").join(", ")}`}
+                </span>
+              </p>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="min-h-10" onClick={() => setEditing(true)}>
+              <Pencil aria-hidden /> Modifica
+            </DropdownMenuItem>
+            {s.status === "active" && (
+              <DropdownMenuItem className="min-h-10" onClick={() => newInvite.mutate(undefined)} disabled={newInvite.isPending}>
+                <Send aria-hidden /> Invito Google
+              </DropdownMenuItem>
             )}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Iscritto dal {formatDate(s.enrollmentDate)}
-            {s.courseIds.length > 0 && ` · ${s.courseIds.map((c) => courses.get(c)?.name ?? "—").join(", ")}`}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <Pencil aria-hidden /> Modifica
-          </Button>
-          {s.status === "active" && (
-            <Button variant="outline" size="sm" onClick={() => newInvite.mutate(undefined)} disabled={newInvite.isPending}>
-              <Send aria-hidden /> Invito Google
-            </Button>
-          )}
-          <Button variant={s.status === "active" ? "destructive" : "secondary"} size="sm" onClick={() => setConfirmStatus(true)}>
-            <Power aria-hidden /> {s.status === "active" ? "Disattiva" : "Riattiva"}
-          </Button>
-        </div>
+            <DropdownMenuItem
+              variant={s.status === "active" ? "destructive" : "default"}
+              className="min-h-10"
+              onClick={() => setConfirmStatus(true)}
+            >
+              <Power aria-hidden /> {s.status === "active" ? "Disattiva" : "Riattiva"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
       <FilterChips
