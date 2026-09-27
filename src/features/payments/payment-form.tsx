@@ -24,7 +24,7 @@ import {
 } from "./schemas";
 import { formatCurrency, formatDate, fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { PaymentProgress } from "./payment-progress";
-import { cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { cycleFee, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { PAYMENT_METHOD_LABEL, paidAmountOf, remainingOf } from "@/utils/status";
 
 const INVALIDATE = [["payments"], ["stats"]];
@@ -89,10 +89,11 @@ function PaymentForm({
   const studentId = useWatch({ control: form.control, name: "studentId" });
   const payNowAmount = useWatch({ control: form.control, name: "payNowAmount" });
   const selected = students.data?.find((s) => s.id === studentId);
+  const selectedFee = cycleFee(selected?.fee);
 
   // Nuova quota: propone descrizione e importo dal costo del corso dello studente.
   const applyFee = (id: string) => {
-    const fee = students.data?.find((s) => s.id === id)?.fee;
+    const fee = cycleFee(students.data?.find((s) => s.id === id)?.fee);
     if (!fee || payment) return;
     if (!form.getValues("amount")) form.setValue("amount", amountToInput(fee.cycleAmount));
     if (!form.getValues("description")) form.setValue("description", `Quota ${cycleLabel(cycleStartAt(fee.startDate.toDate(), new Date()))}`);
@@ -143,7 +144,7 @@ function PaymentForm({
           label="Importo dovuto (€)"
           error={errors.amount?.message}
           required
-          hint={selected?.fee && !payment ? `Quota 4 settimane: ${formatCurrency(selected.fee.cycleAmount)}` : undefined}
+          hint={selectedFee && !payment ? `Quota 4 settimane: ${formatCurrency(selectedFee.cycleAmount)}` : undefined}
         >
           {(p) => <Input {...p} inputMode="decimal" placeholder="120" {...form.register("amount")} />}
         </Field>

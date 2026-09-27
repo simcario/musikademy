@@ -203,6 +203,15 @@ describe("docente", () => {
     await assertFails(updateDoc(doc(student(ALICE), "students", ALICE), { fee: ok }));
   });
 
+  it("con un costo nel vecchio formato mensile l'anagrafica resta modificabile", async () => {
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), "students", BOB), { fee: { monthlyAmount: 120, dueDay: 10 } }));
+    await assertSucceeds(updateDoc(doc(teacher(), "students", BOB), { name: "Roberto" }));
+    await assertFails(updateDoc(doc(teacher(), "students", BOB), { fee: { monthlyAmount: 130, dueDay: 10 } }));
+    await assertSucceeds(
+      updateDoc(doc(teacher(), "students", BOB), { fee: { cycleAmount: 120, startDate: Timestamp.now(), dueAt: "end" } }),
+    );
+  });
+
   it("non crea utenti né cambia ruoli dal client", async () => {
     await assertFails(setDoc(doc(teacher(), "users", "new"), { role: "admin" }));
     await assertFails(updateDoc(doc(teacher(), "users", ALICE), { role: "admin" }));

@@ -6,14 +6,14 @@ import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states
 import { PaymentBadge } from "@/components/shared/status-badge";
 import { PaymentProgress } from "@/features/payments/payment-progress";
 import { useMyPayments, useMyStudentProfile } from "@/features/student-area/hooks";
-import { cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { cycleFee, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf } from "@/utils/status";
 
 /** Sola lettura: lo studente non può modificare i pagamenti (UI + Security Rules). */
 export default function PaymentsPage() {
   const q = useMyPayments();
-  const fee = useMyStudentProfile().data?.fee;
+  const fee = cycleFee(useMyStudentProfile().data?.fee);
   const rows = (q.data ?? []).map((p) => ({ ...p, effective: effectivePaymentStatus(p) }));
   const due = rows.reduce((s, p) => s + remainingOf(p), 0);
 

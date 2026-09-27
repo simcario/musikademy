@@ -17,7 +17,7 @@ import { firestore } from "@/lib/firebase/client";
 import type { Installment, Payment, PaymentMethod, PaymentStatus, Student, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { fullName } from "@/utils/format";
-import { cycleDueDate, cycleKey, cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { cycleDueDate, cycleFee, cycleKey, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { paidAmountOf, remainingOf, storedPaymentStatus } from "@/utils/status";
 import { COLLECTIONS, clean, col, list, paginate, ref, timestamps, touched } from "./base";
 
@@ -208,7 +208,7 @@ export const paymentService = {
    * ID deterministico: rilanciarla non crea doppioni né tocca le quote esistenti.
    */
   async generateCycles(students: WithId<Student>[], at: Date, createdBy: string) {
-    const eligible = students.filter((s) => s.status === "active" && (s.fee?.cycleAmount ?? 0) > 0 && s.fee?.startDate);
+    const eligible = students.filter((s) => s.status === "active" && cycleFee(s.fee));
     let created = 0;
     await runTransaction(firestore(), async (tx) => {
       created = 0;

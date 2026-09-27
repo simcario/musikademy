@@ -20,7 +20,7 @@ import { StudentSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { paymentService } from "@/services/paymentService";
 import type { Payment, PaymentStatus, WithId } from "@/types";
-import { cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { cycleFee, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { formatCurrency, formatDate, fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { PAYMENT_META, PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf } from "@/utils/status";
 import { InstallmentDialog, PaymentFormDialog } from "./payment-form";
@@ -175,8 +175,11 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const { uid } = useSession();
   const students = useActiveStudents();
   const [date, setDate] = useState(() => toInputDate(new Date()));
-  const withFee = (students.data ?? []).filter((s) => (s.fee?.cycleAmount ?? 0) > 0);
-  const total = withFee.reduce((s, st) => s + (st.fee?.cycleAmount ?? 0), 0);
+  const withFee = (students.data ?? []).flatMap((s) => {
+    const fee = cycleFee(s.fee);
+    return fee ? [{ student: s, fee }] : [];
+  });
+  const total = withFee.reduce((sum, r) => sum + r.fee.cycleAmount, 0);
 
   const generate = useStaffMutation(() => paymentService.generateCycles(students.data ?? [], fromInputDate(date), uid), {
     success: (r) =>
@@ -210,15 +213,15 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <>
             {withFee.length > 0 && (
               <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-xl border border-border text-sm">
-                {withFee.map((s) => (
+                {withFee.map(({ student: s, fee }) => (
                   <li key={s.id} className="flex justify-between gap-3 px-3 py-2">
                     <span className="min-w-0 truncate">
                       {fullName(s)}
                       <span className="block text-xs text-muted-foreground">
-                        {cycleLabel(cycleStartAt(s.fee!.startDate.toDate(), fromInputDate(date)))}
+                        {cycleLabel(cycleStartAt(fee.startDate.toDate(), fromInputDate(date)))}
                       </span>
                     </span>
-                    <span className="font-semibold tabular-nums">{formatCurrency(s.fee!.cycleAmount)}</span>
+                    <span className="font-semibold tabular-nums">{formatCurrency(fee.cycleAmount)}</span>
                   </li>
                 ))}
               </ul>

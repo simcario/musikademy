@@ -18,7 +18,7 @@ import { lessonService } from "@/services/lessonService";
 import { paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
 import type { Student, StudentFee, WithId } from "@/types";
-import { cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
+import { cycleFee, cycleKey, cycleLabel, cycleStartAt, shiftCycle, type LegacyFee } from "@/utils/cycles";
 import { formatCurrency, formatDate, fromInputDate, toInputDate } from "@/utils/format";
 import { amountToInput, feeFormSchema, parseAmount, type FeeFormValues } from "./schemas";
 
@@ -28,7 +28,10 @@ export const DUE_AT_LABEL = { start: "a inizio ciclo", end: "a fine ciclo" } as 
 export function StudentFeeCard({ student }: { student: WithId<Student> }) {
   const { uid } = useSession();
   const [editing, setEditing] = useState(false);
-  const fee = student.fee;
+  const saved = student.fee;
+  const fee = cycleFee(saved);
+  // Costo salvato dalla prima versione (quota mensile, senza data di inizio): va reimpostato.
+  const outdated = !!saved && !fee;
   const current = fee ? cycleStartAt(fee.startDate.toDate(), new Date()) : null;
   // Ciclo scelto per la generazione: precedente, in corso o successivo.
   const cycles = current
@@ -61,6 +64,11 @@ export function StudentFeeCard({ student }: { student: WithId<Student> }) {
             </p>
             {current && <p className="text-xs font-medium">Ciclo in corso: {cycleLabel(current)}</p>}
           </>
+        ) : outdated ? (
+          <p className="text-sm font-medium text-warning">
+            Da aggiornare: ora le quote seguono cicli di 4 settimane dalla prima lezione. Premi «Aggiorna» e indica la data
+            della prima lezione.
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">Non impostato: le quote non verranno generate.</p>
         )}
@@ -81,10 +89,10 @@ export function StudentFeeCard({ student }: { student: WithId<Student> }) {
           </>
         )}
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-          <Pencil aria-hidden /> {fee ? "Modifica" : "Imposta costo"}
+          <Pencil aria-hidden /> {fee ? "Modifica" : outdated ? "Aggiorna" : "Imposta costo"}
         </Button>
       </div>
-      <FeeDialog open={editing} onOpenChange={setEditing} studentId={student.id} fee={fee} />
+      <FeeDialog open={editing} onOpenChange={setEditing} studentId={student.id} fee={saved} />
     </div>
   );
 }
@@ -100,11 +108,12 @@ export function FeeDialog({
   studentId: string;
   fee?: StudentFee;
 }) {
-  // Senza costo impostato, la data di inizio si propone dalla prima lezione dello studente.
+  // Senza data di inizio salvata, la si propone dalla prima lezione dello studente.
+  const needsStart = !cycleFee(fee);
   const first = useQuery({
     queryKey: qk.lessons({ first: studentId }),
     queryFn: () => lessonService.firstForStudent(studentId),
-    enabled: open && !fee,
+    enabled: open && needsStart,
   });
   return (
     <FormDialog
@@ -113,7 +122,7 @@ export function FeeDialog({
       title="Costo del corso"
       description="Si paga a cicli di 4 settimane che partono dalla prima lezione, anche a rate (es. lezione per lezione)."
     >
-      {open && !fee && first.isPending ? (
+      {open && needsStart && first.isPending ? (
         <ListSkeleton rows={2} />
       ) : (
         <FeeForm
@@ -139,14 +148,18 @@ function FeeForm({
   firstLesson?: Date;
   onDone: () => void;
 }) {
+  // Il vecchio formato mensile precompila importo e lezioni.
+  const legacy = (fee ?? {}) as LegacyFee;
+  const valid = cycleFee(fee);
+  const lessons = fee?.lessonsPerCycle ?? legacy.lessonsPerMonth;
   const form = useForm<FeeFormValues>({
     resolver: zodResolver(feeFormSchema),
     defaultValues: {
       lessonPrice: amountToInput(fee?.lessonPrice),
-      lessonsPerCycle: fee?.lessonsPerCycle ? String(fee.lessonsPerCycle) : "",
-      cycleAmount: amountToInput(fee?.cycleAmount),
-      startDate: toInputDate(fee?.startDate ?? firstLesson ?? new Date()),
-      dueAt: fee?.dueAt ?? "start",
+      lessonsPerCycle: lessons ? String(lessons) : "",
+      cycleAmount: amountToInput(fee?.cycleAmount ?? legacy.monthlyAmount),
+      startDate: toInputDate(valid?.startDate ?? firstLesson ?? new Date()),
+      dueAt: valid?.dueAt ?? "start",
     },
   });
   const { errors } = form.formState;

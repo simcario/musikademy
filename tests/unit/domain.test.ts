@@ -3,7 +3,7 @@ import { amountToInput, feeFormSchema, installmentSchema, paymentFormSchema, par
 import { lessonFormSchema, parseTopics } from "@/features/lessons/schemas";
 import { createUserSchema, studentFormSchema } from "@/features/students/schemas";
 import { checkFile, safeFileName } from "@/lib/files";
-import { cycleDueDate, cycleEnd, cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
+import { cycleDueDate, cycleEnd, cycleFee, cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
 import { buildKeywords, searchToken } from "@/utils/keywords";
 import {
   effectivePaymentStatus,
@@ -115,6 +115,13 @@ describe("pagamenti", () => {
     expect(feeFormSchema.safeParse({ ...fee, startDate: "" }).success).toBe(false);
     expect(amountToInput(80.5)).toBe("80,50");
     expect(amountToInput(120)).toBe("120");
+  });
+
+  it("riconosce il costo salvato nel vecchio formato mensile", () => {
+    const startDate = ts(new Date(2026, 9, 15));
+    expect(cycleFee(undefined)).toBeNull();
+    expect(cycleFee({ monthlyAmount: 120, dueDay: 10 } as never)).toBeNull();
+    expect(cycleFee({ cycleAmount: 120, startDate, dueAt: "end" })?.cycleAmount).toBe(120);
   });
 
   it("i cicli partono dalla prima lezione, non dal mese", () => {

@@ -65,7 +65,8 @@ service cloud.firestore {
     // Costo del corso (ADR D21): quota per ciclo di 4 settimane dalla prima lezione.
     function validFee() {
       let d = request.resource.data;
-      return !('fee' in d) || (
+      // Un costo non modificato passa anche se nel vecchio formato mensile (prima versione).
+      return !('fee' in d) || d.fee == resource.data.get('fee', null) || (
         d.fee is map
         && d.fee.keys().hasOnly(['cycleAmount', 'lessonPrice', 'lessonsPerCycle', 'startDate', 'dueAt'])
         && money(d.fee.cycleAmount) && d.fee.cycleAmount > 0

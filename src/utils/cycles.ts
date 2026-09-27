@@ -1,5 +1,17 @@
 import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { it } from "date-fns/locale";
+import type { StudentFee } from "@/types";
+
+/** Formato salvato dalla prima versione (quota mensile), ancora presente su alcuni studenti. */
+export type LegacyFee = { monthlyAmount?: number; lessonsPerMonth?: number; dueDay?: number };
+
+/**
+ * Costo del corso utilizzabile per i cicli, oppure `null` se assente o salvato nel vecchio
+ * formato mensile (senza data di inizio): in quel caso va reimpostato dalla scheda studente.
+ */
+export function cycleFee(fee: StudentFee | null | undefined): StudentFee | null {
+  return fee && fee.cycleAmount > 0 && typeof fee.startDate?.toDate === "function" && !!fee.dueAt ? fee : null;
+}
 
 /**
  * Cicli di pagamento di 4 settimane che partono dalla prima lezione dello studente
