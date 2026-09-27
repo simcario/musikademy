@@ -28,7 +28,7 @@ const MESSAGES: Record<string, string> = {
   "unavailable": "Servizio momentaneamente non raggiungibile. Riprova.",
   "not-found": "Elemento non trovato.",
   "failed-precondition": "Operazione non ancora disponibile: configurazione del database incompleta.",
-  "storage/unauthorized": "Non hai i permessi per caricare questo file.",
+  "storage/unauthorized": "Non hai i permessi per accedere a questo file.",
   "storage/canceled": "Caricamento annullato.",
   "storage/quota-exceeded": "Spazio di archiviazione esaurito.",
   "storage/retry-limit-exceeded": "Caricamento interrotto: connessione instabile.",

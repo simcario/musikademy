@@ -27,6 +27,7 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 - ⬜ Auth → Authorized domains: aggiungere il dominio di produzione (per il login Google)
 - ⬜ Dare `roles/iam.serviceAccountTokenCreator` al service account di App Hosting (custom token inviti, vedi README)
 - ⬜ `npm run deploy:rules` (rules + indici)
+- ⬜ IAM: ruolo "Firebase Rules Firestore Service Agent" all'agente di Storage (`service-<numero progetto>@gcp-sa-firebasestorage.iam.gserviceaccount.com`), altrimenti gli studenti non scaricano i materiali (le Storage Rules leggono Firestore). Il deploy delle rules lo propone: rispondere sì
 - ⬜ `npm run bootstrap-admin` con service account → primo accesso admin
 - 🟡 Collaudo con emulatori + seed: login studente/docente e tutte le pagine ✅ · da provare a mano upload, registro presenze, pagamenti, creazione studente
 - ⬜ Personalizzare in italiano il template email "Reimposta password" (invito dei docenti)
