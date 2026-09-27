@@ -100,6 +100,9 @@ export const studentService = {
   setStatus: (uid: string, status: StudentStatus) =>
     adminApi<{ ok: true }>(`users/${uid}`, { method: "PATCH", body: { active: status === "active" } }),
 
+  /** Hard delete: account e tutto lo storico dello studente, irreversibile → Admin SDK. */
+  remove: (uid: string) => adminApi<{ ok: true }>(`users/${uid}`, { method: "DELETE" }),
+
   /** Email di accesso: va cambiata in Auth e nei profili insieme → Admin SDK. */
   changeEmail: (uid: string, email: string) =>
     adminApi<{ ok: true }>(`users/${uid}`, { method: "PATCH", body: { email } }),

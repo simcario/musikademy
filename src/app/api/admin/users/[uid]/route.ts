@@ -4,6 +4,46 @@ import { HttpError, errorResponse, requireCaller } from "@/lib/auth/server";
 import { updateUserSchema } from "@/features/students/schemas";
 import { buildKeywords } from "@/utils/keywords";
 
+/**
+ * Eliminazione definitiva di uno studente: account Auth, profilo e tutto lo storico
+ * (lezioni, presenze, pagamenti, esercizi, note, inviti). I materiali restano, senza l'assegnazione.
+ */
+export async function DELETE(req: Request, ctx: RouteContext<"/api/admin/users/[uid]">) {
+  try {
+    const { uid } = await ctx.params;
+    const db = adminDb();
+    const userSnap = await db.doc(`users/${uid}`).get();
+    if (!userSnap.exists) throw new HttpError(404, "Utente non trovato.");
+    if ((userSnap.data() as { role: string }).role !== "student") {
+      throw new HttpError(400, "Solo gli studenti possono essere eliminati.");
+    }
+    await requireCaller(req, "students:manage");
+
+    const writer = db.bulkWriter();
+    for (const name of ["lessons", "attendance", "payments", "assignments"]) {
+      const snap = await db.collection(name).where("studentId", "==", uid).get();
+      snap.docs.forEach((d) => writer.delete(d.ref));
+    }
+    const invites = await db.collection("invites").where("uid", "==", uid).get();
+    invites.docs.forEach((d) => writer.delete(d.ref));
+    const materials = await db.collection("materials").where("studentIds", "array-contains", uid).get();
+    materials.docs.forEach((d) =>
+      writer.update(d.ref, { studentIds: FieldValue.arrayRemove(uid), updatedAt: FieldValue.serverTimestamp() }),
+    );
+    writer.delete(db.doc(`studentNotes/${uid}`));
+    writer.delete(db.doc(`students/${uid}`));
+    writer.delete(db.doc(`users/${uid}`));
+    await writer.close();
+
+    await adminAuth().deleteUser(uid).catch((e: { code?: string }) => {
+      if (e.code !== "auth/user-not-found") throw e;
+    });
+    return Response.json({ ok: true });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 /** Attiva/disattiva (soft delete), cambia ruolo o email di un utente. */
 export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[uid]">) {
   try {

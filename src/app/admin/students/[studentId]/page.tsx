@@ -3,7 +3,7 @@
 import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, CalendarDays, Mail, MoreVertical, Pencil, Phone, Power, Send } from "lucide-react";
+import { ArrowLeft, CalendarDays, Mail, MoreVertical, Pencil, Phone, Power, Send, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,6 +75,12 @@ function StudentProfile({ studentId }: { studentId: string }) {
       onSuccess: () => setConfirmStatus(false),
     },
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const remove = useStaffMutation(() => studentService.remove(studentId), {
+    success: "Studente eliminato",
+    invalidate: [["students"]],
+    onSuccess: () => router.replace("/admin/students"),
+  });
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const newInvite = useStaffMutation(() => studentService.createInvite(studentId), {
     success: "Nuovo invito creato: i link precedenti non valgono più",
@@ -143,6 +149,9 @@ function StudentProfile({ studentId }: { studentId: string }) {
             >
               <Power aria-hidden /> {s.status === "active" ? "Disattiva" : "Riattiva"}
             </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setConfirmDelete(true)}>
+              <Trash2 aria-hidden /> Elimina studente
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
@@ -181,6 +190,16 @@ function StudentProfile({ studentId }: { studentId: string }) {
         destructive={s.status === "active"}
         loading={toggleStatus.isPending}
         onConfirm={() => toggleStatus.mutate(undefined)}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Eliminare definitivamente ${name}?`}
+        description="Verranno cancellati account, lezioni, presenze, pagamenti, esercizi e note. L'operazione non si può annullare: se vuoi solo bloccare l'accesso usa «Disattiva»."
+        confirmLabel="Elimina"
+        destructive
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate(undefined)}
       />
     </PageContainer>
   );
