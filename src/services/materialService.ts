@@ -166,6 +166,8 @@ export const materialService = {
       task.then(
         async () => {
           try {
+            // Markdown: il testo va nel documento, così il viewer non dipende dal CORS del bucket.
+            const content = check.type === "markdown" ? await file.text() : undefined;
             await setDoc(
               ref(COLLECTIONS.materials, id),
               clean({
@@ -177,6 +179,7 @@ export const materialService = {
                 fileName: file.name,
                 contentType: check.contentType,
                 size: file.size,
+                content,
                 createdBy,
                 keywords: buildKeywords(meta.title, meta.description, meta.category),
                 createdAt: serverTimestamp(),

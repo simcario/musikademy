@@ -3,12 +3,13 @@
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Trash2 } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog, FormActions, FormDialog } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
+import { cn } from "@/lib/utils";
 import { useActiveStudents, useStaffMutation, useStudent } from "@/features/admin/hooks";
 import { StudentSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
@@ -225,6 +226,7 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
     defaultValues: { amount: amountToInput(remaining), date: toInputDate(new Date()), method: payment.method ?? "cash", notes: "" },
   });
   const { errors } = form.formState;
+  const amount = useWatch({ control: form.control, name: "amount" });
 
   const save = useStaffMutation(
     (v: InstallmentFormValues) =>
@@ -256,16 +258,25 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
       {remaining > 0 ? (
         <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4" noValidate>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Importi rapidi">
-            {quick.map((q) => (
-              <button
-                key={q.label}
-                type="button"
-                onClick={() => form.setValue("amount", amountToInput(q.amount), { shouldValidate: true })}
-                className="min-h-10 rounded-full border border-border px-3 text-sm font-medium hover:bg-muted"
-              >
-                {q.label} · {formatCurrency(q.amount)}
-              </button>
-            ))}
+            {quick.map((q) => {
+              // Selezionato finché l'importo corrisponde alla scorciatoia (anche se digitato a mano).
+              const active = !!amount && parseAmount(amount) === q.amount;
+              return (
+                <button
+                  key={q.label}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => form.setValue("amount", amountToInput(q.amount), { shouldValidate: true })}
+                  className={cn(
+                    "inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors",
+                    active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border hover:bg-muted",
+                  )}
+                >
+                  {active && <Check className="size-4" aria-hidden />}
+                  {q.label} · {formatCurrency(q.amount)}
+                </button>
+              );
+            })}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Importo (€)" error={errors.amount?.message} required hint={`Residuo ${formatCurrency(remaining)}`}>

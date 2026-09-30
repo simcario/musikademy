@@ -3,6 +3,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Clock, Headphones, NotebookPen, UserRound } from "lucide-react";
+import { Markdown } from "@/components/shared/markdown";
 import { PageContainer } from "@/components/shared/page";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { AssignmentBadge, AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
@@ -125,7 +126,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
                   <li key={a.id} className="card-surface flex items-start justify-between gap-3 p-4">
                     <div className="min-w-0">
                       <p className="font-semibold">{a.title}</p>
-                      {a.description && <p className="text-sm text-muted-foreground">{a.description}</p>}
+                      {a.description && <Markdown className="text-muted-foreground">{a.description}</Markdown>}
                     </div>
                     <AssignmentBadge status={a.status} />
                   </li>

@@ -160,8 +160,8 @@ function AssignmentForm({
       <Field label="Titolo" error={errors.title?.message} required>
         {(p) => <Input {...p} placeholder="Es. Vocalizzo 04 – Agilità" {...form.register("title")} />}
       </Field>
-      <Field label="Istruzioni" hint="Es. 10 minuti al giorno" error={errors.description?.message}>
-        {(p) => <Textarea {...p} rows={3} {...form.register("description")} />}
+      <Field label="Istruzioni" hint="Supporta Markdown: **grassetto**, elenchi con -, titoli con #" error={errors.description?.message}>
+        {(p) => <Textarea {...p} rows={5} className="font-mono text-[13px]" placeholder="Es. 10 minuti al giorno" {...form.register("description")} />}
       </Field>
       <Field label="Scadenza" error={errors.dueDate?.message}>
         {(p) => <Input {...p} type="date" {...form.register("dueDate")} />}
@@ -186,7 +186,7 @@ function AssignmentForm({
         <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-input bg-surface-low p-3 text-center hover:border-primary focus-within:border-primary">
           <FileUp className="size-6 text-brand-ink" aria-hidden />
           <span className="text-sm font-semibold">Allega file</span>
-          <span className="text-xs text-muted-foreground">PDF, audio, video o immagini · anche più file</span>
+          <span className="text-xs text-muted-foreground">PDF, audio, video, immagini o Markdown (.md) · anche più file</span>
           <input
             type="file"
             multiple

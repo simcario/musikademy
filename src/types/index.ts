@@ -93,7 +93,7 @@ export interface Lesson {
   updatedAt: Timestamp;
 }
 
-export const MATERIAL_TYPES = ["pdf", "audio", "video", "image", "document", "other"] as const;
+export const MATERIAL_TYPES = ["pdf", "audio", "video", "image", "markdown", "document", "other"] as const;
 export type MaterialType = (typeof MATERIAL_TYPES)[number];
 
 export const MATERIAL_CATEGORIES = [
@@ -120,6 +120,8 @@ export interface Material {
   fileName: string;
   contentType: string;
   size: number;
+  /** Solo per i Markdown: testo del file, letto direttamente da Firestore per la visualizzazione. */
+  content?: string;
   courseId?: string;
   createdBy: string;
   visibility: Visibility;

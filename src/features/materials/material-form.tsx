@@ -106,7 +106,7 @@ function MaterialForm({ material, onDone }: { material?: WithId<Material> | null
             <FileUp className="size-7 text-brand-ink" aria-hidden />
             <span className="text-sm font-semibold">{file ? file.name : "Scegli un file"}</span>
             <span className="text-xs text-muted-foreground">
-              {file ? formatFileSize(file.size) : "PDF, MP3, WAV, M4A, MP4, MOV, JPG, PNG, WEBP"}
+              {file ? formatFileSize(file.size) : "PDF, MP3, WAV, M4A, MP4, MOV, JPG, PNG, WEBP, MD"}
             </span>
             <input
               type="file"

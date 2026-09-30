@@ -148,7 +148,8 @@ service cloud.firestore {
         && request.resource.data.visibility in ['all', 'course', 'student']
         && request.resource.data.category in ['dispensa', 'ascolto', 'base', 'video', 'spartito', 'immagine', 'esercizio', 'altro']
         && request.resource.data.studentIds is list
-        && request.resource.data.storagePath is string;
+        && request.resource.data.storagePath is string
+        && optStr('content', 524288);
       allow delete: if isStaff();
     }
 

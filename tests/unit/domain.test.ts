@@ -165,6 +165,8 @@ describe("file e ricerca", () => {
     expect(checkFile({ name: "x.exe", size: 1000, type: "application/x-msdownload" }).ok).toBe(false);
     expect(checkFile({ name: "big.pdf", size: 51 * 1024 * 1024, type: "application/pdf" }).ok).toBe(false);
     expect(checkFile({ name: "empty.png", size: 0, type: "image/png" }).ok).toBe(false);
+    expect(checkFile({ name: "es.md", size: 1000, type: "" })).toMatchObject({ ok: true, type: "markdown", contentType: "text/markdown" });
+    expect(checkFile({ name: "big.md", size: 600 * 1024, type: "text/markdown" }).ok).toBe(false);
   });
 
   it("normalizza i nomi file", () => {

@@ -1,6 +1,7 @@
 import type { MaterialType } from "@/types";
 
 const MB = 1024 * 1024;
+export const MARKDOWN_MAX_SIZE = 512 * 1024;
 
 interface FileRule {
   type: MaterialType;
@@ -25,6 +26,8 @@ export const FILE_RULES: FileRule[] = [
     mimes: ["image/jpeg", "image/png", "image/webp"],
     maxSize: 20 * MB,
   },
+  // Il testo viene copiato anche nel documento Firestore (limite 1 MiB): da qui il tetto basso.
+  { type: "markdown", extensions: ["md", "markdown"], mimes: ["text/markdown", "text/x-markdown"], maxSize: MARKDOWN_MAX_SIZE },
 ];
 
 const DEFAULT_MIME: Record<string, string> = {
@@ -38,6 +41,8 @@ const DEFAULT_MIME: Record<string, string> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
+  md: "text/markdown",
+  markdown: "text/markdown",
 };
 
 export const ACCEPT_ATTR = FILE_RULES.flatMap((r) => r.extensions.map((e) => `.${e}`)).join(",");
@@ -47,16 +52,20 @@ export function extensionOf(name: string): string {
   return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
 }
 
+function formatLimit(bytes: number) {
+  return bytes >= MB ? `${bytes / MB} MB` : `${Math.round(bytes / 1024)} KB`;
+}
+
 export type FileCheck = { ok: true; type: MaterialType; contentType: string } | { ok: false; error: string };
 
 export function checkFile(file: Pick<File, "name" | "size" | "type">): FileCheck {
   const ext = extensionOf(file.name);
   const rule = FILE_RULES.find((r) => r.extensions.includes(ext));
   if (!rule) {
-    return { ok: false, error: "Formato non supportato. Usa PDF, MP3, WAV, M4A, MP4, MOV, JPG, PNG o WEBP." };
+    return { ok: false, error: "Formato non supportato. Usa PDF, MP3, WAV, M4A, MP4, MOV, JPG, PNG, WEBP o MD." };
   }
   if (file.size > rule.maxSize) {
-    return { ok: false, error: `File troppo grande: massimo ${rule.maxSize / MB} MB per questo formato.` };
+    return { ok: false, error: `File troppo grande: massimo ${formatLimit(rule.maxSize)} per questo formato.` };
   }
   if (file.size === 0) return { ok: false, error: "Il file è vuoto." };
   // Alcuni browser non valorizzano il MIME (es. .m4a): lo ricaviamo dall'estensione.

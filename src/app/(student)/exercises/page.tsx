@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CalendarCheck, CalendarX2, CircleCheckBig, Flame } from "lucide-react";
+import { Markdown } from "@/components/shared/markdown";
 import { PageContainer } from "@/components/shared/page";
 import { Segmented } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
@@ -101,7 +102,7 @@ function ExerciseCard({ assignment: a }: { assignment: WithId<Assignment> }) {
       <div className="space-y-1">
         <AssignmentBadge status={a.status} />
         <h2 className="pt-1 text-lg leading-snug font-semibold">{a.title}</h2>
-        {a.description && <p className="text-sm whitespace-pre-line text-muted-foreground">{a.description}</p>}
+        {a.description && <Markdown className="text-muted-foreground">{a.description}</Markdown>}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">

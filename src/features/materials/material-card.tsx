@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Eye, FileText, Image as ImageIcon, Loader2, Music, Pause, Play, Video } from "lucide-react";
+import { Download, Eye, FileText, Image as ImageIcon, Music, NotebookText, Pause, Play, Video } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileViewer, type ViewerKind } from "@/components/shared/file-viewer";
 import { Pill } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ export const TYPE_META: Record<MaterialType, { icon: typeof FileText; tile: stri
   audio: { icon: Music, tile: "bg-indigo-soft text-brand-ink", label: "Audio" },
   video: { icon: Video, tile: "bg-warning-soft text-warning", label: "Video" },
   image: { icon: ImageIcon, tile: "bg-violet-soft text-violet", label: "Immagine" },
+  markdown: { icon: NotebookText, tile: "bg-success-soft text-success", label: "Testo" },
   document: { icon: FileText, tile: "bg-info-soft text-info", label: "Documento" },
   other: { icon: FileText, tile: "bg-neutral-soft text-neutral", label: "File" },
 };
@@ -43,7 +44,17 @@ export function useMaterialUrl(material: Pick<Material, "storagePath"> | null, e
   });
 }
 
-/** Visualizzatore in-app per PDF, video e immagini (lazy: carica l'URL solo all'apertura). */
+const VIEWER_KIND: Record<MaterialType, ViewerKind> = {
+  pdf: "pdf",
+  video: "video",
+  image: "image",
+  markdown: "markdown",
+  audio: "other",
+  document: "other",
+  other: "other",
+};
+
+/** Visualizzatore in-app a schermo intero (lazy: carica l'URL solo all'apertura; il Markdown non ne ha bisogno). */
 export function MaterialViewer({
   material,
   open,
@@ -53,39 +64,20 @@ export function MaterialViewer({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const url = useMaterialUrl(material, open);
+  const kind = VIEWER_KIND[material.type] ?? "other";
+  const needsUrl = !(kind === "markdown" && material.content !== undefined);
+  const url = useMaterialUrl(material, open && needsUrl);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94dvh] gap-3 p-3 sm:max-w-4xl sm:p-4">
-        <DialogHeader className="pr-10">
-          <DialogTitle className="truncate">{material.title}</DialogTitle>
-        </DialogHeader>
-        <div className="flex min-h-64 items-center justify-center overflow-hidden rounded-lg bg-surface-low">
-          {url.isPending ? (
-            <Loader2 className="size-6 animate-spin text-primary" aria-label="Caricamento" />
-          ) : url.isError ? (
-            <p className="p-6 text-sm text-danger">{errorMessage(url.error)}</p>
-          ) : material.type === "video" ? (
-            <video src={url.data} controls playsInline preload="metadata" className="max-h-[75dvh] w-full bg-black" />
-          ) : material.type === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element -- URL firmato dinamico di Storage
-            <img src={url.data} alt={material.title} className="max-h-[75dvh] w-auto object-contain" loading="lazy" />
-          ) : (
-            <iframe src={url.data} title={material.title} className="h-[75dvh] w-full border-0 bg-white" />
-          )}
-        </div>
-        {url.data && (
-          <a
-            href={url.data}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-center text-sm font-semibold text-brand-ink hover:underline"
-          >
-            Apri in una nuova scheda
-          </a>
-        )}
-      </DialogContent>
-    </Dialog>
+    <FileViewer
+      open={open}
+      onOpenChange={onOpenChange}
+      title={material.title}
+      kind={kind}
+      url={url.data}
+      urlPending={needsUrl && url.isPending}
+      urlError={url.error}
+      content={material.content}
+    />
   );
 }
 

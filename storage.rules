@@ -15,7 +15,8 @@ service firebase.storage {
       return (ct == 'application/pdf' && size <= mb(50))
         || (ct.matches('audio/(mpeg|mp3|wav|x-wav|wave|mp4|x-m4a|m4a|aac)') && size <= mb(100))
         || (ct.matches('video/(mp4|quicktime)') && size <= mb(500))
-        || (ct.matches('image/(jpeg|png|webp)') && size <= mb(20));
+        || (ct.matches('image/(jpeg|png|webp)') && size <= mb(20))
+        || (ct.matches('text/(markdown|x-markdown)') && size <= 512 * 1024);
     }
 
     // Lo studente scarica un file solo se può leggere il documento `materials` corrispondente.
