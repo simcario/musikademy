@@ -34,3 +34,11 @@ export function parseTopics(text?: string): string[] {
     .filter(Boolean)
     .slice(0, 20);
 }
+
+/** Aggiunge un'ora a "HH:mm" (fine lezione proposta); `null` se si supera la mezzanotte. */
+export function oneHourAfter(time: string): string | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!m) return null;
+  const h = Number(m[1]) + 1;
+  return h > 23 ? null : `${String(h).padStart(2, "0")}:${m[2]}`;
+}

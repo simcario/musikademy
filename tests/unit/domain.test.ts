@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { amountToInput, feeFormSchema, installmentSchema, paymentFormSchema, parseAmount } from "@/features/payments/schemas";
-import { lessonFormSchema, parseTopics } from "@/features/lessons/schemas";
+import { lessonFormSchema, oneHourAfter, parseTopics } from "@/features/lessons/schemas";
 import { createUserSchema, studentFormSchema } from "@/features/students/schemas";
 import { checkFile, safeFileName } from "@/lib/files";
 import { cycleDueDate, cycleEnd, cycleFee, cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
@@ -181,5 +181,14 @@ describe("file e ricerca", () => {
     expect(k).toContain("ru");
     expect(searchToken("  Vocàl ")).toBe("vocal");
     expect(searchToken("a")).toBeNull();
+  });
+});
+
+describe("oneHourAfter", () => {
+  it("propone la fine lezione un'ora dopo l'inizio", () => {
+    expect(oneHourAfter("18:15")).toBe("19:15");
+    expect(oneHourAfter("09:00")).toBe("10:00");
+    expect(oneHourAfter("23:30")).toBeNull();
+    expect(oneHourAfter("")).toBeNull();
   });
 });

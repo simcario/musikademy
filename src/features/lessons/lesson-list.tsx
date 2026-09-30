@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, CalendarDays, CalendarPlus, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
+import { BookOpen, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,6 +25,7 @@ import { LessonFormDialog } from "./lesson-form";
 export function StaffLessonList({ studentId, showStudent = true }: { studentId?: string; showStudent?: boolean }) {
   const [status, setStatus] = useState<LessonStatus | "all">("all");
   const [editing, setEditing] = useState<WithId<Lesson> | null>(null);
+  const [copying, setCopying] = useState<WithId<Lesson> | null>(null);
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<WithId<Lesson> | null>(null);
   const [assignFor, setAssignFor] = useState<WithId<Lesson> | null>(null);
@@ -99,6 +100,9 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
                     <DropdownMenuItem className="min-h-10" onClick={() => setEditing(l)}>
                       <Pencil aria-hidden /> Modifica
                     </DropdownMenuItem>
+                    <DropdownMenuItem className="min-h-10" onClick={() => setCopying(l)}>
+                      <Copy aria-hidden /> Copia lezione
+                    </DropdownMenuItem>
                     <DropdownMenuItem className="min-h-10" onClick={() => setAssignFor(l)}>
                       <BookOpen aria-hidden /> Assegna esercizio
                     </DropdownMenuItem>
@@ -121,6 +125,7 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
 
       <LessonFormDialog open={creating} onOpenChange={setCreating} defaults={{ studentId }} />
       <LessonFormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} lesson={editing} />
+      <LessonFormDialog open={!!copying} onOpenChange={(o) => !o && setCopying(null)} copyFrom={copying} />
       <AssignmentFormDialog
         open={!!assignFor}
         onOpenChange={(o) => !o && setAssignFor(null)}
