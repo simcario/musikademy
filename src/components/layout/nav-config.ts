@@ -12,6 +12,7 @@ import {
   Settings,
   UserRound,
   Users,
+  Wrench,
 } from "lucide-react";
 
 export interface NavItem {
@@ -31,6 +32,7 @@ export const STUDENT_NAV: NavItem[] = [
   { href: "/exercises", label: "Esercizi", icon: CircleCheckBig, primary: true },
   { href: "/materials", label: "Materiali", icon: Library, primary: true },
   { href: "/listening", label: "Ascolti", icon: Headphones },
+  { href: "/tools", label: "Strumenti", icon: Wrench },
   { href: "/attendance", label: "Presenze", icon: ClipboardCheck },
   { href: "/payments", label: "Pagamenti", icon: CreditCard },
   { href: "/announcements", label: "Comunicazioni", icon: Megaphone },
