@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import {
   deleteObject,
+  getBlob,
   getDownloadURL,
   ref as storageRef,
   uploadBytesResumable,
@@ -204,6 +205,9 @@ export const materialService = {
    * Non viene salvato in Firestore (il token dell'URL bypasserebbe le rules).
    */
   fileUrl: (material: Pick<Material, "storagePath">) => getDownloadURL(storageRef(firebaseStorage(), material.storagePath)),
+
+  /** Contenuto del file, per salvarlo sul dispositivo. Richiede il CORS sul bucket (storage.cors.json). */
+  fileBlob: (material: Pick<Material, "storagePath">) => getBlob(storageRef(firebaseStorage(), material.storagePath)),
 
   update: (id: string, meta: MaterialMeta) =>
     updateDoc(

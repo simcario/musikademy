@@ -73,6 +73,18 @@ export function checkFile(file: Pick<File, "name" | "size" | "type">): FileCheck
   return { ok: true, type: rule.type, contentType };
 }
 
+/** Salva un blob sul dispositivo: l'attributo `download` funziona solo con URL same-origin o `blob:`. */
+export function saveBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export const AVATAR_MAX_SIZE = 5 * MB;
 
 export function safeFileName(name: string): string {

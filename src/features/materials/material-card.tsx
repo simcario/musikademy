@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FileViewer, type ViewerKind } from "@/components/shared/file-viewer";
 import { Pill } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
+import { saveBlob } from "@/lib/files";
 import { cn } from "@/lib/utils";
 import { materialService } from "@/services/materialService";
 import type { Material, MaterialType, WithId } from "@/types";
@@ -82,11 +83,19 @@ export function MaterialViewer({
 }
 
 async function download(material: WithId<Material>) {
+  const id = toast.loading(`Download di ${material.fileName}…`);
   try {
-    const url = await materialService.fileUrl(material);
-    window.open(url, "_blank", "noopener,noreferrer");
-  } catch (e) {
-    toast.error(errorMessage(e, "Impossibile scaricare il file."));
+    saveBlob(await materialService.fileBlob(material), material.fileName);
+    toast.success("File scaricato.", { id });
+  } catch {
+    // Senza CORS sul bucket il blob non è leggibile: ripiego sull'apertura in una nuova scheda.
+    try {
+      const url = await materialService.fileUrl(material);
+      toast.dismiss(id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error(errorMessage(e, "Impossibile scaricare il file."), { id });
+    }
   }
 }
 

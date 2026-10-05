@@ -112,6 +112,12 @@ Il codice su GitHub (`simcario/musikademy`, branch `main`) è la sorgente del de
    ```
    Gli indici impiegano qualche minuto a costruirsi (*Firestore → Indici*): finché non sono pronti
    alcune liste mostrano "configurazione del database incompleta".
+
+   **CORS del bucket** (una tantum): serve al pulsante "Scarica" dei materiali per salvare il file
+   sul dispositivo; senza, il file viene solo aperto in una nuova scheda.
+   ```powershell
+   gcloud storage buckets update gs://musikademy-56b76.firebasestorage.app --cors-file=storage.cors.json
+   ```
 6. **Dominio autorizzato** — *Authentication → Impostazioni → Domini autorizzati*: aggiungi il dominio
    del backend (es. `musikademy--musikademy-56b76.europe-west4.hosted.app`, lo vedi nella pagina App Hosting)
    ed eventuali domini personalizzati. Senza, l'accesso con Google fallisce in produzione.
