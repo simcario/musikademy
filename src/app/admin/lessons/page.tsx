@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarDays, List } from "lucide-react";
 import { PageContainer, PageHeader } from "@/components/shared/page";
 import { Segmented } from "@/components/shared/segmented";
 import { LessonCalendar } from "@/features/lessons/lesson-calendar";
@@ -12,7 +13,7 @@ import { useLesson } from "@/features/student-area/hooks";
 export default function AdminLessonsPage() {
   return (
     <PageContainer className="max-w-5xl">
-      <PageHeader title="Lezioni" description="Crea, modifica o annulla le lezioni. Le presenze si registrano dal registro." />
+      <PageHeader title="Lezioni" description="Crea, modifica o annulla le lezioni. Registra le presenze dal tasto accanto a ogni lezione." />
       <Suspense>
         <LessonsView />
         <EditFromUrl />
@@ -23,26 +24,24 @@ export default function AdminLessonsPage() {
 
 type View = "list" | "calendar";
 
-/** Elenco o calendario: la scelta resta nell'URL (?view=calendar). */
+/** Calendario (default) o elenco: la scelta resta nell'URL (?view=list). */
 function LessonsView() {
   const params = useSearchParams();
   const router = useRouter();
-  const view: View = params.get("view") === "calendar" ? "calendar" : "list";
-  return (
-    <>
-      <Segmented
-        label="Vista lezioni"
-        value={view}
-        onChange={(v) => router.replace(v === "calendar" ? "/admin/lessons?view=calendar" : "/admin/lessons", { scroll: false })}
-        options={[
-          { value: "list", label: "Elenco" },
-          { value: "calendar", label: "Calendario" },
-        ]}
-        className="sm:w-72"
-      />
-      {view === "calendar" ? <LessonCalendar /> : <StaffLessonList />}
-    </>
+  const view: View = params.get("view") === "list" ? "list" : "calendar";
+  const toggle = (
+    <Segmented
+      label="Vista lezioni"
+      value={view}
+      onChange={(v) => router.replace(v === "list" ? "/admin/lessons?view=list" : "/admin/lessons", { scroll: false })}
+      options={[
+        { value: "calendar", label: "Calendario", icon: CalendarDays },
+        { value: "list", label: "Elenco", icon: List },
+      ]}
+      className="w-24 shrink-0"
+    />
   );
+  return view === "calendar" ? <LessonCalendar toolbar={toggle} /> : <StaffLessonList toolbar={toggle} />;
 }
 
 /** Apertura diretta dalla ricerca globale: /admin/lessons?edit=<id> */

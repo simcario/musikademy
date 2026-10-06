@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   addDays,
   addMonths,
@@ -11,12 +11,13 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { useAttendanceMap, useLessonsInRange } from "@/features/admin/hooks";
+import { AttendanceDialog } from "@/features/attendance/attendance-picker";
 import { cn } from "@/lib/utils";
 import type { Lesson, WithId } from "@/types";
 import { formatDate, toDate } from "@/utils/format";
@@ -30,7 +31,7 @@ const byTime = (a: WithId<Lesson>, b: WithId<Lesson>) =>
   (a.startTime ?? "").localeCompare(b.startTime ?? "") || toDate(a.date)!.getTime() - toDate(b.date)!.getTime();
 
 /** Calendario lezioni docente: vista mese (griglia) e vista giorno (agenda). */
-export function LessonCalendar() {
+export function LessonCalendar({ toolbar }: { toolbar?: ReactNode }) {
   const [mode, setMode] = useState<Mode>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [editing, setEditing] = useState<WithId<Lesson> | null>(null);
@@ -61,7 +62,8 @@ export function LessonCalendar() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        {toolbar}
         <Segmented
           label="Visualizzazione calendario"
           value={mode}
@@ -70,10 +72,14 @@ export function LessonCalendar() {
             { value: "month", label: "Mese" },
             { value: "day", label: "Giorno" },
           ]}
-          className="w-48"
+          className="min-w-0 flex-1 sm:w-48 sm:flex-none"
         />
-        <Button onClick={() => setCreatingOn(mode === "day" ? cursor : new Date())}>
-          <CalendarPlus aria-hidden /> Nuova lezione
+        <Button
+          className="ml-auto shrink-0"
+          aria-label="Nuova lezione"
+          onClick={() => setCreatingOn(mode === "day" ? cursor : new Date())}
+        >
+          <CalendarPlus aria-hidden /> <span className={toolbar ? "hidden sm:inline" : undefined}>Nuova lezione</span>
         </Button>
       </div>
 
@@ -219,7 +225,9 @@ function DayAgenda({
   onOpen: (l: WithId<Lesson>) => void;
   onCreate: () => void;
 }) {
-  const att = useAttendanceMap(lessons.map((l) => l.id));
+  const ids = lessons.map((l) => l.id);
+  const att = useAttendanceMap(ids);
+  const [attFor, setAttFor] = useState<WithId<Lesson> | null>(null);
   if (lessons.length === 0) {
     return (
       <EmptyState
@@ -238,11 +246,11 @@ function DayAgenda({
       {lessons.map((l) => {
         const a = att.data?.get(l.id);
         return (
-          <li key={l.id}>
+          <li key={l.id} className="flex items-center pr-2">
             <button
               type="button"
               onClick={() => onOpen(l)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
+              className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-muted"
             >
               <div className="w-14 shrink-0 text-center">
                 <p className="font-bold">{l.startTime ?? "—"}</p>
@@ -254,11 +262,29 @@ function DayAgenda({
                   {l.title} · {l.teacherName}
                 </p>
               </div>
-              {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
+              <span className="hidden sm:block">
+                {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
+              </span>
             </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11 shrink-0 rounded-full"
+              aria-label={`Gestisci presenza di ${l.studentName}`}
+              title="Presenza"
+              onClick={() => setAttFor(l)}
+            >
+              <ClipboardCheck className={cn("size-5", a && "text-success")} aria-hidden />
+            </Button>
           </li>
         );
       })}
+      <AttendanceDialog
+        lesson={attFor}
+        current={attFor ? att.data?.get(attFor.id) : undefined}
+        lessonIds={ids}
+        onOpenChange={(o) => !o && setAttFor(null)}
+      />
     </ul>
   );
 }

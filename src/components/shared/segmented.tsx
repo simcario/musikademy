@@ -1,11 +1,14 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface SegmentOption<T extends string> {
   value: T;
   label: string;
   count?: number;
+  /** Se presente il segmento mostra solo l'icona: l'etichetta resta per screen reader e tooltip. */
+  icon?: LucideIcon;
 }
 
 /** Segmented control (tab "DA FARE / IN CORSO / COMPLETATI", filtri lezioni…). */
@@ -32,13 +35,15 @@ export function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
+            title={o.icon ? o.label : undefined}
             onClick={() => onChange(o.value)}
             className={cn(
               "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold transition-all",
               active ? "bg-card text-brand-ink shadow-card" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <span className="truncate">{o.label}</span>
+            {o.icon && <o.icon className="size-5" aria-hidden />}
+            <span className={o.icon ? "sr-only" : "truncate"}>{o.label}</span>
             {o.count !== undefined && (
               <span
                 className={cn(

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { BookOpen, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { BookOpen, CalendarDays, CalendarPlus, ClipboardCheck, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,8 @@ import { ConfirmDialog } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { useAttendanceMap, useLessonsPage, useStaffMutation } from "@/features/admin/hooks";
+import { AttendanceDialog } from "@/features/attendance/attendance-picker";
+import { cn } from "@/lib/utils";
 import { lessonService } from "@/services/lessonService";
 import type { Lesson, LessonStatus, WithId } from "@/types";
 import { formatDate } from "@/utils/format";
@@ -22,7 +24,16 @@ import { AssignmentFormDialog } from "@/features/exercises/assignment-form";
 import { LessonFormDialog } from "./lesson-form";
 
 /** Elenco lezioni docente con filtri, modifica, annullamento ed eliminazione. */
-export function StaffLessonList({ studentId, showStudent = true }: { studentId?: string; showStudent?: boolean }) {
+export function StaffLessonList({
+  studentId,
+  showStudent = true,
+  toolbar,
+}: {
+  studentId?: string;
+  showStudent?: boolean;
+  /** Controlli extra a inizio riga (es. selettore elenco/calendario). */
+  toolbar?: ReactNode;
+}) {
   const [status, setStatus] = useState<LessonStatus | "all">("all");
   const [editing, setEditing] = useState<WithId<Lesson> | null>(null);
   const [copying, setCopying] = useState<WithId<Lesson> | null>(null);
@@ -31,7 +42,9 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
   const [assignFor, setAssignFor] = useState<WithId<Lesson> | null>(null);
   const q = useLessonsPage({ studentId, status });
   const lessons = q.data?.pages.flatMap((p) => p.items) ?? [];
-  const att = useAttendanceMap(lessons.map((l) => l.id));
+  const ids = lessons.map((l) => l.id);
+  const att = useAttendanceMap(ids);
+  const [attFor, setAttFor] = useState<WithId<Lesson> | null>(null);
 
   const cancel = useStaffMutation((l: WithId<Lesson>) => lessonService.setStatus(l.id, "cancelled"), {
     success: "Lezione annullata",
@@ -45,12 +58,13 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        {toolbar}
         <NativeSelect
           value={status}
           onChange={(e) => setStatus(e.target.value as LessonStatus | "all")}
           aria-label="Filtra per stato"
-          className="w-48"
+          className="min-w-0 flex-1 sm:w-48 sm:flex-none"
         >
           <option value="all">Tutte le lezioni</option>
           {(["scheduled", "completed", "cancelled"] as const).map((s) => (
@@ -59,8 +73,8 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
             </option>
           ))}
         </NativeSelect>
-        <Button onClick={() => setCreating(true)}>
-          <CalendarPlus aria-hidden /> Nuova lezione
+        <Button className="ml-auto shrink-0" aria-label="Nuova lezione" onClick={() => setCreating(true)}>
+          <CalendarPlus aria-hidden /> <span className={toolbar ? "hidden sm:inline" : undefined}>Nuova lezione</span>
         </Button>
       </div>
 
@@ -89,6 +103,16 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
                 <div className="hidden sm:block">
                   {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-11 shrink-0 rounded-full"
+                  aria-label={`Gestisci presenza di ${l.studentName}`}
+                  title="Presenza"
+                  onClick={() => setAttFor(l)}
+                >
+                  <ClipboardCheck className={cn("size-5", a && "text-success")} aria-hidden />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     aria-label={`Azioni lezione ${l.title}`}
@@ -130,6 +154,12 @@ export function StaffLessonList({ studentId, showStudent = true }: { studentId?:
         open={!!assignFor}
         onOpenChange={(o) => !o && setAssignFor(null)}
         defaults={assignFor ? { studentIds: [assignFor.studentId], lessonId: assignFor.id, materialIds: assignFor.materialIds } : undefined}
+      />
+      <AttendanceDialog
+        lesson={attFor}
+        current={attFor ? att.data?.get(attFor.id) : undefined}
+        lessonIds={ids}
+        onOpenChange={(o) => !o && setAttFor(null)}
       />
       <ConfirmDialog
         open={!!toDelete}

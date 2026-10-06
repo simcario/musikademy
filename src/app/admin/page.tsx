@@ -16,12 +16,14 @@ import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states
 import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAttendanceMap, useDashboardStats, useLessonsInRange } from "@/features/admin/hooks";
+import { AttendanceDialog } from "@/features/attendance/attendance-picker";
 import { useSession } from "@/features/auth/auth-provider";
 import { LessonFormDialog } from "@/features/lessons/lesson-form";
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { PaymentFormDialog } from "@/features/payments/payment-form";
 import { StudentFormDialog } from "@/features/students/student-form";
 import { cn } from "@/lib/utils";
+import type { Lesson, WithId } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/format";
 
 type Dialog = "student" | "lesson" | "material" | "payment" | null;
@@ -44,7 +46,6 @@ export default function AdminDashboard() {
         <QuickAction icon={CalendarPlus} label="Nuova lezione" onClick={() => setDialog("lesson")} />
         <QuickAction icon={FilePlus2} label="Nuovo materiale" onClick={() => setDialog("material")} />
         <QuickAction icon={CreditCard} label="Registra pagamento" onClick={() => setDialog("payment")} />
-        <QuickAction icon={ClipboardCheck} label="Registra presenza" href="/admin/attendance" />
       </section>
 
       <section aria-label="Indicatori" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -55,7 +56,7 @@ export default function AdminDashboard() {
           loading={stats.today.isPending}
           sub={stats.week.data !== undefined ? `${stats.week.data} questa settimana` : undefined}
           icon={CalendarDays}
-          href="/admin/attendance"
+          href="/admin/lessons"
         />
         <Stat
           label="Presenze"
@@ -161,7 +162,9 @@ function Stat({
 function UpcomingLessons() {
   const q = useLessonsInRange(new Date(), 7);
   const lessons = (q.data ?? []).filter((l) => l.status !== "cancelled");
-  const att = useAttendanceMap(lessons.map((l) => l.id));
+  const ids = lessons.map((l) => l.id);
+  const att = useAttendanceMap(ids);
+  const [attFor, setAttFor] = useState<WithId<Lesson> | null>(null);
   return (
     <section className="space-y-3">
       <SectionHeader title="Prossime lezioni" href="/admin/lessons" linkLabel="Tutte le lezioni" />
@@ -177,9 +180,11 @@ function UpcomingLessons() {
             const a = att.data?.get(l.id);
             return (
               <li key={l.id}>
-                <Link
-                  href={`/admin/attendance?date=${formatDate(l.date, "yyyy-MM-dd")}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50"
+                <button
+                  type="button"
+                  aria-label={`Gestisci presenza di ${l.studentName}`}
+                  onClick={() => setAttFor(l)}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
                 >
                   <div className="w-14 shrink-0 text-center">
                     <p className="text-[11px] font-semibold text-muted-foreground uppercase">{formatDate(l.date, "EEE")}</p>
@@ -192,12 +197,18 @@ function UpcomingLessons() {
                     </p>
                   </div>
                   {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
-                </Link>
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+      <AttendanceDialog
+        lesson={attFor}
+        current={attFor ? att.data?.get(attFor.id) : undefined}
+        lessonIds={ids}
+        onOpenChange={(o) => !o && setAttFor(null)}
+      />
     </section>
   );
 }
