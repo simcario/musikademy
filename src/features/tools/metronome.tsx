@@ -79,7 +79,7 @@ function Chip({ active, onClick, children, ...props }: {
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-10 items-center justify-center rounded-full border px-4 text-[13px] font-semibold transition-colors",
+        "flex h-10 shrink-0 items-center justify-center rounded-full border px-4 whitespace-nowrap text-[13px] font-semibold transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-card text-muted-foreground hover:text-foreground",
@@ -157,7 +157,7 @@ export function Metronome() {
 
       <div className="space-y-2">
         <p className="section-label">Tempi preimpostati</p>
-        <div className="flex flex-wrap gap-2">
+        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:-mx-6 md:px-6">
           {TEMPI.map((t) => (
             <Chip key={t.name} active={bpm === t.bpm} aria-pressed={bpm === t.bpm} onClick={() => setBpm(t.bpm)}>
               {t.name} {t.bpm}
@@ -243,7 +243,7 @@ export function Metronome() {
             </Button>
           )}
         </div>
-        <div role="radiogroup" aria-label={`Suddivisione del quarto ${selected + 1}`} className="flex flex-wrap gap-2">
+        <div role="radiogroup" aria-label={`Suddivisione del quarto ${selected + 1}`} className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:-mx-6 md:px-6">
           {SUBDIVISIONS.map((s) => (
             <Chip
               key={s.value}
