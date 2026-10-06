@@ -23,27 +23,63 @@ const TEMPI = [
 
 /** Suddivisioni disponibili per ogni quarto: `value` = numero di note nel quarto. */
 const SUBDIVISIONS = [
-  { value: 1, label: "Quarto", short: "1/4" },
-  { value: 2, label: "Ottavi", short: "1/8" },
-  { value: 3, label: "Terzina", short: "3" },
-  { value: 4, label: "Sedicesimi", short: "1/16" },
-  { value: 6, label: "Sestina", short: "6" },
-  { value: 8, label: "Trentaduesimi", short: "1/32" },
+  { value: 1, label: "Quarto" },
+  { value: 2, label: "Ottavi" },
+  { value: 3, label: "Terzina" },
+  { value: 4, label: "Sedicesimi" },
+  { value: 6, label: "Sestina" },
+  { value: 8, label: "Trentaduesimi" },
 ];
 
 const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min), max);
+
+/** Travi per numero di note nel quarto; terzina e sestina portano anche il numero sopra. */
+const BEAMS: Record<number, number> = { 1: 0, 2: 1, 3: 1, 4: 2, 6: 2, 8: 3 };
+
+/** Figura musicale della suddivisione: `division` note unite da travi, alta `size` px. */
+function NoteFigure({ division, size = 28, className }: { division: number; size?: number; className?: string }) {
+  const gap = division > 4 ? 7 : 9;
+  const width = 4 + (division - 1) * gap + 8;
+  const stems = Array.from({ length: division }, (_, i) => 9.6 + i * gap);
+  const tuplet = division === 3 || division === 6;
+  return (
+    <svg
+      viewBox={`0 0 ${width} 32`}
+      width={(width * size) / 32}
+      height={size}
+      fill="currentColor"
+      className={cn("shrink-0", className)}
+      aria-hidden
+    >
+      {stems.map((x) => (
+        <g key={x}>
+          <ellipse cx={x - 2.8} cy={27} rx={3.3} ry={2.4} transform={`rotate(-20 ${x - 2.8} 27)`} />
+          <rect x={x - 0.6} y={10} width={1.2} height={16.5} />
+        </g>
+      ))}
+      {Array.from({ length: BEAMS[division] ?? 0 }, (_, b) => (
+        <rect key={b} x={stems[0] - 0.6} y={10 + b * 4} width={stems[division - 1] - stems[0] + 1.2} height={2.6} />
+      ))}
+      {tuplet && (
+        <text x={(stems[0] + stems[division - 1]) / 2} y={7} textAnchor="middle" fontSize={8} fontWeight={700} fontStyle="italic">
+          {division}
+        </text>
+      )}
+    </svg>
+  );
+}
 
 function Chip({ active, onClick, children, ...props }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-} & Pick<React.ComponentProps<"button">, "role" | "aria-checked" | "aria-pressed">) {
+} & Pick<React.ComponentProps<"button">, "role" | "aria-checked" | "aria-pressed" | "aria-label" | "title">) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "h-10 rounded-full border px-4 text-[13px] font-semibold transition-colors",
+        "flex h-10 items-center justify-center rounded-full border px-4 text-[13px] font-semibold transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-card text-muted-foreground hover:text-foreground",
@@ -191,9 +227,7 @@ export function Metronome() {
                     />
                   ))}
                 </span>
-                <span className="text-[11px] leading-4 font-semibold text-muted-foreground">
-                  {SUBDIVISIONS.find((s) => s.value === division)?.short}
-                </span>
+                <NoteFigure division={division} size={22} className="text-muted-foreground" />
               </button>
             );
           })}
@@ -216,9 +250,11 @@ export function Metronome() {
               role="radio"
               active={beats[selected] === s.value}
               aria-checked={beats[selected] === s.value}
+              aria-label={s.label}
+              title={s.label}
               onClick={() => setDivision(s.value)}
             >
-              {s.label}
+              <NoteFigure division={s.value} />
             </Chip>
           ))}
         </div>
