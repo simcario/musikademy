@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, FileText, Loader2 } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { ExternalLink, FileDown, FileText, Loader2, Printer } from "lucide-react";
+import { toast } from "sonner";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { extensionOf } from "@/lib/files";
+import { extensionOf, saveMarkdownAsPdf } from "@/lib/files";
 import { errorMessage } from "@/utils/errors";
 import { Markdown } from "./markdown";
 
@@ -20,14 +23,25 @@ export function viewerKindOf(fileName: string): ViewerKind {
   return "other";
 }
 
+/** Stampa la pagina: con `.print-root` montato, il CSS di stampa (globals.css) mostra solo il documento. */
+function printDocument(title: string) {
+  // Il titolo della pagina è il nome proposto da "Salva come PDF" e l'intestazione del foglio.
+  const previous = document.title;
+  document.title = title;
+  window.addEventListener("afterprint", () => (document.title = previous), { once: true });
+  window.print();
+}
+
 /**
  * Visualizzatore a schermo intero per tutti i file in-app.
- * Il Markdown usa `content` se disponibile (da Firestore), altrimenti prova a scaricare il testo da `url`.
+ * Il Markdown usa `content` se disponibile (da Firestore), altrimenti prova a scaricare il testo da `url`;
+ * si può scaricare in PDF e stampare.
  */
 export function FileViewer({
   open,
   onOpenChange,
   title,
+  fileName,
   kind,
   url,
   urlPending,
@@ -37,6 +51,8 @@ export function FileViewer({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   title: string;
+  /** Nome del file originale, da cui deriva quello del PDF (predefinito: `title`). */
+  fileName?: string;
   kind: ViewerKind;
   url?: string;
   urlPending?: boolean;
@@ -56,6 +72,20 @@ export function FileViewer({
   const markdown = content ?? text.data;
   const pending = kind === "markdown" && content !== undefined ? false : urlPending || (kind === "markdown" && text.isPending);
   const error = kind === "markdown" && content !== undefined ? null : urlError || (kind === "markdown" ? text.error : null);
+  const exportable = kind === "markdown" && !pending && !error && !!markdown;
+
+  const [exporting, setExporting] = useState(false);
+  async function downloadPdf() {
+    setExporting(true);
+    try {
+      await saveMarkdownAsPdf(markdown ?? "", title, fileName ?? title);
+      toast.success("PDF scaricato.");
+    } catch (e) {
+      toast.error(errorMessage(e, "Impossibile creare il PDF."));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,6 +93,16 @@ export function FileViewer({
         <header className="flex shrink-0 items-center gap-2 border-b border-border bg-popover py-2 pr-12 pl-4">
           <DialogTitle className="min-w-0 flex-1 truncate text-base font-semibold">{title}</DialogTitle>
           <DialogDescription className="sr-only">Visualizzazione a schermo intero</DialogDescription>
+          {exportable && (
+            <>
+              <Button variant="ghost" size="icon-sm" onClick={downloadPdf} disabled={exporting} aria-label="Scarica in PDF" title="Scarica in PDF">
+                {exporting ? <Loader2 className="animate-spin" aria-hidden /> : <FileDown aria-hidden />}
+              </Button>
+              <Button variant="ghost" size="icon-sm" onClick={() => printDocument(title)} aria-label="Stampa" title="Stampa">
+                <Printer aria-hidden />
+              </Button>
+            </>
+          )}
           {url && (
             <a
               href={url}
@@ -112,6 +152,15 @@ export function FileViewer({
             </Centered>
           )}
         </div>
+        {/* Copia per la stampa, fuori dal dialog: una finestra fissa e scorrevole stamperebbe solo la parte visibile. */}
+        {open &&
+          exportable &&
+          createPortal(
+            <div className="print-root">
+              <Markdown>{markdown}</Markdown>
+            </div>,
+            document.body,
+          )}
       </DialogContent>
     </Dialog>
   );

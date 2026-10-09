@@ -1,5 +1,5 @@
 /* Musikademy service worker (ADR D11).
- * - Asset statici (/_next/static, /icons, /brand): cache-first (sono versionati/immutabili).
+ * - Asset statici (/_next/static, /icons, /brand, /fonts): cache-first (sono versionati/immutabili).
  * - Navigazioni: network-first con pagina offline di ripiego.
  * - Nessuna richiesta verso Firebase/API viene messa in cache: i dati personali restano
  *   gestiti dalla cache di Firestore, legata alla sessione.
@@ -34,7 +34,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   const isStatic =
-    url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/brand/");
+    url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/brand/") || url.pathname.startsWith("/fonts/");
 
   if (isStatic) {
     event.respondWith(

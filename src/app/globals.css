@@ -260,3 +260,39 @@
     @apply max-w-full rounded-lg;
   }
 }
+
+/* Stampa dei Markdown: FileViewer monta una copia del documento in `.print-root`, figlio diretto di <body>. */
+.print-root {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+  /* Il dialog aperto blocca lo scorrimento della pagina: in stampa taglierebbe il documento al primo foglio. */
+  html:has(.print-root),
+  body:has(> .print-root) {
+    position: static !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body:has(> .print-root) > :not(.print-root) {
+    display: none !important;
+  }
+  .print-root {
+    display: block;
+  }
+  .print-root :where(h1, h2, h3, h4) {
+    break-after: avoid;
+  }
+  .print-root :where(pre, blockquote, tr, img) {
+    break-inside: avoid;
+  }
+  .print-root pre {
+    white-space: pre-wrap;
+  }
+  .print-root table {
+    display: table;
+  }
+}

@@ -85,6 +85,17 @@ export function saveBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/** `dispensa.md` → `dispensa.pdf`. */
+export function pdfFileName(name: string): string {
+  return `${name.replace(/\.(md|markdown)$/i, "") || "documento"}.pdf`;
+}
+
+/** Converte un Markdown in PDF e lo salva. Il motore PDF è pesante: viene caricato solo al momento dell'uso. */
+export async function saveMarkdownAsPdf(markdown: string, title: string, fileName: string) {
+  const { markdownToPdf } = await import("./markdown-pdf");
+  saveBlob(await markdownToPdf(markdown, title), pdfFileName(fileName));
+}
+
 export const AVATAR_MAX_SIZE = 5 * MB;
 
 export function safeFileName(name: string): string {

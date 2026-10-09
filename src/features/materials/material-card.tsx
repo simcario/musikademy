@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FileViewer, type ViewerKind } from "@/components/shared/file-viewer";
 import { Pill } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
-import { saveBlob } from "@/lib/files";
+import { pdfFileName, saveBlob, saveMarkdownAsPdf } from "@/lib/files";
 import { cn } from "@/lib/utils";
 import { materialService } from "@/services/materialService";
 import type { Material, MaterialType, WithId } from "@/types";
@@ -73,6 +73,7 @@ export function MaterialViewer({
       open={open}
       onOpenChange={onOpenChange}
       title={material.title}
+      fileName={material.fileName}
       kind={kind}
       url={url.data}
       urlPending={needsUrl && url.isPending}
@@ -83,6 +84,18 @@ export function MaterialViewer({
 }
 
 async function download(material: WithId<Material>) {
+  // I Markdown si scaricano in PDF: è il formato leggibile e stampabile su ogni dispositivo.
+  if (material.type === "markdown") {
+    const id = toast.loading(`Creazione di ${pdfFileName(material.fileName)}…`);
+    try {
+      const text = material.content ?? (await (await materialService.fileBlob(material)).text());
+      await saveMarkdownAsPdf(text, material.title, material.fileName);
+      toast.success("PDF scaricato.", { id });
+    } catch (e) {
+      toast.error(errorMessage(e, "Impossibile creare il PDF."), { id });
+    }
+    return;
+  }
   const id = toast.loading(`Download di ${material.fileName}…`);
   try {
     saveBlob(await materialService.fileBlob(material), material.fileName);
@@ -139,7 +152,8 @@ export function MaterialActions({ material, compact }: { material: WithId<Materi
         variant="ghost"
         size="icon"
         onClick={() => download(material)}
-        aria-label={`Scarica ${material.title}`}
+        aria-label={`Scarica ${material.title}${material.type === "markdown" ? " in PDF" : ""}`}
+        title={material.type === "markdown" ? "Scarica in PDF" : undefined}
       >
         <Download className="size-5" aria-hidden />
       </Button>
