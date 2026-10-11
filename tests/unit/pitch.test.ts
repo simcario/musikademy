@@ -80,11 +80,11 @@ describe("note suonate", () => {
 
   it("conta le letture consecutive della stessa nota", () => {
     const tracker = createNoteTracker();
-    expect(tracker.push(reading(440))).toEqual({ pitchClass: 9, frames: 1 });
-    expect(tracker.push(reading(441))).toEqual({ pitchClass: 9, frames: 2 });
-    expect(tracker.push(reading(262))).toEqual({ pitchClass: 0, frames: 1 });
+    expect(tracker.push(reading(440))).toEqual({ pitchClass: 9, midi: 69, frames: 1 });
+    expect(tracker.push(reading(441))).toEqual({ pitchClass: 9, midi: 69, frames: 2 });
+    expect(tracker.push(reading(262))).toEqual({ pitchClass: 0, midi: 60, frames: 1 });
     expect(tracker.push(null)).toBeNull();
-    expect(tracker.push(reading(262))).toEqual({ pitchClass: 0, frames: 1 });
+    expect(tracker.push(reading(262))).toMatchObject({ pitchClass: 0, frames: 1 });
   });
 
   it("a inizio turno ignora la nota che sta ancora risuonando", () => {
@@ -94,7 +94,7 @@ describe("note suonate", () => {
     expect(tracker.push(reading(440, 0.15))).toBeNull();
     expect(tracker.push(reading(440, 0.1))).toBeNull();
     // Un'altra nota vale subito.
-    expect(tracker.push(reading(262, 0.1))).toEqual({ pitchClass: 0, frames: 1 });
+    expect(tracker.push(reading(262, 0.1))).toMatchObject({ pitchClass: 0, frames: 1 });
   });
 
   it("la stessa nota torna valida dopo un nuovo attacco o un silenzio", () => {
@@ -102,12 +102,12 @@ describe("note suonate", () => {
     attacked.push(reading(440, 0.2));
     attacked.reset();
     expect(attacked.push(reading(440, 0.05))).toBeNull();
-    expect(attacked.push(reading(440, 0.3))).toEqual({ pitchClass: 9, frames: 1 });
+    expect(attacked.push(reading(440, 0.3))).toMatchObject({ pitchClass: 9, frames: 1 });
 
     const silenced = createNoteTracker();
     silenced.push(reading(440));
     silenced.reset();
     silenced.push(null);
-    expect(silenced.push(reading(440))).toEqual({ pitchClass: 9, frames: 1 });
+    expect(silenced.push(reading(440))).toMatchObject({ pitchClass: 9, frames: 1 });
   });
 });

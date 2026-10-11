@@ -108,6 +108,13 @@ export const MATERIAL_CATEGORIES = [
 ] as const;
 export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number];
 
+/**
+ * I materiali di categoria `esercizio` sono il catalogo degli esercizi (sezione Esercizi):
+ * non compaiono nella libreria dei materiali, né del docente né dello studente.
+ */
+export const EXERCISE_CATEGORY = "esercizio" satisfies MaterialCategory;
+export const LIBRARY_CATEGORIES = MATERIAL_CATEGORIES.filter((c) => c !== EXERCISE_CATEGORY);
+
 export type Visibility = "all" | "course" | "student";
 
 export interface Material {
@@ -142,8 +149,76 @@ export interface PianoKeysExercise {
   accidentals: boolean;
 }
 
+export const SCALE_TYPES = ["major", "natural_minor", "harmonic_minor", "melodic_minor"] as const;
+export type ScaleType = (typeof SCALE_TYPES)[number];
+
+/** Scale musicali: compare il nome di una scala, lo studente la suona nota per nota. */
+export interface ScalesExercise {
+  kind: "scales";
+  /** Tipo di scala richiesto; `mixed` = ogni volta un tipo a caso. */
+  scale: ScaleType | "mixed";
+  /** Scale da suonare in una sessione. */
+  rounds: number;
+  /** Include le tonalità con la tonica su un tasto nero. */
+  accidentals: boolean;
+  /** Secondi a disposizione per l'intera scala; `null` = senza limite. */
+  timeLimit: number | null;
+}
+
+/** Chiave di violino o di basso. */
+export type Clef = "treble" | "bass";
+
+/** Nota sul pentagramma: compare una nota scritta, lo studente la suona. */
+export interface StaffNotesExercise {
+  kind: "staff-notes";
+  /** `mixed` = ogni volta una chiave a caso. */
+  clef: Clef | "mixed";
+  /** `staff` = solo note dentro il pentagramma; `ledger` = anche con tagli addizionali. */
+  range: "staff" | "ledger";
+  /** Include diesis e bemolle. */
+  accidentals: boolean;
+  /** La nota vale solo nell'ottava scritta (altrimenti in qualunque ottava). */
+  strictOctave: boolean;
+  rounds: number;
+  /** Secondi a disposizione per ogni nota; `null` = senza limite. */
+  timeLimit: number | null;
+}
+
+export const MEASURE_DIFFICULTIES = ["easy", "medium", "hard"] as const;
+export type MeasureDifficulty = (typeof MEASURE_DIFFICULTIES)[number];
+
+/** Battuta sul pentagramma: lo studente suona le note di una battuta in 4/4 a tempo di metronomo. */
+export interface StaffMeasureExercise {
+  kind: "staff-measure";
+  clef: Clef;
+  difficulty: MeasureDifficulty;
+  /** Velocità del metronomo incorporato. */
+  bpm: number;
+  /** Battute da suonare in una sessione. */
+  rounds: number;
+}
+
+/** Intervalli: data una nota di partenza e un intervallo, lo studente suona la nota di arrivo. */
+export interface IntervalsExercise {
+  kind: "intervals";
+  /** Quali intervalli vengono chiesti. */
+  level: "seconds_thirds" | "up_to_fifth" | "all";
+  /** Intervalli ascendenti, discendenti o entrambi. */
+  direction: "up" | "down" | "mixed";
+  /** Include le note di partenza alterate. */
+  accidentals: boolean;
+  rounds: number;
+  /** Secondi a disposizione per ogni intervallo; `null` = senza limite. */
+  timeLimit: number | null;
+}
+
 /** Esercizi interattivi disponibili (catalogo in features/exercises/interactive). */
-export type InteractiveExercise = PianoKeysExercise;
+export type InteractiveExercise =
+  | PianoKeysExercise
+  | ScalesExercise
+  | StaffNotesExercise
+  | StaffMeasureExercise
+  | IntervalsExercise;
 export type InteractiveKind = InteractiveExercise["kind"];
 
 export interface Assignment {

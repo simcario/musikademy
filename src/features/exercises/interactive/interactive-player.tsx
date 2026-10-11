@@ -6,8 +6,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Pill } from "@/components/shared/status-badge";
 import type { InteractiveExercise } from "@/types";
 import { InteractiveIcon } from "./catalog";
+import { IntervalsGame } from "./intervals-game";
+import { MeasureGame } from "./measure-game";
 import { MicSetup } from "./mic-setup";
 import { PianoKeysGame } from "./piano-keys-game";
+import { ScalesGame } from "./scales-game";
+import { StaffNotesGame } from "./staff-notes-game";
 import { useMicrophone } from "./use-microphone";
 
 /** Contrassegno degli esercizi interattivi in elenchi e card. */
@@ -69,11 +73,14 @@ function InteractivePlayer({
   }
   if (mic.status === "setup" || !mic.stream) return <MicSetup mic={mic} />;
 
+  const game = { stream: mic.stream, onClose, onComplete };
   return (
     <div className="space-y-3">
-      {exercise.kind === "piano-keys" && (
-        <PianoKeysGame exercise={exercise} stream={mic.stream} onClose={onClose} onComplete={onComplete} />
-      )}
+      {exercise.kind === "piano-keys" && <PianoKeysGame exercise={exercise} {...game} />}
+      {exercise.kind === "scales" && <ScalesGame exercise={exercise} {...game} />}
+      {exercise.kind === "staff-notes" && <StaffNotesGame exercise={exercise} {...game} />}
+      {exercise.kind === "staff-measure" && <MeasureGame exercise={exercise} {...game} />}
+      {exercise.kind === "intervals" && <IntervalsGame exercise={exercise} {...game} />}
       <Button variant="ghost" size="sm" onClick={mic.reconfigure} className="text-muted-foreground">
         <Settings2 aria-hidden /> Cambia microfono
       </Button>

@@ -22,7 +22,7 @@ import { MaterialActions, MaterialIcon } from "@/features/materials/material-car
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { useDebounce } from "@/hooks/use-debounce";
 import { materialService } from "@/services/materialService";
-import { MATERIAL_CATEGORIES, type Material, type MaterialCategory, type WithId } from "@/types";
+import { EXERCISE_CATEGORY, LIBRARY_CATEGORIES, type Material, type MaterialCategory, type WithId } from "@/types";
 import { formatFileSize, formatShortDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 
@@ -46,7 +46,8 @@ function Materials() {
   const [toDelete, setToDelete] = useState<WithId<Material> | null>(null);
   const debounced = useDebounce(search);
   const q = useMaterialsPage({ category, search: debounced, sort });
-  const items = q.data?.pages.flatMap((p) => p.items) ?? [];
+  // Gli esercizi hanno il loro catalogo nella sezione Esercizi.
+  const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
 
   const remove = useStaffMutation((m: WithId<Material>) => materialService.remove(m), {
     success: "Materiale eliminato",
@@ -79,7 +80,7 @@ function Materials() {
         label="Categoria"
         value={category}
         onChange={setCategory}
-        options={[{ value: "all" as const, label: "Tutti" }, ...MATERIAL_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].plural }))]}
+        options={[{ value: "all" as const, label: "Tutti" }, ...LIBRARY_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].plural }))]}
       />
 
       {q.isPending ? (

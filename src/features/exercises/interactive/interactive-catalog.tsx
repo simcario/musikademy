@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { AssignmentFormDialog } from "../assignment-form";
 import { INTERACTIVE_CATALOG, type InteractiveCatalogEntry } from "./catalog";
 import { InteractiveBadge, InteractivePlayerDialog } from "./interactive-player";
+import { InteractiveWizardDialog } from "./interactive-wizard";
 
 /** Catalogo docente degli esercizi interattivi: ogni voce si può provare e assegnare agli studenti. */
-export function InteractiveCatalog({ onAssigned }: { onAssigned?: () => void }) {
+export function InteractiveCatalog() {
   const [trying, setTrying] = useState<InteractiveCatalogEntry | null>(null);
   const [assigning, setAssigning] = useState<InteractiveCatalogEntry | null>(null);
 
@@ -43,14 +44,11 @@ export function InteractiveCatalog({ onAssigned }: { onAssigned?: () => void }) 
         onClose={() => setTrying(null)}
       />
       <AssignmentFormDialog
-        open={!!assigning}
-        onOpenChange={(o) => {
-          if (o) return;
-          setAssigning(null);
-        }}
+        open={!!assigning && !assigning.wizard}
+        onOpenChange={(o) => !o && setAssigning(null)}
         defaults={assigning ? { title: assigning.title, description: assigning.instructions, interactive: assigning.defaults } : undefined}
-        onSaved={onAssigned}
       />
+      <InteractiveWizardDialog entry={assigning?.wizard ? assigning : null} onClose={() => setAssigning(null)} />
     </>
   );
 }

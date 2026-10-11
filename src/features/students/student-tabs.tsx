@@ -20,7 +20,7 @@ import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
-import type { Student, WithId } from "@/types";
+import { EXERCISE_CATEGORY, type Student, type WithId } from "@/types";
 import { formatCurrency, formatDate, formatWeekday } from "@/utils/format";
 import { remainingOf, summarizeAttendance } from "@/utils/status";
 
@@ -106,7 +106,8 @@ export function StudentMaterialsTab({ studentId, studentName }: { studentId: str
     initialPageParam: null as unknown,
     getNextPageParam: (last) => last.cursor ?? undefined,
   });
-  const items = q.data?.pages.flatMap((p) => p.items) ?? [];
+  // I materiali degli esercizi si gestiscono dalla scheda Esercizi.
+  const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
   const unassign = useStaffMutation((materialId: string) => materialService.unassignFromStudent(materialId, studentId), {
     success: `Materiale nascosto a ${studentName}`,
     invalidate: [["materials"]],

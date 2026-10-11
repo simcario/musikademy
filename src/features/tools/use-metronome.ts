@@ -9,7 +9,7 @@ export interface MetronomePosition {
   sub: number;
 }
 
-type ClickLevel = "accent" | "beat" | "sub";
+export type ClickLevel = "accent" | "beat" | "sub";
 
 const CLICK: Record<ClickLevel, { freq: number; gain: number }> = {
   accent: { freq: 1568, gain: 1 },
@@ -21,7 +21,7 @@ const CLICK: Record<ClickLevel, { freq: number; gain: number }> = {
 const TICK_MS = 25;
 const LOOKAHEAD = 0.1;
 
-function scheduleClick(ctx: AudioContext, out: AudioNode, time: number, level: ClickLevel) {
+export function scheduleClick(ctx: AudioContext, out: AudioNode, time: number, level: ClickLevel) {
   const { freq, gain } = CLICK[level];
   const osc = ctx.createOscillator();
   const env = ctx.createGain();

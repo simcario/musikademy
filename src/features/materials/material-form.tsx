@@ -15,7 +15,7 @@ import { CourseSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
 import { materialService } from "@/services/materialService";
-import { MATERIAL_CATEGORIES, type Material, type WithId } from "@/types";
+import { EXERCISE_CATEGORY, LIBRARY_CATEGORIES, MATERIAL_CATEGORIES, type Material, type WithId } from "@/types";
 import { formatFileSize, fullName } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 import { useUploadQueue } from "./upload-queue";
@@ -37,19 +37,28 @@ export function MaterialFormDialog({
   open,
   onOpenChange,
   material,
+  exercise,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   material?: WithId<Material> | null;
+  /** Voce del catalogo esercizi: categoria fissa, la visibilità è data dalle assegnazioni. */
+  exercise?: boolean;
 }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title={material ? "Modifica materiale" : "Nuovo materiale"} wide>
-      <MaterialForm key={material?.id ?? "new"} material={material} onDone={() => onOpenChange(false)} />
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={exercise ? (material ? "Modifica esercizio" : "Nuovo esercizio") : material ? "Modifica materiale" : "Nuovo materiale"}
+      description={exercise && !material ? "Entra nel catalogo: gli studenti lo vedono solo quando glielo assegni." : undefined}
+      wide
+    >
+      <MaterialForm key={material?.id ?? "new"} material={material} exercise={exercise} onDone={() => onOpenChange(false)} />
     </FormDialog>
   );
 }
 
-function MaterialForm({ material, onDone }: { material?: WithId<Material> | null; onDone: () => void }) {
+function MaterialForm({ material, exercise, onDone }: { material?: WithId<Material> | null; exercise?: boolean; onDone: () => void }) {
   const { uid } = useSession();
   const students = useActiveStudents();
   const uploads = useUploadQueue();
@@ -60,7 +69,7 @@ function MaterialForm({ material, onDone }: { material?: WithId<Material> | null
     defaultValues: {
       title: material?.title ?? "",
       description: material?.description ?? "",
-      category: material?.category ?? "dispensa",
+      category: material?.category ?? (exercise ? EXERCISE_CATEGORY : "dispensa"),
       courseId: material?.courseId ?? "",
       visibility: material?.visibility ?? "student",
       studentIds: material?.studentIds ?? [],
@@ -71,7 +80,7 @@ function MaterialForm({ material, onDone }: { material?: WithId<Material> | null
   const visibility = useWatch({ control: form.control, name: "visibility" });
 
   const update = useStaffMutation((v: Values) => materialService.update(material!.id, v), {
-    success: "Materiale aggiornato",
+    success: exercise ? "Esercizio aggiornato" : "Materiale aggiornato",
     invalidate: [["materials"]],
     onSuccess: onDone,
   });
@@ -126,52 +135,56 @@ function MaterialForm({ material, onDone }: { material?: WithId<Material> | null
       <Field label="Titolo" error={errors.title?.message} required>
         {(p) => <Input {...p} {...form.register("title")} />}
       </Field>
-      <Field label="Descrizione" error={errors.description?.message}>
+      <Field label={exercise ? "Istruzioni" : "Descrizione"} error={errors.description?.message}>
         {(p) => <Textarea {...p} rows={2} {...form.register("description")} />}
       </Field>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Categoria">
-          {(p) => (
-            <NativeSelect {...p} {...form.register("category")}>
-              {MATERIAL_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_META[c].label}
-                </option>
-              ))}
-            </NativeSelect>
-          )}
-        </Field>
-        <Field label="Visibilità">
-          {(p) => (
-            <NativeSelect {...p} {...form.register("visibility")}>
-              <option value="student">Solo studenti assegnati</option>
-              <option value="course">Un corso</option>
-              <option value="all">Tutti gli studenti</option>
-            </NativeSelect>
-          )}
-        </Field>
-        <Field label="Corso" error={errors.courseId?.message} required={visibility === "course"}>
-          {(p) => <CourseSelect {...p} {...form.register("courseId")} />}
-        </Field>
-      </div>
-      <div className="space-y-1">
-        <CheckList
-          label={
-            visibility === "student"
-              ? "Rendi visibile subito a (opzionale)"
-              : "Assegna anche a studenti specifici (opzionale)"
-          }
-          items={(students.data ?? []).map((s) => ({ id: s.id, label: fullName(s), sub: s.email }))}
-          selected={watch_studentIds}
-          onChange={(ids) => form.setValue("studentIds", ids, { shouldValidate: true })}
-          maxHeight="max-h-44"
-        />
-        {visibility === "student" && watch_studentIds.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Nessuno studente lo vedrà finché non lo assegni dalla scheda studente (Materiali → Assegna).
-          </p>
-        )}
-      </div>
+      {!exercise && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Categoria">
+              {(p) => (
+                <NativeSelect {...p} {...form.register("category")}>
+                  {LIBRARY_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_META[c].label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              )}
+            </Field>
+            <Field label="Visibilità">
+              {(p) => (
+                <NativeSelect {...p} {...form.register("visibility")}>
+                  <option value="student">Solo studenti assegnati</option>
+                  <option value="course">Un corso</option>
+                  <option value="all">Tutti gli studenti</option>
+                </NativeSelect>
+              )}
+            </Field>
+            <Field label="Corso" error={errors.courseId?.message} required={visibility === "course"}>
+              {(p) => <CourseSelect {...p} {...form.register("courseId")} />}
+            </Field>
+          </div>
+          <div className="space-y-1">
+            <CheckList
+              label={
+                visibility === "student"
+                  ? "Rendi visibile subito a (opzionale)"
+                  : "Assegna anche a studenti specifici (opzionale)"
+              }
+              items={(students.data ?? []).map((s) => ({ id: s.id, label: fullName(s), sub: s.email }))}
+              selected={watch_studentIds}
+              onChange={(ids) => form.setValue("studentIds", ids, { shouldValidate: true })}
+              maxHeight="max-h-44"
+            />
+            {visibility === "student" && watch_studentIds.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Nessuno studente lo vedrà finché non lo assegni dalla scheda studente (Materiali → Assegna).
+              </p>
+            )}
+          </div>
+        </>
+      )}
       <FormActions onCancel={onDone} submitting={update.isPending} submitLabel={material ? "Salva" : "Carica"} />
     </form>
   );

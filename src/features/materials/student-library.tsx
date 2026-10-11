@@ -9,7 +9,7 @@ import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/sha
 import { useMyMaterials } from "@/features/student-area/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useNow } from "@/hooks/use-now";
-import type { MaterialCategory } from "@/types";
+import { EXERCISE_CATEGORY, type MaterialCategory } from "@/types";
 import { toDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 import { NowPlayingCard } from "./audio-dock";
@@ -17,7 +17,7 @@ import { MaterialCard, NewPill } from "./material-card";
 
 type CategoryFilter = MaterialCategory | "all";
 
-const STUDENT_CATEGORIES: CategoryFilter[] = ["all", "dispensa", "ascolto", "base", "video", "spartito", "immagine", "esercizio", "altro"];
+const STUDENT_CATEGORIES: CategoryFilter[] = ["all", "dispensa", "ascolto", "base", "video", "spartito", "immagine", "altro"];
 
 /** Libreria materiali studente: ricerca, filtri per categoria, ordinamento, paginazione progressiva. */
 export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories?: CategoryFilter[] }) {
@@ -26,7 +26,8 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
   const [sort, setSort] = useState<"recent" | "title">("recent");
   const debounced = useDebounce(search);
   const q = useMyMaterials({ category, search: debounced, sort });
-  const items = q.data?.pages.flatMap((p) => p.items) ?? [];
+  // I materiali degli esercizi si aprono dall'esercizio assegnato, non dalla libreria.
+  const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
   const weekAgo = useNow() - 7 * 86_400_000;
 
   return (

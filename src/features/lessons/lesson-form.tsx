@@ -16,7 +16,7 @@ import { useSession } from "@/features/auth/auth-provider";
 import { useTeachers } from "@/features/student-area/hooks";
 import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
-import type { Lesson, WithId } from "@/types";
+import { EXERCISE_CATEGORY, type Lesson, type WithId } from "@/types";
 import { fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { CATEGORY_META, LESSON_META } from "@/utils/status";
 import { lessonFormSchema, oneHourAfter, parseTopics, type LessonFormValues } from "./schemas";
@@ -212,7 +212,9 @@ function LessonForm({
       </Field>
       <CheckList
         label="Materiali della lezione"
-        items={materialItems.map((m) => ({ id: m.id, label: m.title, sub: CATEGORY_META[m.category].label }))}
+        items={materialItems
+          .filter((m) => m.category !== EXERCISE_CATEGORY || materialIds.includes(m.id))
+          .map((m) => ({ id: m.id, label: m.title, sub: CATEGORY_META[m.category].label }))}
         selected={materialIds}
         onChange={setMaterialIds}
         emptyText="Nessun materiale caricato."

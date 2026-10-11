@@ -135,6 +135,10 @@ async function main() {
     { s: 0, title: "Riscaldamento posturale", description: "", status: "completed", due: -2, mats: [] },
     { s: 1, title: "Legato su vocali aperte", description: "Scale lente, 15 minuti.", status: "todo", due: 4, mats: ["demo-base-caruso"] },
     { s: 0, title: "Riconoscimento della tastiera del pianoforte", description: "Suona la nota che compare entro 5 secondi.", status: "todo", due: 6, mats: [], interactive: { kind: "piano-keys", rounds: 10, accidentals: false } },
+    { s: 0, title: "Le scale musicali", description: "Suona la scala che compare, ascendente per un'ottava.", status: "todo", due: 7, mats: [], interactive: { kind: "scales", scale: "major", rounds: 5, accidentals: false, timeLimit: 30 } },
+    { s: 0, title: "Indovina la nota sul pentagramma", description: "Leggi la nota e suonala sulla tastiera.", status: "todo", due: 7, mats: [], interactive: { kind: "staff-notes", clef: "treble", range: "staff", accidentals: false, strictOctave: false, rounds: 10, timeLimit: 10 } },
+    { s: 0, title: "Suona la battuta", description: "Suona la battuta a tempo con il metronomo.", status: "todo", due: 8, mats: [], interactive: { kind: "staff-measure", clef: "treble", difficulty: "easy", bpm: 60, rounds: 5 } },
+    { s: 0, title: "Gli intervalli", description: "Suona la nota di arrivo dell'intervallo.", status: "todo", due: 8, mats: [], interactive: { kind: "intervals", level: "seconds_thirds", direction: "up", accidentals: false, rounds: 10, timeLimit: 15 } },
   ];
   for (const [i, a] of assignments.entries()) {
     const s = students[a.s];

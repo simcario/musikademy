@@ -1,29 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import { PageContainer, PageHeader } from "@/components/shared/page";
-import { Segmented } from "@/components/shared/segmented";
-import { StaffAssignmentList } from "@/features/exercises/assignment-list";
 import { InteractiveCatalog } from "@/features/exercises/interactive/interactive-catalog";
-
-type Section = "assigned" | "interactive";
+import { MaterialExerciseCatalog } from "@/features/exercises/material-exercise-catalog";
 
 export default function AdminExercisesPage() {
-  const [section, setSection] = useState<Section>("assigned");
   return (
     <PageContainer className="max-w-5xl">
-      <PageHeader title="Esercizi" description="Assegna esercizi e segui lo stato di avanzamento degli studenti." />
-      <Segmented
-        label="Sezione esercizi"
-        value={section}
-        onChange={setSection}
-        className="max-w-md"
-        options={[
-          { value: "assigned", label: "Assegnati" },
-          { value: "interactive", label: "Esercizi interattivi" },
-        ]}
+      <PageHeader
+        title="Esercizi"
+        description="Catalogo degli esercizi da assegnare. Quelli già assegnati si trovano nella scheda di ogni studente, sezione Esercizi."
       />
-      {section === "assigned" ? <StaffAssignmentList /> : <InteractiveCatalog onAssigned={() => setSection("assigned")} />}
+      <section className="space-y-3" aria-labelledby="interactive-exercises">
+        <h2 id="interactive-exercises" className="section-label">
+          Esercizi interattivi
+        </h2>
+        <InteractiveCatalog />
+      </section>
+      <MaterialExerciseCatalog />
     </PageContainer>
   );
 }

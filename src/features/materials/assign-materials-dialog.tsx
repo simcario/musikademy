@@ -9,6 +9,7 @@ import { LoadMore } from "@/components/shared/states";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { materialService } from "@/services/materialService";
+import { EXERCISE_CATEGORY } from "@/types";
 import { CATEGORY_META } from "@/utils/status";
 
 /** Assegna materiali già caricati a uno studente (visibilità additiva). */
@@ -27,7 +28,9 @@ export function AssignMaterialsDialog({
   const [selected, setSelected] = useState<string[]>([]);
   const debounced = useDebounce(search);
   const q = useMaterialsPage({ search: debounced, sort: "recent" });
-  const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => !m.studentIds?.includes(studentId));
+  const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter(
+    (m) => m.category !== EXERCISE_CATEGORY && !m.studentIds?.includes(studentId),
+  );
 
   const assign = useStaffMutation(
     async () => {

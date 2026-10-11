@@ -6,6 +6,10 @@ export const NOTE_NAMES_FLAT = ["Do", "Re♭", "Re", "Mi♭", "Mi", "Fa", "Sol�
 /** Classi di altezza (0 = Do … 11 = Si) dei tasti bianchi. */
 export const WHITE_KEYS = [0, 2, 4, 5, 7, 9, 11];
 
+/** Nomi delle sette note e alterazioni, per scrivere una nota con la grafia voluta (Fa♯ oppure Sol♭). */
+export const LETTERS = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Si"];
+export const ALTERATION: Record<number, string> = { [-2]: "♭♭", [-1]: "♭", 0: "", 1: "♯", 2: "♯♯" };
+
 export const isBlackKey = (pitchClass: number) => !WHITE_KEYS.includes(pitchClass);
 
 /** Nome della nota; per i tasti neri entrambe le grafie ("Do♯ / Re♭"). */
@@ -103,6 +107,13 @@ export function detectPitch(buffer: Float32Array, sampleRate: number): PitchRead
   return { frequency, clarity, rms };
 }
 
+/**
+ * Letture consecutive (40 ms l'una) perché una nota valga come risposta:
+ * l'errore ne richiede di più, per non punire un falso rilevamento.
+ */
+export const CORRECT_FRAMES = 3;
+export const WRONG_FRAMES = 6;
+
 /** Di quanto deve salire il livello tra due letture perché sia un nuovo attacco. */
 const ATTACK_RATIO = 1.8;
 
@@ -122,7 +133,7 @@ export function createNoteTracker() {
       carried = last;
       frames = 0;
     },
-    push(reading: PitchReading | null): { pitchClass: number; frames: number } | null {
+    push(reading: PitchReading | null): { pitchClass: number; midi: number; frames: number } | null {
       if (!reading) {
         last = null;
         frames = 0;
@@ -143,7 +154,7 @@ export function createNoteTracker() {
         return null;
       }
       carried = null;
-      return { pitchClass, frames };
+      return { pitchClass, midi: Math.round(frequencyToMidi(reading.frequency)), frames };
     },
   };
 }

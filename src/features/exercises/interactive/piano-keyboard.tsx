@@ -11,9 +11,21 @@ const BLACK_KEYS = [
   { pitchClass: 10, after: 5 },
 ];
 
-/** Un'ottava di tastiera (Do–Si) che evidenzia la nota corretta e quella suonata per errore. */
-export function PianoKeyboard({ correct, wrong, className }: { correct?: number | null; wrong?: number | null; className?: string }) {
-  const tone = (pitchClass: number) => (pitchClass === correct ? "fill-success" : pitchClass === wrong ? "fill-danger" : null);
+/** Un'ottava di tastiera (Do–Si) che evidenzia le note corrette, quella suonata per errore e una nota di riferimento. */
+export function PianoKeyboard({
+  correct = [],
+  wrong,
+  marked,
+  className,
+}: {
+  correct?: number[];
+  wrong?: number | null;
+  /** Nota di riferimento, es. quella di partenza di un intervallo. */
+  marked?: number;
+  className?: string;
+}) {
+  const tone = (pitchClass: number) =>
+    pitchClass === wrong ? "fill-danger" : correct.includes(pitchClass) ? "fill-success" : pitchClass === marked ? "fill-primary" : null;
   return (
     <svg viewBox="0 0 140 72" className={cn("w-full", className)} aria-hidden>
       {WHITE_KEYS.map((pitchClass, i) => (

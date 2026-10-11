@@ -6,19 +6,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUp, Paperclip, X } from "lucide-react";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, FormDialog } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
+import { useMaterialsByIds } from "@/features/student-area/hooks";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
 import { assignmentService } from "@/services/assignmentService";
 import { materialService } from "@/services/materialService";
 import type { Assignment, InteractiveExercise, WithId } from "@/types";
 import { formatFileSize, fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
-import { InteractiveIcon, ROUND_OPTIONS, catalogEntry } from "./interactive/catalog";
+import { InteractiveSettings } from "./interactive/interactive-settings";
 
 export const assignmentFormSchema = z.object({
   title: z.string().trim().min(1, "Inserisci un titolo").max(140),
@@ -44,14 +44,11 @@ export function AssignmentFormDialog({
   onOpenChange,
   assignment,
   defaults,
-  onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   assignment?: WithId<Assignment> | null;
   defaults?: AssignmentDefaults;
-  /** Chiamata solo dopo un salvataggio riuscito (non all'annullamento). */
-  onSaved?: () => void;
 }) {
   return (
     <FormDialog
@@ -61,7 +58,7 @@ export function AssignmentFormDialog({
       description={assignment ? undefined : "Puoi assegnarlo a più studenti in un'unica operazione."}
       wide
     >
-      <AssignmentForm key={assignment?.id ?? defaults?.interactive?.kind ?? "new"} assignment={assignment} defaults={defaults} onDone={() => onOpenChange(false)} onSaved={onSaved} />
+      <AssignmentForm key={assignment?.id ?? defaults?.interactive?.kind ?? defaults?.materialIds?.join() ?? "new"} assignment={assignment} defaults={defaults} onDone={() => onOpenChange(false)} />
     </FormDialog>
   );
 }
@@ -70,17 +67,18 @@ function AssignmentForm({
   assignment,
   defaults,
   onDone,
-  onSaved,
 }: {
   assignment?: WithId<Assignment> | null;
   defaults?: AssignmentDefaults;
   onDone: () => void;
-  onSaved?: () => void;
 }) {
   const { uid } = useSession();
   const students = useActiveStudents();
   const materials = useMaterialsPage({ sort: "recent" });
-  const materialItems = materials.data?.pages.flatMap((p) => p.items) ?? [];
+  // I materiali già collegati (es. l'esercizio scelto dal catalogo) possono non essere tra i più recenti.
+  const linked = useMaterialsByIds(assignment?.materialIds ?? defaults?.materialIds ?? []);
+  const recent = materials.data?.pages.flatMap((p) => p.items) ?? [];
+  const materialItems = [...(linked.data ?? []).filter((m) => !recent.some((r) => r.id === m.id)), ...recent];
   const form = useForm<Values>({
     resolver: zodResolver(assignmentFormSchema),
     defaultValues: {
@@ -147,9 +145,10 @@ function AssignmentForm({
       const targetIds = assignment ? [assignment.studentId] : v.studentIds;
       const uploadedIds = await uploadAttachments(v.title, targetIds);
       // I materiali collegati devono essere leggibili dagli studenti (visibilità additiva, ADR D18).
+      const chosen = await materialService.getMany(v.materialIds);
       await Promise.all(
-        materialItems
-          .filter((m) => v.materialIds.includes(m.id) && targetIds.some((id) => !m.studentIds?.includes(id)))
+        chosen
+          .filter((m) => targetIds.some((id) => !m.studentIds?.includes(id)))
           .map((m) => materialService.assignToStudents(m, targetIds)),
       );
       const input = {
@@ -170,10 +169,7 @@ function AssignmentForm({
       success: (_r, v) =>
         assignment ? "Esercizio aggiornato" : `Esercizio assegnato a ${v.studentIds.length} student${v.studentIds.length === 1 ? "e" : "i"}`,
       invalidate: [["assignments"], ["materials"]],
-      onSuccess: () => {
-        onDone();
-        onSaved?.();
-      },
+      onSuccess: onDone,
     },
   );
 
@@ -185,37 +181,7 @@ function AssignmentForm({
       <Field label="Istruzioni" hint="Supporta Markdown: **grassetto**, elenchi con -, titoli con #" error={errors.description?.message}>
         {(p) => <Textarea {...p} rows={5} className="font-mono text-[13px]" placeholder="Es. 10 minuti al giorno" {...form.register("description")} />}
       </Field>
-      {interactive && (
-        <fieldset className="space-y-3 rounded-xl bg-surface-mid p-3">
-          <legend className="sr-only">Esercizio interattivo</legend>
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-violet-ink">
-            <InteractiveIcon className="size-4 shrink-0" aria-hidden />
-            Esercizio interattivo · {catalogEntry(interactive.kind)?.title}
-          </p>
-          <Field label="Note da riconoscere">
-            {(p) => (
-              <NativeSelect {...p} value={interactive.rounds} onChange={(e) => setInteractive({ ...interactive, rounds: Number(e.target.value) })}>
-                {[...new Set([...ROUND_OPTIONS, interactive.rounds])]
-                  .sort((a, b) => a - b)
-                  .map((n) => (
-                    <option key={n} value={n}>
-                      {n} note
-                    </option>
-                  ))}
-              </NativeSelect>
-            )}
-          </Field>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-            <input
-              type="checkbox"
-              className="size-[18px] rounded accent-primary"
-              checked={interactive.accidentals}
-              onChange={(e) => setInteractive({ ...interactive, accidentals: e.target.checked })}
-            />
-            Includi i tasti neri (diesis e bemolle)
-          </label>
-        </fieldset>
-      )}
+      {interactive && <InteractiveSettings value={interactive} onChange={setInteractive} />}
       <Field label="Scadenza" error={errors.dueDate?.message}>
         {(p) => <Input {...p} type="date" {...form.register("dueDate")} />}
       </Field>
