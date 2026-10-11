@@ -296,3 +296,13 @@
     display: table;
   }
 }
+
+/* Barra del tempo a disposizione negli esercizi interattivi. */
+@keyframes countdown-bar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

@@ -133,12 +133,27 @@ export interface Material {
 
 export type AssignmentStatus = "todo" | "in_progress" | "completed";
 
+/** Riconoscimento della tastiera: compare una nota, lo studente la suona e il microfono la riconosce. */
+export interface PianoKeysExercise {
+  kind: "piano-keys";
+  /** Note da riconoscere in una sessione. */
+  rounds: number;
+  /** Include i tasti neri (diesis e bemolle). */
+  accidentals: boolean;
+}
+
+/** Esercizi interattivi disponibili (catalogo in features/exercises/interactive). */
+export type InteractiveExercise = PianoKeysExercise;
+export type InteractiveKind = InteractiveExercise["kind"];
+
 export interface Assignment {
   studentId: string;
   studentName: string;
   lessonId?: string;
   title: string;
   description?: string;
+  /** Presente se l'esercizio è interattivo: tipo e impostazioni del gioco. */
+  interactive?: InteractiveExercise;
   materialIds: string[];
   assignedAt: Timestamp;
   dueDate?: Timestamp;

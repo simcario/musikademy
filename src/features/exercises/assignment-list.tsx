@@ -19,6 +19,7 @@ import type { Assignment, AssignmentStatus, WithId } from "@/types";
 import { formatDate } from "@/utils/format";
 import { ASSIGNMENT_META } from "@/utils/status";
 import { AssignmentFormDialog } from "./assignment-form";
+import { InteractiveIcon } from "./interactive/catalog";
 
 /** Esercizi assegnati con stato di avanzamento dello studente (visibile al docente, §13). */
 export function StaffAssignmentList({ studentId }: { studentId?: string }) {
@@ -60,7 +61,12 @@ export function StaffAssignmentList({ studentId }: { studentId?: string }) {
           {rows.map((a) => (
             <li key={a.id} className="flex items-center gap-3 px-4 py-3">
               <button type="button" onClick={() => setEditing(a)} className="min-w-0 flex-1 text-left">
-                <p className="truncate font-semibold">{a.title}</p>
+                <p className="flex items-center gap-1.5 font-semibold">
+                  {a.interactive && (
+                    <InteractiveIcon className="size-4 shrink-0 text-violet-ink" role="img" aria-label="Esercizio interattivo" />
+                  )}
+                  <span className="truncate">{a.title}</span>
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {!studentId && `${a.studentName} · `}Assegnato {formatDate(a.assignedAt, "d MMM")}
                   {a.dueDate && ` · Scadenza ${formatDate(a.dueDate, "d MMM")}`}

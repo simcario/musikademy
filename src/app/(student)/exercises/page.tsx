@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck, CalendarX2, CircleCheckBig, Flame } from "lucide-react";
+import { CalendarCheck, CalendarX2, CircleCheckBig, Flame, Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/shared/markdown";
 import { PageContainer } from "@/components/shared/page";
 import { Segmented } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { AssignmentBadge } from "@/components/shared/status-badge";
+import { InteractiveBadge, InteractivePlayerDialog } from "@/features/exercises/interactive/interactive-player";
 import { MaterialRow } from "@/features/materials/material-card";
 import { useMaterialsByIds, useMyAssignments, useSetAssignmentStatus } from "@/features/student-area/hooks";
 import { useNow } from "@/hooks/use-now";
@@ -94,13 +96,17 @@ function ExerciseCard({ assignment: a }: { assignment: WithId<Assignment> }) {
   const setStatus = useSetAssignmentStatus();
   const materials = useMaterialsByIds(a.materialIds ?? []);
   const now = useNow();
+  const [playing, setPlaying] = useState(false);
   const due = toDate(a.dueDate);
   const overdue = due && a.status !== "completed" && due.getTime() < now;
 
   return (
     <article className={cn("card-surface space-y-4 p-4", a.status === "completed" && "opacity-90")}>
       <div className="space-y-1">
-        <AssignmentBadge status={a.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <AssignmentBadge status={a.status} />
+          {a.interactive && <InteractiveBadge />}
+        </div>
         <h2 className="pt-1 text-lg leading-snug font-semibold">{a.title}</h2>
         {a.description && <Markdown className="text-muted-foreground">{a.description}</Markdown>}
       </div>
@@ -120,6 +126,25 @@ function ExerciseCard({ assignment: a }: { assignment: WithId<Assignment> }) {
             <MaterialRow key={m.id} material={m} />
           ))}
         </div>
+      )}
+      {a.interactive && (
+        <>
+          <Button onClick={() => setPlaying(true)} className="w-full">
+            <Play aria-hidden /> Avvia esercizio
+          </Button>
+          <InteractivePlayerDialog
+            session={playing ? { title: a.title, exercise: a.interactive } : null}
+            onClose={() => setPlaying(false)}
+            onComplete={
+              a.status === "completed"
+                ? undefined
+                : () => {
+                    setPlaying(false);
+                    setStatus.mutate({ id: a.id, status: "completed" });
+                  }
+            }
+          />
+        </>
       )}
       <div className="space-y-1.5">
         <p className="text-xs font-medium text-muted-foreground" id={`st-${a.id}`}>

@@ -134,12 +134,13 @@ async function main() {
     { s: 0, title: "Respirazione diaframmatica con cannuccia", description: "5 serie al giorno.", status: "in_progress", due: 5, mats: ["demo-dispensa-respirazione"] },
     { s: 0, title: "Riscaldamento posturale", description: "", status: "completed", due: -2, mats: [] },
     { s: 1, title: "Legato su vocali aperte", description: "Scale lente, 15 minuti.", status: "todo", due: 4, mats: ["demo-base-caruso"] },
+    { s: 0, title: "Riconoscimento della tastiera del pianoforte", description: "Suona la nota che compare entro 5 secondi.", status: "todo", due: 6, mats: [], interactive: { kind: "piano-keys", rounds: 10, accidentals: false } },
   ];
   for (const [i, a] of assignments.entries()) {
     const s = students[a.s];
     await db.doc(`assignments/demo-assignment-${i + 1}`).set({
       studentId: studentIds[a.s], studentName: `${s.name} ${s.surname}`, lessonId: a.lesson ?? "", title: a.title,
-      description: a.description, materialIds: a.mats, assignedAt: day(-6), dueDate: day(a.due, 23, 59), status: a.status,
+      description: a.description, ...(a.interactive ? { interactive: a.interactive } : {}), materialIds: a.mats, assignedAt: day(-6), dueDate: day(a.due, 23, 59), status: a.status,
       createdBy: adminId, keywords: buildKeywords(a.title, s.name, s.surname), createdAt: now, updatedAt: now, ...demo,
     });
   }

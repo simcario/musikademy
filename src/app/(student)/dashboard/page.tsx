@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/shared/brand";
 import { SectionHeader, PageContainer } from "@/components/shared/page";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { AssignmentBadge, Pill } from "@/components/shared/status-badge";
+import { InteractiveBadge } from "@/features/exercises/interactive/interactive-player";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/features/auth/auth-provider";
 import { MaterialActions, MaterialIcon, TYPE_META } from "@/features/materials/material-card";
@@ -209,6 +210,7 @@ function TodoAssignments() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <AssignmentBadge status={a.status} />
+                      {a.interactive && <InteractiveBadge />}
                       {urgent && (
                         <Pill tone="danger" dot>
                           Urgente

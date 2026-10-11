@@ -1,12 +1,13 @@
 import { Timestamp, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, where, writeBatch, limit } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
-import type { Assignment, AssignmentStatus } from "@/types";
+import type { Assignment, AssignmentStatus, InteractiveExercise } from "@/types";
 import { buildKeywords } from "@/utils/keywords";
 import { COLLECTIONS, clean, col, list, paginate, ref, touched } from "./base";
 
 export interface AssignmentInput {
   title: string;
   description?: string;
+  interactive?: InteractiveExercise;
   lessonId?: string;
   materialIds: string[];
   dueDate?: Date;
@@ -71,6 +72,7 @@ export const assignmentService = {
       description: input.description ?? "",
       lessonId: input.lessonId ?? "",
       materialIds: input.materialIds,
+      ...(input.interactive ? { interactive: input.interactive } : {}),
       dueDate: input.dueDate ? Timestamp.fromDate(input.dueDate) : null,
       keywords: buildKeywords(input.title, studentName),
       ...touched(),

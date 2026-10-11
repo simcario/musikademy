@@ -7,6 +7,7 @@ import { Markdown } from "@/components/shared/markdown";
 import { PageContainer } from "@/components/shared/page";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { AssignmentBadge, AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
+import { InteractiveBadge } from "@/features/exercises/interactive/interactive-player";
 import { MaterialRow } from "@/features/materials/material-card";
 import {
   useLesson,
@@ -126,6 +127,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
                   <li key={a.id} className="card-surface flex items-start justify-between gap-3 p-4">
                     <div className="min-w-0">
                       <p className="font-semibold">{a.title}</p>
+                      {a.interactive && <InteractiveBadge className="my-1" />}
                       {a.description && <Markdown className="text-muted-foreground">{a.description}</Markdown>}
                     </div>
                     <AssignmentBadge status={a.status} />
