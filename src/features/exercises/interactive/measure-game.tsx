@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { ArrowRight, CircleCheckBig, CircleX, TimerOff } from "lucide-react";
+import { ArrowRight, CircleCheckBig, CircleX, Play, TimerOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { scheduleClick } from "@/features/tools/use-metronome";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ import { BEATS_PER_MEASURE, generateMeasure, noteLabel, pitchClassOfNote, type M
 import { StaffView } from "./staff-view";
 import { usePitchListener } from "./use-microphone";
 
-/** Il metronomo batte una battuta a vuoto prima di quella da suonare. */
+/** Il metronomo conta alla rovescia una battuta a vuoto prima di quella da suonare. */
 const COUNT_IN = BEATS_PER_MEASURE;
 /** Quarti di tolleranza dopo la fine della battuta per chiudere l'ultima nota. */
 const GRACE_BEATS = 1;
@@ -29,7 +29,8 @@ const SUCCESS_MS = 2200;
 type Failure = { reason: "wrong"; played: number } | { reason: "late" };
 
 interface State {
-  phase: "idle" | "counting" | "playing" | "feedback" | "done";
+  /** `ready`: la battuta è a video e aspetta che lo studente avvii il metronomo. */
+  phase: "idle" | "ready" | "counting" | "playing" | "feedback" | "done";
   measure: MeasureNote[];
   /** Quarti trascorsi dal primo clic: i primi `COUNT_IN` sono la battuta a vuoto. */
   beat: number;
@@ -41,6 +42,7 @@ interface State {
 
 type Action =
   | { type: "round"; measure: MeasureNote[]; fresh: boolean }
+  | { type: "start" }
   | { type: "beat"; index: number }
   | { type: "hit"; step: number }
   | { type: "fail"; played: number }
@@ -51,7 +53,9 @@ const INITIAL: State = { phase: "idle", measure: [], beat: 0, step: 0, failure: 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "round":
-      return { ...INITIAL, phase: "counting", measure: action.measure, results: action.fresh ? [] : state.results };
+      return { ...INITIAL, phase: "ready", measure: action.measure, results: action.fresh ? [] : state.results };
+    case "start":
+      return state.phase === "ready" ? { ...state, phase: "counting" } : state;
     case "beat":
       if (state.phase === "counting") {
         return { ...state, beat: action.index, phase: action.index >= COUNT_IN ? "playing" : "counting" };
@@ -75,8 +79,8 @@ function reducer(state: State, action: Action): State {
 }
 
 /**
- * Battuta sul pentagramma: compare una battuta in 4/4, il metronomo batte una battuta a vuoto
- * e lo studente suona le note in ordine entro la battuta successiva.
+ * Battuta sul pentagramma: compare una battuta in 4/4 e lo studente avvia il metronomo quando è pronto;
+ * dopo il conto alla rovescia di una battuta (4-3-2-1) suona le note in ordine entro la battuta successiva.
  */
 export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps<StaffMeasureExercise>) {
   const { clef, difficulty, bpm, rounds } = exercise;
@@ -94,24 +98,27 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
   /** Istante (clock audio) del primo clic del turno. */
   const roundStart = useRef(0);
 
-  /** Nuova battuta: i clic del turno sono programmati subito sul clock audio, come nel metronomo. */
+  /** Nuova battuta a video: il metronomo parte solo quando lo studente lo avvia. */
   const beginRound = useCallback(
-    (fresh: boolean) => {
-      const ctx = (clicks.current ??= new AudioContext());
-      void ctx.resume();
-      const out = ctx.createGain();
-      out.gain.value = CLICK_VOLUME;
-      out.connect(ctx.destination);
-      clickOut.current = out;
-      const start = ctx.currentTime + 0.2;
-      for (let i = 0; i < COUNT_IN + BEATS_PER_MEASURE; i++) {
-        scheduleClick(ctx, out, start + i * beatLength, i % BEATS_PER_MEASURE === 0 ? "accent" : "beat");
-      }
-      roundStart.current = start;
-      dispatch({ type: "round", measure: generateMeasure(clef, difficulty), fresh });
-    },
-    [beatLength, clef, difficulty],
+    (fresh: boolean) => dispatch({ type: "round", measure: generateMeasure(clef, difficulty), fresh }),
+    [clef, difficulty],
   );
+
+  /** I clic del turno sono programmati subito sul clock audio, come nel metronomo. */
+  const startMetronome = useCallback(() => {
+    const ctx = (clicks.current ??= new AudioContext());
+    void ctx.resume();
+    const out = ctx.createGain();
+    out.gain.value = CLICK_VOLUME;
+    out.connect(ctx.destination);
+    clickOut.current = out;
+    const start = ctx.currentTime + 0.2;
+    for (let i = 0; i < COUNT_IN + BEATS_PER_MEASURE; i++) {
+      scheduleClick(ctx, out, start + i * beatLength, i % BEATS_PER_MEASURE === 0 ? "accent" : "beat");
+    }
+    roundStart.current = start;
+    dispatch({ type: "start" });
+  }, [beatLength]);
 
   const next = useCallback(() => {
     if (results.length >= rounds) dispatch({ type: "done" });
@@ -183,8 +190,9 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
   if (phase === "idle") {
     return (
       <GameIntro onStart={start}>
-        Compare una battuta in 4/4: il metronomo ({bpm} BPM) batte quattro quarti a vuoto per darti il tempo di leggerla, poi suonala a
-        tempo, una nota dopo l&apos;altra, entro la battuta successiva. {rounds} battute. Tieni il volume del dispositivo moderato.
+        Compare una battuta in 4/4: leggila e, quando sei pronto, premi Avvia. Il metronomo ({bpm} BPM) conta alla rovescia una battuta
+        (4-3-2-1), poi suonala a tempo, una nota dopo l&apos;altra, entro la battuta successiva. {rounds} battute. Tieni il volume del
+        dispositivo moderato.
       </GameIntro>
     );
   }
@@ -204,10 +212,11 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
 
       <GameStage>
         {feedback && lastOk && <Confetti />}
+        {phase === "ready" && <p className="section-label">Leggi la battuta, poi premi Avvia</p>}
         {phase === "counting" && (
           <>
-            <p className="section-label">Leggi la battuta, poi suona</p>
-            <Countdown count={Math.min(beat, COUNT_IN - 1) + 1} />
+            <p className="section-label">Preparati a suonare</p>
+            <Countdown count={COUNT_IN - Math.min(beat, COUNT_IN - 1)} />
           </>
         )}
         {phase === "playing" && (
@@ -249,6 +258,12 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
         />
         {feedback && <p className="text-sm font-medium">{measure.map((m) => noteLabel(m.note)).join(" – ")}</p>}
       </GameStage>
+
+      {phase === "ready" && (
+        <Button size="lg" className="w-full" onClick={startMetronome}>
+          <Play aria-hidden /> Avvia
+        </Button>
+      )}
 
       {feedback && !lastOk && (
         <Button className="w-full" onClick={next}>

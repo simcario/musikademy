@@ -317,3 +317,90 @@ export interface Page<T> {
   /** Cursore opaco per la pagina successiva, `null` se finita. */
   cursor: unknown | null;
 }
+
+// ─────────────── WhatsApp (ADR D24) ───────────────
+
+/**
+ * Stato del worker WhatsApp Web (`whatsapp/session`), scritto solo dal worker.
+ * `stopped` = nessuna sessione attiva (mai collegato o disconnesso): serve "Collega".
+ */
+export type WhatsAppState = "stopped" | "starting" | "qr" | "authenticated" | "connected" | "error";
+
+export interface WhatsAppSession {
+  state: WhatsAppState;
+  /** QR da scansionare (immagine data URL), presente solo con `state: "qr"`. */
+  qr?: string | null;
+  /** Numero collegato (es. "393331234567") e nome del profilo. */
+  phone?: string | null;
+  pushName?: string | null;
+  /** WhatsApp Web aperto in una finestra visibile sul computer del worker. */
+  browserVisible?: boolean;
+  error?: string | null;
+  /** `false` quando il worker è stato chiuso; altrimenti fa fede `heartbeatAt` (WA_OFFLINE_AFTER_MS). */
+  online?: boolean;
+  heartbeatAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export type WhatsAppCommand = "connect" | "logout";
+
+export interface WhatsAppControl {
+  command: WhatsAppCommand;
+  status: "pending" | "done";
+  requestedBy: string;
+  requestedAt: Timestamp;
+}
+
+/** Impostazioni dei promemoria (`whatsapp/settings`), modificabili dall'admin. */
+export interface WhatsAppSettings {
+  /** Servizio di invio: worker WhatsApp Web o API ufficiale tramite Zernio (ADR D25). */
+  provider: "whatsapp-web" | "zernio";
+  remindersEnabled: boolean;
+  /** `HH:mm`, fuso Europe/Rome. */
+  reminderTime: string;
+  /** 0 = giorno della lezione, 1 = giorno prima, 2 = due giorni prima. */
+  daysBefore: number;
+  /**
+   * Testi personalizzati con segnaposto ({nome}, {titolo}…). Con WhatsApp Web si usano così;
+   * con Zernio ogni modifica diventa un template Meta da approvare (vedi metaDrafts).
+   */
+  reminderTemplate: string;
+  announcementTemplate: string;
+  /** Prefisso aggiunto ai numeri senza prefisso internazionale (es. "39"). */
+  countryCode: string;
+  /** Zernio: template approvati in uso e in attesa di approvazione. Scritti solo dal server. */
+  metaTemplates?: Partial<Record<"reminder" | "announcement", { name: string; text: string }>>;
+  metaDrafts?: Partial<Record<"reminder" | "announcement", { name: string; text: string }>>;
+  updatedAt?: Timestamp;
+}
+
+export const WHATSAPP_MESSAGE_STATUSES = ["queued", "sending", "sent", "failed", "expired"] as const;
+export type WhatsAppMessageStatus = (typeof WHATSAPP_MESSAGE_STATUSES)[number];
+export type WhatsAppMessageKind = "announcement" | "reminder" | "test";
+
+/** Messaggio in uscita (`whatsappMessages`): lo crea l'app o il worker, lo invia il worker. */
+export interface WhatsAppMessage {
+  kind: WhatsAppMessageKind;
+  /** Destinatario: lo studente (numero risolto dal worker all'invio) oppure un numero esplicito. */
+  studentId?: string;
+  recipientName: string;
+  to?: string;
+  /** Testo leggibile del messaggio (con Zernio: il template con le variabili inserite). */
+  body: string;
+  /**
+   * Valori dei segnaposto ({ nome: "Elena", … }). Con Zernio, all'invio diventano le variabili
+   * {{1}}, {{2}}… del template in uso in quel momento (trascodifica).
+   */
+  templateVars?: Record<string, string>;
+  /** Comunicazione o lezione di origine. */
+  refId?: string;
+  status: WhatsAppMessageStatus;
+  error?: string;
+  attempts?: number;
+  /** Oltre questo istante il messaggio non viene più inviato (es. promemoria di una lezione passata). */
+  expiresAt?: Timestamp;
+  sentAt?: Timestamp;
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
