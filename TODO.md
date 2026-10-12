@@ -43,6 +43,10 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 - ⬜ Test E2E (Playwright) dei flussi principali
 - ⬜ Session cookie + `proxy.ts` per redirect lato server (oggi guard client + rules)
 
+- 🟡 WhatsApp (ADR D24): worker con WhatsApp Web, pagina admin "WhatsApp" (collegamento con QR, orario promemoria, registro invii), invio delle comunicazioni — unit + rules ✅, worker provato sull'emulatore (QR, scadenza QR, comando Collega, promemoria in coda) · da provare con un numero reale · `deploy:rules` necessario
+- 🟡 WhatsApp con API ufficiale (Zernio, ADR D25): dispatcher server + cron, template, selettore del servizio — unit/rules ✅, dispatcher provato su emulatore contro l'API Zernio reale (account trovato, invio rifiutato per template non ancora creati) · da fare: creare i template, segreti App Hosting, job Cloud Scheduler, prova reale
+- ⬜ WhatsApp: decidere dove far girare il worker in produzione (PC della scuola sempre acceso o VPS)
+
 ## V2+ (roadmap §55 — non implementare ora)
 
 Calendario · push attive (Cloud Functions) · promemoria · statistiche avanzate · playlist e A/B repeat ·

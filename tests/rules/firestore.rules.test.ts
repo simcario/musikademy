@@ -18,6 +18,7 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  deleteDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -236,5 +237,67 @@ describe("inviti", () => {
   it("lo studente non può segnare da solo l'invito come accettato", async () => {
     await assertFails(updateDoc(doc(student(ALICE), "students", ALICE), { inviteStatus: "accepted" }));
     await assertFails(updateDoc(doc(teacher(), "students", ALICE), { inviteStatus: "accepted" }));
+  });
+});
+
+describe("WhatsApp (ADR D24)", () => {
+  const admin = () => as("admin1", "admin");
+  const settings = { remindersEnabled: true, reminderTime: "18:00", daysBefore: 1, reminderTemplate: "Ciao {nome}", countryCode: "39" };
+  const message = (by: string) => ({
+    kind: "announcement",
+    studentId: ALICE,
+    recipientName: "Alice X",
+    body: "Ciao",
+    status: "queued",
+    attempts: 0,
+    createdBy: by,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  it("solo l'admin imposta i promemoria, con valori validi", async () => {
+    await assertSucceeds(setDoc(doc(admin(), "whatsapp", "settings"), settings));
+    await assertFails(setDoc(doc(teacher(), "whatsapp", "settings"), settings));
+    await assertFails(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, reminderTime: "25:00" }));
+    await assertFails(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, extra: true }));
+    await assertSucceeds(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, provider: "zernio" }));
+    await assertFails(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, provider: "altro" }));
+  });
+
+  it("solo l'admin collega o scollega il numero; lo stato lo scrive solo il worker", async () => {
+    const cmd = { command: "connect", status: "pending", requestedBy: "admin1", requestedAt: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(admin(), "whatsapp", "control"), cmd));
+    await assertFails(setDoc(doc(teacher(), "whatsapp", "control"), { ...cmd, requestedBy: TEACHER }));
+    await assertFails(setDoc(doc(admin(), "whatsapp", "control"), { ...cmd, command: "shell" }));
+    await assertFails(setDoc(doc(admin(), "whatsapp", "session"), { state: "connected" }));
+  });
+
+  it("lo staff legge stato e registro, lo studente no", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "whatsapp", "session"), { state: "connected" }));
+    await assertSucceeds(getDoc(doc(teacher(), "whatsapp", "session")));
+    await assertFails(getDoc(doc(student(ALICE), "whatsapp", "session")));
+    await assertFails(getDocs(collection(student(ALICE), "whatsappMessages")));
+  });
+
+  it("lo staff mette in coda, ma non segna come inviato né crea promemoria", async () => {
+    await assertSucceeds(setDoc(doc(teacher(), "whatsappMessages", "m1"), message(TEACHER)));
+    await assertSucceeds(setDoc(doc(teacher(), "whatsappMessages", "m6"), { ...message(TEACHER), templateParams: ["T", "C"] }));
+    await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m7"), { ...message(TEACHER), templateParams: "x" }));
+    await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m2"), { ...message(TEACHER), status: "sent" }));
+    await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m3"), { ...message(TEACHER), kind: "reminder" }));
+    await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m4"), { ...message("altro") }));
+    await assertFails(setDoc(doc(student(ALICE), "whatsappMessages", "m5"), message(ALICE)));
+    await assertFails(updateDoc(doc(teacher(), "whatsappMessages", "m1"), { status: "sent" }));
+  });
+
+  it("riprova solo i messaggi falliti; non elimina quelli in invio", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "whatsappMessages", "f"), { ...message(TEACHER), status: "failed", error: "x" });
+      await setDoc(doc(ctx.firestore(), "whatsappMessages", "s"), { ...message(TEACHER), status: "sending" });
+    });
+    await assertSucceeds(updateDoc(doc(teacher(), "whatsappMessages", "f"), { status: "queued", error: "" }));
+    await assertFails(updateDoc(doc(teacher(), "whatsappMessages", "s"), { status: "queued" }));
+    await assertFails(deleteDoc(doc(teacher(), "whatsappMessages", "s")));
+    await assertSucceeds(deleteDoc(doc(teacher(), "whatsappMessages", "f")));
   });
 });

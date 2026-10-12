@@ -50,3 +50,8 @@ next-env.d.ts
 *-debug.log
 .firebase/
 *.firebase-export*/
+
+# Worker WhatsApp: sessione di WhatsApp Web (equivale all'accesso al numero: mai versionarla)
+/whatsapp-worker/.wwebjs_auth/
+/whatsapp-worker/.wwebjs_cache/
+/whatsapp-worker/node_modules/

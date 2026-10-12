@@ -8,10 +8,12 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, FormDialog } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
-import { useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect, StudentSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
+import { useWhatsAppSession, useWhatsAppSettings } from "@/features/whatsapp/hooks";
 import { announcementService } from "@/services/announcementService";
+import { announcementRecipients, whatsappService } from "@/services/whatsappService";
 import type { Announcement, WithId } from "@/types";
 import { fullName } from "@/utils/format";
 
@@ -21,6 +23,7 @@ const schema = z
     content: z.string().trim().min(1, "Scrivi il messaggio").max(10000),
     targetType: z.enum(["all", "course", "student"]),
     targetId: z.string().optional(),
+    whatsapp: z.boolean(),
   })
   .refine((v) => v.targetType === "all" || !!v.targetId, { path: ["targetId"], message: "Seleziona il destinatario" });
 type Values = z.infer<typeof schema>;
@@ -50,18 +53,38 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
       content: announcement?.content ?? "",
       targetType: announcement?.targetType ?? "all",
       targetId: announcement?.targetId ?? "",
+      whatsapp: false,
     },
   });
   const { errors } = form.formState;
-  const target = useWatch({ control: form.control, name: "targetType" });
+  const [target, targetId, sendWhatsApp] = useWatch({ control: form.control, name: ["targetType", "targetId", "whatsapp"] });
+  const students = useActiveStudents();
+  const wa = useWhatsAppSession();
+  const zernio = useWhatsAppSettings().data?.provider === "zernio";
+  const recipients = announcementRecipients({ targetType: target, targetId }, students.data ?? []);
+  const withoutPhone = recipients.filter((s) => !s.phone).length;
 
   const save = useStaffMutation(
-    async (v: Values) => {
+    async ({ whatsapp, ...v }: Values) => {
       const input = { ...v, targetId: v.targetType === "all" ? undefined : v.targetId };
-      if (announcement) await announcementService.update(announcement.id, input);
-      else await announcementService.create(input, { uid, name: fullName(profile) });
+      const authorName = announcement?.authorName ?? fullName(profile);
+      let id = announcement?.id;
+      if (id) await announcementService.update(id, input);
+      else id = await announcementService.create(input, { uid, name: authorName });
+      if (!whatsapp) return 0;
+      // Destinatari calcolati al momento dell'invio, sugli studenti attivi.
+      const all = students.data ?? (await students.refetch()).data ?? [];
+      const queued = await whatsappService.queueAnnouncement({ ...input, authorName }, id, announcementRecipients(input, all), uid);
+      // Con Zernio l'invio avviene sul server: lo avviamo subito. Se non riesce, ci pensa il job pianificato.
+      if (zernio && queued) await whatsappService.dispatchNow().catch(() => undefined);
+      return queued;
     },
-    { success: announcement ? "Comunicazione aggiornata" : "Comunicazione pubblicata", invalidate: [["announcements"]], onSuccess: onDone },
+    {
+      success: (queued) =>
+        `${announcement ? "Comunicazione aggiornata" : "Comunicazione pubblicata"}${queued ? ` · ${queued} messaggi WhatsApp in coda` : ""}`,
+      invalidate: [["announcements"]],
+      onSuccess: onDone,
+    },
   );
 
   return (
@@ -91,6 +114,23 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
           <Field label="Studente" error={errors.targetId?.message} required>
             {(p) => <StudentSelect {...p} {...form.register("targetId")} />}
           </Field>
+        )}
+      </div>
+      <div className="rounded-lg border border-border p-3">
+        <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
+          <input type="checkbox" className="size-[18px] accent-primary" {...form.register("whatsapp")} />
+          {announcement ? "Invia di nuovo anche su WhatsApp" : "Invia anche su WhatsApp"}
+        </label>
+        {sendWhatsApp && (
+          <p className="pl-[30px] text-xs text-muted-foreground">
+            {recipients.length === 1 ? "1 studente" : `${recipients.length} studenti`}
+            {withoutPhone > 0 && ` (${withoutPhone} senza numero in anagrafica)`}.{" "}
+            {zernio
+              ? "Invio immediato con l'API ufficiale: testo su una riga, accorciato se molto lungo (il testo completo resta nell'app)."
+              : wa.connected
+                ? "Invio dal numero collegato, un messaggio ogni pochi secondi."
+                : "WhatsApp non è collegato ora: i messaggi partiranno appena lo sarà."}
+          </p>
         )}
       </div>
       <FormActions onCancel={onDone} submitting={save.isPending} submitLabel={announcement ? "Salva" : "Pubblica"} />

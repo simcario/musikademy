@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Library,
   Megaphone,
+  MessageCircle,
   Settings,
   UserRound,
   Users,
@@ -47,6 +48,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/exercises", label: "Esercizi", icon: BookOpen },
   { href: "/admin/tools", label: "Strumenti", icon: Wrench },
   { href: "/admin/announcements", label: "Comunicazioni", icon: Megaphone },
+  { href: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/admin/payments", label: "Pagamenti", icon: CreditCard },
   { href: "/admin/settings", label: "Impostazioni", icon: Settings },
 ];

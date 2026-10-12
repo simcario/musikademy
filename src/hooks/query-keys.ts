@@ -17,5 +17,6 @@ export const qk = {
   payments: (scope: unknown) => ["payments", scope] as const,
   announcements: (scope: unknown) => ["announcements", scope] as const,
   stats: (name: string) => ["stats", name] as const,
+  whatsappSettings: () => ["whatsapp", "settings"] as const,
   search: (q: string) => ["search", q] as const,
 };

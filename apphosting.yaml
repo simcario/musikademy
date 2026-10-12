@@ -29,4 +29,11 @@ env:
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: G-YSNRZN6GTY
     availability: [BUILD, RUNTIME]
+  - variable: ZERNIO_API_KEY
+    secret: zernio-api-key
+    availability: [RUNTIME]
+  - variable: CRON_SECRET
+    secret: cron-secret
+    availability: [RUNTIME]
+ 
   # Admin SDK: su App Hosting usa le credenziali del service account del backend (nessun segreto).

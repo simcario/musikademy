@@ -26,6 +26,8 @@ export const COLLECTIONS = {
   payments: "payments",
   announcements: "announcements",
   notifications: "notifications",
+  whatsapp: "whatsapp",
+  whatsappMessages: "whatsappMessages",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
