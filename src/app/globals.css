@@ -276,6 +276,11 @@
   .md-editor .selectedCell {
     @apply bg-indigo-soft/60;
   }
+  /* Elemento su cui agisce il pannello delle proprietà (le immagini hanno il contorno in ImageView). */
+  .md-editor table.is-selected,
+  .md-editor hr.ProseMirror-selectednode {
+    @apply outline-2 outline-offset-4 outline-primary;
+  }
   .md-editor ul[data-type="taskList"] {
     @apply list-none pl-0;
   }

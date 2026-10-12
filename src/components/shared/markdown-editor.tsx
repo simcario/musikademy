@@ -31,7 +31,6 @@ import {
   Strikethrough,
   Table as TableIcon,
   TextQuote,
-  Trash2,
   Undo2,
   Unlink,
   Upload,
@@ -43,6 +42,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 import { errorMessage } from "@/utils/errors";
 import { useAssetImage } from "./markdown";
+import { ActiveTable, PropertiesPanel } from "./markdown-editor-properties";
 
 export interface MarkdownEditorApi {
   /** Markdown corrente, dalla vista attiva. */
@@ -51,34 +51,24 @@ export interface MarkdownEditorApi {
 
 const AssetDirContext = createContext<string | undefined>(undefined);
 
-/** Immagine nell'editor: risolve quelle su Storage e, se selezionata, mostra testo alternativo e rimozione. */
-function ImageView({ node, selected, updateAttributes, deleteNode }: ReactNodeViewProps) {
+/** Immagine nell'editor: risolve quelle su Storage e si seleziona con un clic; le proprietà stanno in PropertiesPanel. */
+function ImageView({ node, selected, editor, getPos }: ReactNodeViewProps) {
   const assetDir = useContext(AssetDirContext);
   const { src, alt } = node.attrs as { src?: string | null; alt?: string | null };
   const url = useAssetImage(assetDir, src ?? undefined);
   return (
-    <NodeViewWrapper as="span" className="relative inline-block max-w-full align-bottom">
+    <NodeViewWrapper as="span" className="inline-block max-w-full align-bottom">
       {/* eslint-disable-next-line @next/next/no-img-element -- URL dinamico (Storage o sito esterno) */}
-      <img src={url} alt={alt ?? ""} data-drag-handle className={cn(selected && "outline-2 outline-offset-2 outline-primary")} />
-      {selected && (
-        <span
-          contentEditable={false}
-          className="absolute top-full left-0 z-10 mt-2 flex w-72 max-w-[80vw] items-center gap-1 rounded-lg border border-border bg-popover p-1 shadow-dialog"
-        >
-          <Input
-            value={alt ?? ""}
-            onChange={(e) => updateAttributes({ alt: e.target.value })}
-            // Invio non deve salvare l'intero documento.
-            onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-            placeholder="Testo alternativo"
-            aria-label="Testo alternativo dell'immagine"
-            className="h-9 sm:h-9"
-          />
-          <Button type="button" variant="destructive" size="icon-sm" onClick={deleteNode} aria-label="Rimuovi immagine" title="Rimuovi immagine">
-            <Trash2 aria-hidden />
-          </Button>
-        </span>
-      )}
+      <img
+        src={url}
+        alt={alt ?? ""}
+        data-drag-handle
+        className={cn("cursor-pointer", selected && "outline-2 outline-offset-2 outline-primary")}
+        onClick={() => {
+          const pos = getPos();
+          if (pos !== undefined) editor.commands.setNodeSelection(pos);
+        }}
+      />
     </NodeViewWrapper>
   );
 }
@@ -148,6 +138,7 @@ export default function MarkdownEditor({
       TableKit.configure({ table: { resizable: false } }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      ActiveTable,
       MarkdownSyntax,
     ],
     content: value,
@@ -363,25 +354,6 @@ export default function MarkdownEditor({
           </Button>
         </div>
 
-        {visual && state?.table && (
-          <div className="flex flex-wrap items-center gap-1 border-t border-border px-2 py-1.5">
-            <span className="section-label mr-1">Tabella</span>
-            {(
-              [
-                ["Aggiungi riga", (e) => e.chain().focus().addRowAfter().run()],
-                ["Aggiungi colonna", (e) => e.chain().focus().addColumnAfter().run()],
-                ["Elimina riga", (e) => e.chain().focus().deleteRow().run()],
-                ["Elimina colonna", (e) => e.chain().focus().deleteColumn().run()],
-                ["Elimina tabella", (e) => e.chain().focus().deleteTable().run()],
-              ] as [string, (e: Editor) => void][]
-            ).map(([label, fn]) => (
-              <Button key={label} type="button" variant="ghost" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={run(fn)}>
-                {label}
-              </Button>
-            ))}
-          </div>
-        )}
-
         {panel && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-2 py-1.5">
             {panel === "image" && (
@@ -442,26 +414,29 @@ export default function MarkdownEditor({
         />
       </div>
 
-      <div className="pb-safe min-h-0 flex-1 lg:overflow-y-auto">
-        <article className="mx-auto w-full max-w-3xl bg-card px-5 py-8 sm:my-6 sm:rounded-xl sm:px-10 sm:shadow-card">
-          <AssetDirContext.Provider value={assetDir}>
-            <EditorContent editor={editor} className={cn(!visual && "hidden")} />
-          </AssetDirContext.Provider>
-          {!visual && (
-            <textarea
-              ref={textarea}
-              value={source}
-              onChange={(e) => {
-                setSource(e.target.value);
-                sourceChanged.current = true;
-                onDirty();
-              }}
-              spellCheck={false}
-              aria-label="Codice Markdown del documento"
-              className="field-sizing-content block min-h-[60vh] w-full resize-y bg-transparent font-mono text-sm leading-relaxed outline-none"
-            />
-          )}
-        </article>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="pb-safe min-h-0 flex-1 lg:overflow-y-auto">
+          <article className="mx-auto w-full max-w-3xl bg-card px-5 py-8 sm:my-6 sm:rounded-xl sm:px-10 sm:shadow-card">
+            <AssetDirContext.Provider value={assetDir}>
+              <EditorContent editor={editor} className={cn(!visual && "hidden")} />
+            </AssetDirContext.Provider>
+            {!visual && (
+              <textarea
+                ref={textarea}
+                value={source}
+                onChange={(e) => {
+                  setSource(e.target.value);
+                  sourceChanged.current = true;
+                  onDirty();
+                }}
+                spellCheck={false}
+                aria-label="Codice Markdown del documento"
+                className="field-sizing-content block min-h-[60vh] w-full resize-y bg-transparent font-mono text-sm leading-relaxed outline-none"
+              />
+            )}
+          </article>
+        </div>
+        {visual && editor && <PropertiesPanel editor={editor} />}
       </div>
     </div>
   );
