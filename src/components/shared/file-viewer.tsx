@@ -47,6 +47,7 @@ export function FileViewer({
   urlPending,
   urlError,
   content,
+  assetDir,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -58,6 +59,8 @@ export function FileViewer({
   urlPending?: boolean;
   urlError?: unknown;
   content?: string;
+  /** Cartella Storage del materiale, per le immagini inserite nel Markdown. */
+  assetDir?: string;
 }) {
   const text = useQuery({
     queryKey: ["file-text", url],
@@ -78,7 +81,7 @@ export function FileViewer({
   async function downloadPdf() {
     setExporting(true);
     try {
-      await saveMarkdownAsPdf(markdown ?? "", title, fileName ?? title);
+      await saveMarkdownAsPdf(markdown ?? "", title, fileName ?? title, assetDir);
       toast.success("PDF scaricato.");
     } catch (e) {
       toast.error(errorMessage(e, "Impossibile creare il PDF."));
@@ -127,7 +130,7 @@ export function FileViewer({
             </Centered>
           ) : kind === "markdown" ? (
             <article className="mx-auto max-w-3xl bg-card px-5 py-8 sm:my-6 sm:rounded-xl sm:px-10 sm:shadow-card">
-              <Markdown>{markdown ?? ""}</Markdown>
+              <Markdown assetDir={assetDir}>{markdown ?? ""}</Markdown>
             </article>
           ) : kind === "video" ? (
             <video src={url} controls playsInline autoPlay preload="metadata" className="absolute inset-0 size-full bg-black object-contain" />
@@ -157,7 +160,7 @@ export function FileViewer({
           exportable &&
           createPortal(
             <div className="print-root">
-              <Markdown>{markdown}</Markdown>
+              <Markdown assetDir={assetDir}>{markdown}</Markdown>
             </div>,
             document.body,
           )}

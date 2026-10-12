@@ -261,6 +261,32 @@
   }
 }
 
+/* Editor visuale dei Markdown (MarkdownEditor): stesso aspetto del documento, più ciò che serve per modificarlo. */
+@layer components {
+  .md-editor {
+    @apply min-h-[60vh] outline-none;
+  }
+  .md-editor li > p,
+  .md-editor :where(th, td) > p {
+    @apply my-0;
+  }
+  .md-editor table {
+    @apply table table-fixed;
+  }
+  .md-editor .selectedCell {
+    @apply bg-indigo-soft/60;
+  }
+  .md-editor ul[data-type="taskList"] {
+    @apply list-none pl-0;
+  }
+  .md-editor ul[data-type="taskList"] > li {
+    @apply flex items-start gap-1;
+  }
+  .md-editor ul[data-type="taskList"] > li > div {
+    @apply min-w-0 flex-1;
+  }
+}
+
 /* Stampa dei Markdown: FileViewer monta una copia del documento in `.print-root`, figlio diretto di <body>. */
 .print-root {
   display: none;

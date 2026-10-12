@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { FilePlus2, Library, MoreVertical, Pencil, Search, Trash2 } from "lucide-react";
+import { FilePlus2, Library, MoreVertical, Pencil, Search, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +19,8 @@ import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/sha
 import { Pill } from "@/components/shared/status-badge";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { MaterialActions, MaterialIcon } from "@/features/materials/material-card";
+import { MaterialAssignDialog } from "@/features/materials/material-assign-dialog";
+import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { useDebounce } from "@/hooks/use-debounce";
 import { materialService } from "@/services/materialService";
@@ -43,6 +45,7 @@ function Materials() {
   const [sort, setSort] = useState<"recent" | "title">("recent");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<WithId<Material> | null>(null);
+  const [assigning, setAssigning] = useState<WithId<Material> | null>(null);
   const [toDelete, setToDelete] = useState<WithId<Material> | null>(null);
   const debounced = useDebounce(search);
   const q = useMaterialsPage({ category, search: debounced, sort });
@@ -126,7 +129,10 @@ function Materials() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem className="min-h-10" onClick={() => setEditing(m)}>
-                      <Pencil aria-hidden /> Modifica / assegna
+                      <Pencil aria-hidden /> Modifica
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="min-h-10" onClick={() => setAssigning(m)}>
+                      <Users aria-hidden /> Assegna
                     </DropdownMenuItem>
                     <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToDelete(m)}>
                       <Trash2 aria-hidden /> Elimina
@@ -141,7 +147,8 @@ function Materials() {
       <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
 
       <MaterialFormDialog open={creating} onOpenChange={setCreating} />
-      <MaterialFormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} material={editing} />
+      <MaterialEditorDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} material={editing} />
+      <MaterialAssignDialog open={!!assigning} onOpenChange={(o) => !o && setAssigning(null)} material={assigning} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}

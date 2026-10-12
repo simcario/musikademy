@@ -10,12 +10,11 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, FormDialog } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
-import { materialService } from "@/services/materialService";
-import { EXERCISE_CATEGORY, LIBRARY_CATEGORIES, MATERIAL_CATEGORIES, type Material, type WithId } from "@/types";
+import { EXERCISE_CATEGORY, LIBRARY_CATEGORIES, MATERIAL_CATEGORIES } from "@/types";
 import { formatFileSize, fullName } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 import { useUploadQueue } from "./upload-queue";
@@ -33,15 +32,14 @@ const schema = z
   .refine((v) => v.visibility !== "course" || !!v.courseId, { path: ["courseId"], message: "Seleziona il corso" });
 type Values = z.infer<typeof schema>;
 
+/** Caricamento di un nuovo materiale. Per modificarlo o riassegnarlo: MaterialEditorDialog e MaterialAssignDialog. */
 export function MaterialFormDialog({
   open,
   onOpenChange,
-  material,
   exercise,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  material?: WithId<Material> | null;
   /** Voce del catalogo esercizi: categoria fissa, la visibilità è data dalle assegnazioni. */
   exercise?: boolean;
 }) {
@@ -49,16 +47,16 @@ export function MaterialFormDialog({
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={exercise ? (material ? "Modifica esercizio" : "Nuovo esercizio") : material ? "Modifica materiale" : "Nuovo materiale"}
-      description={exercise && !material ? "Entra nel catalogo: gli studenti lo vedono solo quando glielo assegni." : undefined}
+      title={exercise ? "Nuovo esercizio" : "Nuovo materiale"}
+      description={exercise ? "Entra nel catalogo: gli studenti lo vedono solo quando glielo assegni." : undefined}
       wide
     >
-      <MaterialForm key={material?.id ?? "new"} material={material} exercise={exercise} onDone={() => onOpenChange(false)} />
+      <MaterialForm exercise={exercise} onDone={() => onOpenChange(false)} />
     </FormDialog>
   );
 }
 
-function MaterialForm({ material, exercise, onDone }: { material?: WithId<Material> | null; exercise?: boolean; onDone: () => void }) {
+function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => void }) {
   const { uid } = useSession();
   const students = useActiveStudents();
   const uploads = useUploadQueue();
@@ -67,23 +65,17 @@ function MaterialForm({ material, exercise, onDone }: { material?: WithId<Materi
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: material?.title ?? "",
-      description: material?.description ?? "",
-      category: material?.category ?? (exercise ? EXERCISE_CATEGORY : "dispensa"),
-      courseId: material?.courseId ?? "",
-      visibility: material?.visibility ?? "student",
-      studentIds: material?.studentIds ?? [],
+      title: "",
+      description: "",
+      category: exercise ? EXERCISE_CATEGORY : "dispensa",
+      courseId: "",
+      visibility: "student",
+      studentIds: [],
     },
   });
   const { errors } = form.formState;
   const watch_studentIds = useWatch({ control: form.control, name: "studentIds" });
   const visibility = useWatch({ control: form.control, name: "visibility" });
-
-  const update = useStaffMutation((v: Values) => materialService.update(material!.id, v), {
-    success: exercise ? "Esercizio aggiornato" : "Materiale aggiornato",
-    invalidate: [["materials"]],
-    onSuccess: onDone,
-  });
 
   function onFile(f: File | null) {
     setFile(null);
@@ -99,7 +91,6 @@ function MaterialForm({ material, exercise, onDone }: { material?: WithId<Materi
   }
 
   function submit(v: Values) {
-    if (material) return update.mutate(v);
     if (!file) return setFileError("Seleziona un file da caricare");
     uploads.start(file, v, uid); // upload in background: il dialog si chiude subito
     onDone();
@@ -107,31 +98,29 @@ function MaterialForm({ material, exercise, onDone }: { material?: WithId<Materi
 
   return (
     <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
-      {!material && (
-        <div className="space-y-1.5">
-          <label
-            className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-input bg-surface-low p-4 text-center hover:border-primary focus-within:border-primary"
-          >
-            <FileUp className="size-7 text-brand-ink" aria-hidden />
-            <span className="text-sm font-semibold">{file ? file.name : "Scegli un file"}</span>
-            <span className="text-xs text-muted-foreground">
-              {file ? formatFileSize(file.size) : "PDF, MP3, WAV, M4A, MP4, MOV, JPG, PNG, WEBP, MD"}
-            </span>
-            <input
-              type="file"
-              accept={ACCEPT_ATTR}
-              className="sr-only"
-              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-              aria-describedby={fileError ? "file-error" : undefined}
-            />
-          </label>
-          {fileError && (
-            <p id="file-error" role="alert" className="text-xs font-medium text-danger">
-              {fileError}
-            </p>
-          )}
-        </div>
-      )}
+      <div className="space-y-1.5">
+        <label
+          className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-input bg-surface-low p-4 text-center hover:border-primary focus-within:border-primary"
+        >
+          <FileUp className="size-7 text-brand-ink" aria-hidden />
+          <span className="text-sm font-semibold">{file ? file.name : "Scegli un file"}</span>
+          <span className="text-xs text-muted-foreground">
+            {file ? formatFileSize(file.size) : "PDF, MP3, WAV, M4A, MP4, MOV, JPG, PNG, WEBP, MD"}
+          </span>
+          <input
+            type="file"
+            accept={ACCEPT_ATTR}
+            className="sr-only"
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            aria-describedby={fileError ? "file-error" : undefined}
+          />
+        </label>
+        {fileError && (
+          <p id="file-error" role="alert" className="text-xs font-medium text-danger">
+            {fileError}
+          </p>
+        )}
+      </div>
       <Field label="Titolo" error={errors.title?.message} required>
         {(p) => <Input {...p} {...form.register("title")} />}
       </Field>
@@ -179,13 +168,13 @@ function MaterialForm({ material, exercise, onDone }: { material?: WithId<Materi
             />
             {visibility === "student" && watch_studentIds.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Nessuno studente lo vedrà finché non lo assegni dalla scheda studente (Materiali → Assegna).
+                Nessuno studente lo vedrà finché non lo assegni (menu del materiale → Assegna).
               </p>
             )}
           </div>
         </>
       )}
-      <FormActions onCancel={onDone} submitting={update.isPending} submitLabel={material ? "Salva" : "Carica"} />
+      <FormActions onCancel={onDone} submitting={false} submitLabel="Carica" />
     </form>
   );
 }

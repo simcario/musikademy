@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { amountToInput, feeFormSchema, installmentSchema, paymentFormSchema, parseAmount } from "@/features/payments/schemas";
 import { lessonFormSchema, oneHourAfter, parseTopics } from "@/features/lessons/schemas";
 import { createUserSchema, studentFormSchema } from "@/features/students/schemas";
-import { checkFile, safeFileName } from "@/lib/files";
+import { assetImageName, checkFile, dirOf, isAssetImage, safeFileName } from "@/lib/files";
 import { cycleDueDate, cycleEnd, cycleFee, cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
 import { buildKeywords, searchToken } from "@/utils/keywords";
 import {
@@ -171,6 +171,17 @@ describe("file e ricerca", () => {
 
   it("normalizza i nomi file", () => {
     expect(safeFileName("Vocalizzo n°4 (è).MP3")).toBe("Vocalizzo-n-4-e.mp3");
+  });
+
+  it("riconosce le immagini inserite dall'editor nei Markdown", () => {
+    expect(isAssetImage(assetImageName("Foto Scala.PNG"))).toBe(true);
+    expect(isAssetImage("img-0a1b2c3d4e5f.webp")).toBe(true);
+    // Solo il nome di un file accanto al documento: mai percorsi o indirizzi.
+    expect(isAssetImage("https://esempio.it/img-0a1b2c.png")).toBe(false);
+    expect(isAssetImage("../altro/img-0a1b2c.png")).toBe(false);
+    expect(isAssetImage("foto.png")).toBe(false);
+    expect(isAssetImage(undefined)).toBe(false);
+    expect(dirOf("materials/abc/dispensa.md")).toBe("materials/abc");
   });
 
   it("genera keyword con prefissi e senza accenti", () => {

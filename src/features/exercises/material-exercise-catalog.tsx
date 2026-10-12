@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { MaterialActions, MaterialIcon } from "@/features/materials/material-card";
+import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { materialService } from "@/services/materialService";
 import { EXERCISE_CATEGORY, type Material, type WithId } from "@/types";
@@ -92,7 +93,7 @@ export function MaterialExerciseCatalog() {
       <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
 
       <MaterialFormDialog exercise open={creating} onOpenChange={setCreating} />
-      <MaterialFormDialog exercise open={!!editing} onOpenChange={(o) => !o && setEditing(null)} material={editing} />
+      <MaterialEditorDialog exercise open={!!editing} onOpenChange={(o) => !o && setEditing(null)} material={editing} />
       <AssignmentFormDialog
         open={!!assigning}
         onOpenChange={(o) => !o && setAssigning(null)}

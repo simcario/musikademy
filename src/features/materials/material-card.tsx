@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FileViewer, type ViewerKind } from "@/components/shared/file-viewer";
 import { Pill } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
-import { pdfFileName, saveBlob, saveMarkdownAsPdf } from "@/lib/files";
+import { dirOf, pdfFileName, saveBlob, saveMarkdownAsPdf } from "@/lib/files";
 import { cn } from "@/lib/utils";
 import { materialService } from "@/services/materialService";
 import type { Material, MaterialType, WithId } from "@/types";
@@ -79,6 +79,7 @@ export function MaterialViewer({
       urlPending={needsUrl && url.isPending}
       urlError={url.error}
       content={material.content}
+      assetDir={dirOf(material.storagePath)}
     />
   );
 }
@@ -89,7 +90,7 @@ async function download(material: WithId<Material>) {
     const id = toast.loading(`Creazione di ${pdfFileName(material.fileName)}…`);
     try {
       const text = material.content ?? (await (await materialService.fileBlob(material)).text());
-      await saveMarkdownAsPdf(text, material.title, material.fileName);
+      await saveMarkdownAsPdf(text, material.title, material.fileName, dirOf(material.storagePath));
       toast.success("PDF scaricato.", { id });
     } catch (e) {
       toast.error(errorMessage(e, "Impossibile creare il PDF."), { id });

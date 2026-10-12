@@ -14,12 +14,14 @@ import {
   deleteObject,
   getBlob,
   getDownloadURL,
+  listAll,
   ref as storageRef,
+  uploadBytes,
   uploadBytesResumable,
   type UploadTask,
 } from "firebase/storage";
 import { firebaseStorage, firestore } from "@/lib/firebase/client";
-import { checkFile, safeFileName } from "@/lib/files";
+import { MARKDOWN_MAX_SIZE, assetImageName, checkFile, dirOf, isAssetImage, safeFileName } from "@/lib/files";
 import type { Material, MaterialCategory, Page, Visibility, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { buildKeywords, searchToken } from "@/utils/keywords";
@@ -33,6 +35,9 @@ export interface MaterialMeta {
   visibility: Visibility;
   studentIds: string[];
 }
+
+export type MaterialDetails = Pick<MaterialMeta, "title" | "description" | "category">;
+export type MaterialAssignment = Pick<MaterialMeta, "courseId" | "visibility" | "studentIds">;
 
 export interface MaterialFilters {
   category?: MaterialCategory | "all";
@@ -209,21 +214,66 @@ export const materialService = {
   /** Contenuto del file, per salvarlo sul dispositivo. Richiede il CORS sul bucket (storage.cors.json). */
   fileBlob: (material: Pick<Material, "storagePath">) => getBlob(storageRef(firebaseStorage(), material.storagePath)),
 
-  update: (id: string, meta: MaterialMeta) =>
-    updateDoc(
-      ref(COLLECTIONS.materials, id),
+  /**
+   * Modifica del documento: titolo, descrizione, categoria e, per i Markdown, il testo (`content`).
+   * Il testo viene riscritto anche nel file su Storage, così download e dimensione restano allineati.
+   */
+  async updateDetails(material: WithId<Material>, details: MaterialDetails, content?: string) {
+    let file: { content?: string; size?: number } = {};
+    if (content !== undefined) {
+      const blob = new Blob([content], { type: material.contentType });
+      if (blob.size > MARKDOWN_MAX_SIZE) throw new AppError("Documento troppo lungo: il limite è 512 KB.");
+      await uploadBytes(storageRef(firebaseStorage(), material.storagePath), blob, { contentType: material.contentType });
+      file = { content, size: blob.size };
+    }
+    await updateDoc(
+      ref(COLLECTIONS.materials, material.id),
       clean({
-        ...meta,
-        courseId: meta.courseId || "",
-        studentIds: meta.studentIds,
-        keywords: buildKeywords(meta.title, meta.description, meta.category),
+        ...details,
+        ...file,
+        keywords: buildKeywords(details.title, details.description, details.category),
         ...touched(),
       }),
-    ),
+    );
+    if (content !== undefined) await this.pruneImages(material, content).catch(() => undefined);
+  },
+
+  /** Assegnazione: a chi è visibile il materiale. */
+  updateAssignment: (id: string, a: MaterialAssignment) =>
+    updateDoc(ref(COLLECTIONS.materials, id), {
+      visibility: a.visibility,
+      courseId: a.courseId || "",
+      studentIds: a.studentIds,
+      ...touched(),
+    }),
+
+  // ── Immagini inserite nei Markdown (vedi isAssetImage) ──
+  /** Carica un'immagine accanto al file del materiale e ne restituisce il nome, da usare nel testo. */
+  async uploadImage(material: Pick<Material, "storagePath">, file: File): Promise<string> {
+    const check = checkFile(file);
+    if (!check.ok) throw new AppError(check.error);
+    if (check.type !== "image") throw new AppError("Puoi inserire solo immagini JPG, PNG o WEBP.");
+    const name = assetImageName(file.name);
+    await uploadBytes(storageRef(firebaseStorage(), `${dirOf(material.storagePath)}/${name}`), file, {
+      contentType: check.contentType,
+    });
+    return name;
+  },
+
+  imageUrl: (assetDir: string, name: string) => getDownloadURL(storageRef(firebaseStorage(), `${assetDir}/${name}`)),
+
+  /** Elimina da Storage le immagini caricate che `content` non usa più. */
+  async pruneImages(material: Pick<Material, "storagePath">, content: string) {
+    const { items } = await listAll(storageRef(firebaseStorage(), dirOf(material.storagePath)));
+    await Promise.all(
+      items.filter((i) => isAssetImage(i.name) && !content.includes(i.name)).map((i) => deleteObject(i).catch(() => undefined)),
+    );
+  },
 
   async remove(material: WithId<Material>) {
     await deleteDoc(ref(COLLECTIONS.materials, material.id));
     await deleteObject(storageRef(firebaseStorage(), material.storagePath)).catch(() => undefined);
+    await this.pruneImages(material, "").catch(() => undefined);
   },
 
   /** Assegnazione additiva: `studentIds` rende il materiale visibile a quegli studenti qualunque sia la visibilità. */

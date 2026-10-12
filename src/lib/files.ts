@@ -90,10 +90,30 @@ export function pdfFileName(name: string): string {
   return `${name.replace(/\.(md|markdown)$/i, "") || "documento"}.pdf`;
 }
 
-/** Converte un Markdown in PDF e lo salva. Il motore PDF è pesante: viene caricato solo al momento dell'uso. */
-export async function saveMarkdownAsPdf(markdown: string, title: string, fileName: string) {
+/**
+ * Converte un Markdown in PDF e lo salva. Il motore PDF è pesante: viene caricato solo al momento dell'uso.
+ * `assetDir` è la cartella Storage del materiale, per le immagini inserite dall'editor.
+ */
+export async function saveMarkdownAsPdf(markdown: string, title: string, fileName: string, assetDir?: string) {
   const { markdownToPdf } = await import("./markdown-pdf");
-  saveBlob(await markdownToPdf(markdown, title), pdfFileName(fileName));
+  saveBlob(await markdownToPdf(markdown, title, assetDir), pdfFileName(fileName));
+}
+
+/**
+ * Immagini inserite dall'editor in un Markdown: stanno in Storage accanto al file (`materials/{id}/`)
+ * e nel testo compaiono col solo nome, così l'URL si risolve a runtime e restano soggette alle Storage Rules.
+ */
+const ASSET_IMAGE = /^img-[a-z0-9]+\.(jpe?g|png|webp)$/;
+
+export const isAssetImage = (src: string | undefined | null): src is string => !!src && ASSET_IMAGE.test(src);
+
+export function assetImageName(fileName: string): string {
+  return `img-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}.${extensionOf(fileName)}`;
+}
+
+/** `materials/abc/dispensa.md` → `materials/abc`. */
+export function dirOf(path: string): string {
+  return path.slice(0, Math.max(0, path.lastIndexOf("/")));
 }
 
 export const AVATAR_MAX_SIZE = 5 * MB;

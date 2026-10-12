@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { authService } from "@/services/authService";
+import { materialService } from "@/services/materialService";
+import { isAssetImage } from "./files";
 
 /**
  * Markdown → PDF con testo vero (selezionabile), generato nel browser.
@@ -85,6 +87,8 @@ interface Ctx {
   defs: Map<string, string>;
   /** Immagini caricate, per URL: quelle mancanti (irraggiungibili, formato ignoto) ripiegano sul testo alternativo. */
   images: Map<string, LoadedImage>;
+  /** Cartella Storage del materiale: lì stanno le immagini inserite dall'editor (solo nome file nel testo). */
+  assetDir?: string;
   /** Dentro le liste gli spazi tra i blocchi sono ridotti. */
   tight: boolean;
 }
@@ -92,11 +96,11 @@ interface Ctx {
 const isSafeLink = (url: string) => /^(https?:|mailto:|tel:)/i.test(url);
 const isLoadableImage = (url: string | undefined): url is string => !!url && /^(https?:|data:image\/)/i.test(url);
 
-function imageUrlOf(node: PhrasingContent, defs: Map<string, string>): string | undefined {
+function imageUrlOf(node: PhrasingContent, where: Pick<Ctx, "defs" | "assetDir">): string | undefined {
   // Un'immagine cliccabile `[![alt](img)](link)` vale come l'immagine che contiene.
-  if ((node.type === "link" || node.type === "linkReference") && node.children.length === 1) return imageUrlOf(node.children[0], defs);
-  const url = node.type === "image" ? node.url : node.type === "imageReference" ? defs.get(node.identifier) : undefined;
-  return isLoadableImage(url) ? url : undefined;
+  if ((node.type === "link" || node.type === "linkReference") && node.children.length === 1) return imageUrlOf(node.children[0], where);
+  const url = node.type === "image" ? node.url : node.type === "imageReference" ? where.defs.get(node.identifier) : undefined;
+  return isLoadableImage(url) || (where.assetDir && isAssetImage(url)) ? url : undefined;
 }
 
 const readAsDataUrl = (blob: Blob) =>
@@ -108,10 +112,11 @@ const readAsDataUrl = (blob: Blob) =>
   });
 
 /**
- * Scarica un'immagine e la prepara per il PDF. Quelle esterne passano da /api/image-proxy (il browser
- * non può leggerne i byte senza CORS); il PDF accetta solo PNG e JPEG, gli altri formati vengono convertiti.
+ * Scarica un'immagine e la prepara per il PDF. Quelle esterne e quelle su Storage passano da /api/image-proxy
+ * (il browser non può leggerne i byte senza CORS); il PDF accetta solo PNG e JPEG, gli altri formati vengono convertiti.
  */
-async function loadImage(url: string, token: () => Promise<string>): Promise<LoadedImage> {
+async function loadImage(src: string, token: () => Promise<string>, assetDir?: string): Promise<LoadedImage> {
+  const url = assetDir && isAssetImage(src) ? await materialService.imageUrl(assetDir, src) : src;
   const res = url.startsWith("data:")
     ? await fetch(url)
     : await fetch(`/api/image-proxy?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${await token()}` } });
@@ -143,11 +148,11 @@ async function loadImage(url: string, token: () => Promise<string>): Promise<Loa
   }
 }
 
-async function loadImages(root: Root, defs: Map<string, string>): Promise<Map<string, LoadedImage>> {
+async function loadImages(root: Root, defs: Map<string, string>, assetDir?: string): Promise<Map<string, LoadedImage>> {
   const urls = new Set<string>();
   const visit = (nodes: RootContent[]) => {
     for (const n of nodes) {
-      if (n.type === "paragraph") for (const c of n.children) urls.add(imageUrlOf(c, defs) ?? "");
+      if (n.type === "paragraph") for (const c of n.children) urls.add(imageUrlOf(c, { defs, assetDir }) ?? "");
       else if ("children" in n) visit(n.children as RootContent[]);
     }
   };
@@ -160,7 +165,7 @@ async function loadImages(root: Root, defs: Map<string, string>): Promise<Map<st
   await Promise.all(
     [...urls].map(async (url) => {
       try {
-        images.set(url, await loadImage(url, token));
+        images.set(url, await loadImage(url, token, assetDir));
       } catch {
         // Resta il testo alternativo.
       }
@@ -217,7 +222,7 @@ function paragraph(children: PhrasingContent[], ctx: Ctx): ReactNode[] {
     run = [];
   };
   for (const child of children) {
-    const image = ctx.images.get(imageUrlOf(child, ctx.defs) ?? "");
+    const image = ctx.images.get(imageUrlOf(child, ctx) ?? "");
     if (image) {
       flush();
       parts.push(<PdfImage key={parts.length} src={image.src} style={[s.image, { width: image.width, height: image.height }]} />);
@@ -309,10 +314,10 @@ function definitionsOf(root: Root): Map<string, string> {
   return defs;
 }
 
-export async function markdownToPdf(markdown: string, title: string): Promise<Blob> {
+export async function markdownToPdf(markdown: string, title: string, assetDir?: string): Promise<Blob> {
   const root = unified().use(remarkParse).use(remarkGfm).parse(markdown);
   const defs = definitionsOf(root);
-  const ctx: Ctx = { defs, images: await loadImages(root, defs), tight: false };
+  const ctx: Ctx = { defs, images: await loadImages(root, defs, assetDir), assetDir, tight: false };
   return pdf(
     <Document title={title} creator="Musikademy" producer="Musikademy" language="it">
       <Page size="A4" style={s.page}>
