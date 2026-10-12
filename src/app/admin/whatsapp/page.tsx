@@ -3,6 +3,7 @@
 import { PageContainer, PageHeader } from "@/components/shared/page";
 import { useSession } from "@/features/auth/auth-provider";
 import { useWhatsAppSettings } from "@/features/whatsapp/hooks";
+import { MessageTemplates } from "@/features/whatsapp/message-templates";
 import {
   ProviderSettings,
   ReminderSettings,
@@ -29,6 +30,7 @@ export default function AdminWhatsAppPage() {
         provider && <WhatsAppConnection editable={isAdmin} />
       )}
       <ReminderSettings editable={isAdmin} />
+      <MessageTemplates editable={isAdmin} />
       <WhatsAppMessageLog />
     </PageContainer>
   );

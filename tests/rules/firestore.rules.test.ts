@@ -262,6 +262,13 @@ describe("WhatsApp (ADR D24)", () => {
     await assertFails(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, extra: true }));
     await assertSucceeds(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, provider: "zernio" }));
     await assertFails(setDoc(doc(admin(), "whatsapp", "settings"), { ...settings, provider: "altro" }));
+    // Salvataggi parziali e testi personalizzati
+    await assertSucceeds(setDoc(doc(admin(), "whatsapp", "settings"), { announcementTemplate: "Ciao {nome}" }, { merge: true }));
+    await assertFails(setDoc(doc(admin(), "whatsapp", "settings"), { announcementTemplate: "" }, { merge: true }));
+    // I template Meta in uso li scrive solo il server
+    await assertFails(
+      setDoc(doc(admin(), "whatsapp", "settings"), { metaTemplates: { reminder: { name: "x", text: "y" } } }, { merge: true }),
+    );
   });
 
   it("solo l'admin collega o scollega il numero; lo stato lo scrive solo il worker", async () => {
@@ -281,8 +288,10 @@ describe("WhatsApp (ADR D24)", () => {
 
   it("lo staff mette in coda, ma non segna come inviato né crea promemoria", async () => {
     await assertSucceeds(setDoc(doc(teacher(), "whatsappMessages", "m1"), message(TEACHER)));
-    await assertSucceeds(setDoc(doc(teacher(), "whatsappMessages", "m6"), { ...message(TEACHER), templateParams: ["T", "C"] }));
-    await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m7"), { ...message(TEACHER), templateParams: "x" }));
+    await assertSucceeds(
+      setDoc(doc(teacher(), "whatsappMessages", "m6"), { ...message(TEACHER), templateVars: { nome: "Alice", titolo: "T" } }),
+    );
+    await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m7"), { ...message(TEACHER), templateVars: "x" }));
     await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m2"), { ...message(TEACHER), status: "sent" }));
     await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m3"), { ...message(TEACHER), kind: "reminder" }));
     await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m4"), { ...message("altro") }));

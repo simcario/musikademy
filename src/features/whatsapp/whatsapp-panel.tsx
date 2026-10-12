@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -26,27 +25,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
-import {
-  REMINDER_PLACEHOLDERS,
-  WA_PROVIDERS,
-  fillTemplate,
-  normalizePhone,
-  reminderParams,
-  renderTemplate,
-  type WhatsAppProvider,
-} from "@/lib/whatsapp/shared";
-import { whatsappService, type ZernioStatus } from "@/services/whatsappService";
+import { WA_PROVIDERS, messageText, normalizePhone, type MessageKind, type WhatsAppProvider } from "@/lib/whatsapp/shared";
+import { whatsappService, type ZernioTemplateState } from "@/services/whatsappService";
 import type { WhatsAppMessage, WhatsAppMessageKind, WhatsAppMessageStatus, WhatsAppSettings, WithId } from "@/types";
 import type { Tone } from "@/utils/status";
 import { formatDate } from "@/utils/format";
-import { useWhatsAppMessages, useWhatsAppSession, useWhatsAppSettings } from "./hooks";
+import { useWhatsAppMessages, useWhatsAppSession, useWhatsAppSettings, useZernioStatus } from "./hooks";
 
 const formatPhone = (p?: string | null) => (p ? `+${p}` : "");
 
@@ -187,11 +177,9 @@ function Status({
 // ─────────────── Promemoria ───────────────
 
 const settingsSchema = z.object({
-  provider: z.enum(WA_PROVIDERS),
   remindersEnabled: z.boolean(),
   reminderTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Orario non valido"),
   daysBefore: z.coerce.number<string>().int().min(0).max(7),
-  reminderTemplate: z.string().trim().min(1, "Scrivi il testo del promemoria").max(1000),
   countryCode: z.string().trim().regex(/^[1-9]\d{0,3}$/, "Solo cifre, es. 39"),
 });
 type SettingsValues = z.output<typeof settingsSchema>;
@@ -202,7 +190,6 @@ const DAYS_BEFORE_LABEL: Record<number, string> = {
   1: "Il giorno prima",
   2: "Due giorni prima",
 };
-const SAMPLE_WHEN: Record<number, string> = { 0: "oggi", 1: "domani", 2: "giovedì 16 ottobre" };
 
 export function ReminderSettings({ editable }: { editable: boolean }) {
   const q = useWhatsAppSettings();
@@ -216,7 +203,7 @@ export function ReminderSettings({ editable }: { editable: boolean }) {
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <ReminderForm key={q.data.provider} settings={q.data} editable={editable} />
+        <ReminderForm settings={q.data} editable={editable} />
       )}
     </section>
   );
@@ -225,30 +212,23 @@ export function ReminderSettings({ editable }: { editable: boolean }) {
 function ReminderForm({ settings, editable }: { settings: WhatsAppSettings; editable: boolean }) {
   const form = useForm<SettingsInput, unknown, SettingsValues>({
     resolver: zodResolver(settingsSchema),
-    defaultValues: { ...settings, daysBefore: String(settings.daysBefore) },
+    defaultValues: {
+      remindersEnabled: settings.remindersEnabled,
+      reminderTime: settings.reminderTime,
+      daysBefore: String(settings.daysBefore),
+      countryCode: settings.countryCode,
+    },
   });
   const { errors, isDirty } = form.formState;
-  const [enabled, template, daysBefore, time] = useWatch({
+  const [enabled, daysBefore, time] = useWatch({
     control: form.control,
-    name: ["remindersEnabled", "reminderTemplate", "daysBefore", "reminderTime"],
+    name: ["remindersEnabled", "daysBefore", "reminderTime"],
   });
-  // Con Zernio il testo è il template approvato da Meta e non si modifica da qui.
-  const official = settings.provider === "zernio";
   const save = useStaffMutation((v: SettingsValues) => whatsappService.saveSettings(v), {
     success: "Impostazioni dei promemoria salvate",
     invalidate: [["whatsapp", "settings"]],
     onSuccess: (_, v) => form.reset({ ...v, daysBefore: String(v.daysBefore) }),
   });
-  const sample = {
-    nome: "Elena",
-    cognome: "Rossi",
-    titolo: "Tecnica vocale",
-    quando: SAMPLE_WHEN[Number(daysBefore)] ?? "il giorno della lezione",
-    data: "giovedì 16 ottobre",
-    ora: "17:30",
-    docente: "Luca Bianchi",
-  };
-  const preview = official ? fillTemplate("reminder", reminderParams(sample)) : renderTemplate(template ?? "", sample);
 
   return (
     <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4" noValidate>
@@ -273,27 +253,6 @@ function ReminderForm({ settings, editable }: { settings: WhatsAppSettings; edit
             {(p) => <Input {...p} type="time" {...form.register("reminderTime")} />}
           </Field>
         </div>
-        {official ? (
-          <p className="text-xs text-muted-foreground">
-            Con l&apos;API ufficiale il testo è quello del template approvato da Meta: nome, lezione, giorno, ora e docente
-            vengono inseriti automaticamente.
-          </p>
-        ) : (
-        <Field
-          label="Testo del promemoria"
-          error={errors.reminderTemplate?.message}
-          hint={`Segnaposto: ${Object.keys(REMINDER_PLACEHOLDERS)
-            .map((k) => `{${k}}`)
-            .join(" ")}`}
-          required
-        >
-          {(p) => <Textarea {...p} rows={3} {...form.register("reminderTemplate")} />}
-        </Field>
-        )}
-        <div className="rounded-lg bg-muted/60 p-3 text-sm">
-          <p className="section-label mb-1 text-muted-foreground">Anteprima</p>
-          <p className="whitespace-pre-wrap">{preview}</p>
-        </div>
         <Field
           label="Prefisso internazionale predefinito"
           error={errors.countryCode?.message}
@@ -303,6 +262,7 @@ function ReminderForm({ settings, editable }: { settings: WhatsAppSettings; edit
           {(p) => <Input {...p} inputMode="numeric" {...form.register("countryCode")} />}
         </Field>
       </fieldset>
+      <p className="text-xs text-muted-foreground">Il testo del promemoria si modifica in &quot;Testi dei messaggi&quot;.</p>
       {editable ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
@@ -418,7 +378,7 @@ function TestMessage() {
   const to = normalizePhone(phone, settings.data?.countryCode);
   const send = useStaffMutation(
     async (n: string) => {
-      await whatsappService.queueTest(n, uid);
+      await whatsappService.queueTest(n, messageText(settings.data ?? {}, "announcement"), uid);
       // Con Zernio parte subito dal server; con WhatsApp Web lo invia il worker.
       if (settings.data?.provider === "zernio") await whatsappService.dispatchNow().catch(() => undefined);
     },
@@ -458,8 +418,7 @@ const PROVIDER_META: Record<WhatsAppProvider, { label: string; description: stri
 export function ProviderSettings({ editable }: { editable: boolean }) {
   const q = useWhatsAppSettings();
   const save = useStaffMutation(
-    // updatedAt viene comunque riscritto dal service.
-    (provider: WhatsAppProvider) => whatsappService.saveSettings({ ...q.data!, provider }),
+    (provider: WhatsAppProvider) => whatsappService.saveSettings({ provider }),
     { success: "Servizio di invio aggiornato", invalidate: [["whatsapp"]] },
   );
   if (!q.data) return null;
@@ -496,17 +455,17 @@ export function ProviderSettings({ editable }: { editable: boolean }) {
 
 // ─────────────── Zernio (API ufficiale) ───────────────
 
-const TEMPLATE_STATUS: Record<ZernioStatus["templates"][number]["status"], { label: string; tone: Tone }> = {
+export const TEMPLATE_STATUS: Record<ZernioTemplateState["status"], { label: string; tone: Tone }> = {
   APPROVED: { label: "Approvato", tone: "success" },
   PENDING: { label: "In approvazione", tone: "warning" },
   REJECTED: { label: "Rifiutato", tone: "danger" },
   MISSING: { label: "Da creare", tone: "neutral" },
 };
-const TEMPLATE_LABEL: Record<string, string> = { reminder: "Promemoria lezione", announcement: "Comunicazione" };
+export const TEMPLATE_LABEL: Record<MessageKind, string> = { reminder: "Promemoria lezione", announcement: "Comunicazione" };
 
 export function ZernioConnection({ editable }: { editable: boolean }) {
-  const q = useQuery({ queryKey: ["whatsapp", "zernio"], queryFn: whatsappService.zernioStatus });
-  const create = useStaffMutation(() => whatsappService.createZernioTemplates(), {
+  const q = useZernioStatus(true);
+  const create = useStaffMutation(() => whatsappService.createDefaultTemplates(), {
     success: "Template inviati a Meta: l'approvazione richiede da pochi minuti a 24 ore",
     invalidate: [["whatsapp", "zernio"]],
   });
@@ -555,23 +514,39 @@ export function ZernioConnection({ editable }: { editable: boolean }) {
             <FileCheck2 className="size-4 text-brand-ink" aria-hidden /> Template dei messaggi
           </p>
           <ul className="divide-y divide-border rounded-lg border border-border">
-            {templates.map((t) => (
-              <li key={t.key} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                <span className="min-w-0">
-                  <span className="block font-medium">{TEMPLATE_LABEL[t.key] ?? t.key}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {t.name}
-                    {t.category && t.category !== "UTILITY" ? ` · categoria ${t.category} (costo più alto)` : ""}
+            {templates.map(({ kind, active, draft }) => (
+              <li key={kind} className="space-y-1 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="block font-medium">{TEMPLATE_LABEL[kind]}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      In uso: {active.name}
+                      {active.category && active.category !== "UTILITY" ? ` · categoria ${active.category} (costo più alto)` : ""}
+                    </span>
                   </span>
-                </span>
-                <Pill tone={TEMPLATE_STATUS[t.status].tone}>{TEMPLATE_STATUS[t.status].label}</Pill>
+                  <Pill tone={TEMPLATE_STATUS[active.status].tone}>{TEMPLATE_STATUS[active.status].label}</Pill>
+                </div>
+                {draft && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-muted-foreground">Nuovo testo: {draft.name}</span>
+                    <Pill tone={TEMPLATE_STATUS[draft.status].tone}>{TEMPLATE_STATUS[draft.status].label}</Pill>
+                  </div>
+                )}
+                {(draft?.status === "REJECTED" ? draft : active.status === "REJECTED" ? active : null) && (
+                  <p className="text-xs text-danger">
+                    Rifiutato da Meta{(draft ?? active).reason ? ` (${(draft ?? active).reason})` : ""}: modifica il testo in
+                    &quot;Testi dei messaggi&quot; e invialo di nuovo.
+                  </p>
+                )}
               </li>
             ))}
           </ul>
-          {templates.some((t) => t.status !== "APPROVED") && (
-            <p className="text-xs text-muted-foreground">I messaggi partono solo con i template approvati da Meta.</p>
+          {templates.some((t) => t.active.status !== "APPROVED") && (
+            <p className="text-xs text-muted-foreground">
+              I messaggi partono solo con un template approvato da Meta: fino ad allora restano in coda.
+            </p>
           )}
-          {editable && templates.some((t) => t.status === "MISSING") && (
+          {editable && templates.some((t) => t.active.status === "MISSING") && (
             <Button size="sm" disabled={create.isPending} onClick={() => create.mutate(undefined)}>
               {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />} Invia i
               template a Meta

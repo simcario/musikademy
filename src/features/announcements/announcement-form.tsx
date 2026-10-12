@@ -13,6 +13,7 @@ import { CourseSelect, StudentSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { useWhatsAppSession, useWhatsAppSettings } from "@/features/whatsapp/hooks";
 import { announcementService } from "@/services/announcementService";
+import { messageText } from "@/lib/whatsapp/shared";
 import { announcementRecipients, whatsappService } from "@/services/whatsappService";
 import type { Announcement, WithId } from "@/types";
 import { fullName } from "@/utils/format";
@@ -60,7 +61,8 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
   const [target, targetId, sendWhatsApp] = useWatch({ control: form.control, name: ["targetType", "targetId", "whatsapp"] });
   const students = useActiveStudents();
   const wa = useWhatsAppSession();
-  const zernio = useWhatsAppSettings().data?.provider === "zernio";
+  const waSettings = useWhatsAppSettings().data;
+  const zernio = waSettings?.provider === "zernio";
   const recipients = announcementRecipients({ targetType: target, targetId }, students.data ?? []);
   const withoutPhone = recipients.filter((s) => !s.phone).length;
 
@@ -74,7 +76,13 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
       if (!whatsapp) return 0;
       // Destinatari calcolati al momento dell'invio, sugli studenti attivi.
       const all = students.data ?? (await students.refetch()).data ?? [];
-      const queued = await whatsappService.queueAnnouncement({ ...input, authorName }, id, announcementRecipients(input, all), uid);
+      const queued = await whatsappService.queueAnnouncement(
+        { ...input, authorName },
+        id,
+        announcementRecipients(input, all),
+        messageText(waSettings ?? (await whatsappService.getSettings()), "announcement"),
+        uid,
+      );
       // Con Zernio l'invio avviene sul server: lo avviamo subito. Se non riesce, ci pensa il job pianificato.
       if (zernio && queued) await whatsappService.dispatchNow().catch(() => undefined);
       return queued;
@@ -126,7 +134,7 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
             {recipients.length === 1 ? "1 studente" : `${recipients.length} studenti`}
             {withoutPhone > 0 && ` (${withoutPhone} senza numero in anagrafica)`}.{" "}
             {zernio
-              ? "Invio immediato con l'API ufficiale: testo su una riga, accorciato se molto lungo (il testo completo resta nell'app)."
+              ? "Invio immediato con l'API ufficiale e il testo approvato (vedi WhatsApp → Testi dei messaggi); il testo lungo viene accorciato."
               : wa.connected
                 ? "Invio dal numero collegato, un messaggio ogni pochi secondi."
                 : "WhatsApp non è collegato ora: i messaggi partiranno appena lo sarà."}

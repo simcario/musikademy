@@ -136,6 +136,26 @@ i messaggi partono dal server dell'app usando **template approvati da Meta** (it
    ```
    Le comunicazioni partono subito anche senza il job.
 
+**Testi personalizzabili** (Admin → WhatsApp → *Testi dei messaggi*): promemoria e comunicazioni si
+scrivono con segnaposto leggibili; la pagina mostra anteprima e **trascodifica** nel formato di Meta.
+
+| Promemoria | Comunicazione | Valore |
+|---|---|---|
+| `{nome}` `{cognome}` | `{nome}` `{cognome}` | studente destinatario |
+| `{titolo}` | `{titolo}` | titolo della lezione / della comunicazione |
+| `{quando}` | — | "oggi", "domani" o il giorno (es. "giovedì 16 ottobre") |
+| `{data}` | — | data della lezione (es. "giovedì 16 ottobre") |
+| `{ora}` | — | orario di inizio (es. "17:30") |
+| `{docente}` | — | nome e cognome del docente |
+| — | `{testo}` | testo della comunicazione (su una riga con Zernio, max ~700 caratteri) |
+| — | `{autore}` | chi ha scritto la comunicazione |
+
+Con Zernio i segnaposto diventano `{{1}}`, `{{2}}`… nell'ordine in cui compaiono (un segnaposto ripetuto
+prende un nuovo numero) e ogni modifica viene inviata a Meta come nuovo template: resta in uso il testo
+precedente finché il nuovo non è approvato. Regole di Meta controllate prima dell'invio: niente segnaposto
+all'inizio o alla fine, mai due segnaposto attaccati, almeno 3 parole fisse per segnaposto. Meta può
+classificare come MARKETING (più caro) un testo dal tono promozionale: meglio un tono di servizio.
+
 Costi indicativi: Zernio gratuito (fino a 10.000 messaggi/mese, numero proprio senza canone); Meta circa
 0,025–0,03 € per messaggio UTILITY in Italia, addebitati da Meta sul conto WhatsApp Business.
 

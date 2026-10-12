@@ -1,5 +1,5 @@
 import "server-only";
-import { ZERNIO_LANGUAGE, ZERNIO_TEMPLATES, type ZernioTemplateKey } from "./shared";
+import { ZERNIO_LANGUAGE, sampleVars, transcode, type MessageKind } from "./shared";
 
 /**
  * Client minimo dell'API Zernio (https://zernio.com/api/v1) per WhatsApp Cloud (ADR D25).
@@ -59,6 +59,7 @@ export interface ZernioTemplate {
   status: "APPROVED" | "PENDING" | "REJECTED";
   category: string;
   language: string;
+  rejected_reason?: string;
 }
 
 export async function listTemplates(accountId: string) {
@@ -68,32 +69,30 @@ export async function listTemplates(accountId: string) {
   return templates ?? [];
 }
 
-/** Invia a Meta per l'approvazione un template di Musikademy (UTILITY, italiano). */
-export function createTemplate(accountId: string, key: ZernioTemplateKey) {
-  const t = ZERNIO_TEMPLATES[key];
+/**
+ * Invia a Meta per l'approvazione un template (UTILITY, italiano) a partire dal testo con i segnaposto
+ * leggibili: la trascodifica produce il corpo {{1}}, {{2}}… e gli esempi richiesti da Meta.
+ */
+export function createTemplate(accountId: string, name: string, kind: MessageKind, text: string) {
+  const t = transcode(text, kind);
+  if (t.issues.length) throw new ZernioError(t.issues.join(" "), 400, "INVALID_TEMPLATE");
+  const examples = sampleVars(kind);
+  const components: unknown[] = [{ type: "body", text: t.body }];
+  if (t.order.length) (components[0] as Record<string, unknown>).example = { body_text: [t.order.map((k) => examples[k])] };
   return zernio<{ template: ZernioTemplate }>("/whatsapp/templates", {
     method: "POST",
-    body: {
-      accountId,
-      name: t.name,
-      category: "UTILITY",
-      language: ZERNIO_LANGUAGE,
-      components: [{ type: "body", text: t.body, example: { body_text: [t.example] } }],
-    },
+    body: { accountId, name, category: "UTILITY", language: ZERNIO_LANGUAGE, components },
   });
 }
 
-/**
- * Invia un template a un numero (cifre con prefisso internazionale, senza "+").
- * Zernio apre la conversazione o riusa quella esistente.
- */
-export function sendTemplate(accountId: string, to: string, key: ZernioTemplateKey, params: string[]) {
+/** Invia un template a un numero (cifre con prefisso internazionale, senza "+"). */
+export function sendTemplate(accountId: string, to: string, templateName: string, params: string[]) {
   return zernio<{ success: boolean; data?: { messageId?: string; conversationId?: string } }>("/inbox/conversations", {
     method: "POST",
     body: {
       accountId,
       participantId: to,
-      templateName: ZERNIO_TEMPLATES[key].name,
+      templateName,
       templateLanguage: ZERNIO_LANGUAGE,
       templateParams: params,
     },

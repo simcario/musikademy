@@ -1,8 +1,13 @@
-import { errorResponse, requireCaller } from "@/lib/auth/server";
-import { ZERNIO_TEMPLATES, type ZernioTemplateKey } from "@/lib/whatsapp/shared";
-import { ZernioError, createTemplate, listTemplates, whatsappAccount, zernioConfigured } from "@/lib/whatsapp/zernio";
-
-const KEYS = Object.keys(ZERNIO_TEMPLATES) as ZernioTemplateKey[];
+import { z } from "zod";
+import { HttpError, errorResponse, requireCaller } from "@/lib/auth/server";
+import {
+  createMissingDefaults,
+  loadSettings,
+  resolveTemplates,
+  submitTemplate,
+} from "@/lib/whatsapp/meta-templates";
+import { MESSAGE_KINDS, transcode } from "@/lib/whatsapp/shared";
+import { ZernioError, whatsappAccount, zernioConfigured } from "@/lib/whatsapp/zernio";
 
 async function status() {
   const base = { configured: zernioConfigured(), cronConfigured: !!process.env.CRON_SECRET };
@@ -10,27 +15,24 @@ async function status() {
   try {
     const account = await whatsappAccount();
     if (!account) return { ...base, account: null, templates: [] };
-    const existing = await listTemplates(account._id);
+    const templates = await resolveTemplates(account._id, await loadSettings());
     return {
       ...base,
       account: {
         id: account._id,
         name: account.metadata?.verifiedName || account.displayName || "WhatsApp",
-        // `username` è il numero in formato leggibile (es. "+39 331 …"); platformUserId sono ID Meta.
+        // `username` è il numero in formato leggibile (es. "+39 331 …").
         phone: (account.metadata?.displayPhoneNumber || account.username || "").replace(/\D/g, "") || undefined,
         needsReconnection: account.needsReconnection,
       },
-      templates: KEYS.map((key) => {
-        const t = existing.find((x) => x.name === ZERNIO_TEMPLATES[key].name);
-        return { key, name: ZERNIO_TEMPLATES[key].name, status: t?.status ?? "MISSING", category: t?.category };
-      }),
+      templates: MESSAGE_KINDS.map((k) => templates[k]),
     };
   } catch (e) {
     return { ...base, account: null, templates: [], error: (e as Error).message };
   }
 }
 
-/** Stato di Zernio: numero collegato e approvazione dei template (ADR D25). */
+/** Stato di Zernio: numero collegato e template (in uso / in approvazione) per tipo di messaggio. */
 export async function GET(req: Request) {
   try {
     await requireCaller(req, "staff:area");
@@ -40,15 +42,30 @@ export async function GET(req: Request) {
   }
 }
 
-/** Invia a Meta per l'approvazione i template mancanti (o rifiutati da ricreare). */
+const bodySchema = z.union([
+  z.object({ action: z.literal("create-defaults") }),
+  z.object({ action: z.literal("submit"), kind: z.enum(["reminder", "announcement"]), text: z.string().trim().min(1).max(1024) }),
+]);
+
+/**
+ * - `create-defaults`: crea su Meta i template predefiniti mancanti
+ * - `submit`: invia a Meta un testo personalizzato (resta in uso il precedente finché non è approvato)
+ */
 export async function POST(req: Request) {
   try {
     await requireCaller(req, "settings:manage");
+    const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) throw new HttpError(400, "Dati non validi.");
     const account = await whatsappAccount();
-    if (!account) return Response.json({ error: "Collega prima un numero WhatsApp su Zernio." }, { status: 409 });
-    const existing = await listTemplates(account._id);
-    for (const key of KEYS) {
-      if (!existing.some((t) => t.name === ZERNIO_TEMPLATES[key].name)) await createTemplate(account._id, key);
+    if (!account) throw new HttpError(409, "Collega prima un numero WhatsApp su Zernio.");
+
+    if (parsed.data.action === "create-defaults") {
+      await createMissingDefaults(account._id, await loadSettings());
+    } else {
+      const { kind, text } = parsed.data;
+      const issues = transcode(text, kind).issues;
+      if (issues.length) throw new HttpError(400, issues.join(" "));
+      await submitTemplate(account._id, kind, text);
     }
     return Response.json(await status());
   } catch (e) {

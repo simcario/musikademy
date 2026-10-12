@@ -1,18 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_ANNOUNCEMENT_TEMPLATE,
+  DEFAULT_REMINDER_TEMPLATE,
   addDays,
-  announcementMessage,
-  announcementParams,
-  fillTemplate,
-  reminderParams,
-  templateForKind,
-  templateParam,
+  announcementVars,
   markdownToWhatsApp,
+  messageText,
+  metaParams,
+  metaTemplateName,
   normalizePhone,
   relativeLessonDay,
   reminderMessageId,
   reminderRunDue,
+  renderMessage,
   renderTemplate,
+  templateKindOf,
+  templateParam,
+  transcode,
   zonedDayStart,
   zonedParts,
 } from "@/lib/whatsapp/shared";
@@ -50,10 +54,17 @@ describe("testi", () => {
       "*Titolo*\n*grassetto* e _corsivo_\n• uno\n• due\nsito (https://x.it)",
     );
   });
-  it("compone la comunicazione con titolo e firma", () => {
-    expect(announcementMessage({ title: "Saggio", content: "Sabato alle **18**", authorName: "Luca" })).toBe(
-      "*Saggio*\n\nSabato alle *18*\n\n— Luca",
+  it("prepara i valori della comunicazione per ogni studente", () => {
+    const vars = announcementVars(
+      { title: " Saggio ", content: "Sabato alle **18**", authorName: "Luca" },
+      { name: "Elena", surname: "Rossi" },
     );
+    expect(vars).toEqual({ nome: "Elena", cognome: "Rossi", titolo: "Saggio", testo: "Sabato alle *18*", autore: "Luca" });
+    expect(renderMessage("Ciao {nome}: {titolo} — {autore}", vars)).toBe("Ciao Elena: Saggio — Luca");
+  });
+  it("usa il testo personalizzato o quello predefinito", () => {
+    expect(messageText({}, "reminder")).toBe(DEFAULT_REMINDER_TEMPLATE);
+    expect(messageText({ announcementTemplate: "X {titolo} y" }, "announcement")).toBe("X {titolo} y");
   });
 });
 
@@ -96,27 +107,48 @@ describe("pianificazione promemoria", () => {
   });
 });
 
-describe("template WhatsApp Cloud (Zernio)", () => {
-  it("mette le variabili su una riga, come richiede Meta", () => {
+describe("trascodifica per i template Meta (Zernio)", () => {
+  it("numera i segnaposto nell'ordine in cui compaiono, anche se ripetuti", () => {
+    const t = transcode("Ciao {nome}, la lezione {titolo} è {quando}. Ti aspettiamo {nome} a scuola, a presto!", "reminder");
+    expect(t.body).toBe("Ciao {{1}}, la lezione {{2}} è {{3}}. Ti aspettiamo {{4}} a scuola, a presto!");
+    expect(t.order).toEqual(["nome", "titolo", "quando", "nome"]);
+  });
+  it("i testi predefiniti rispettano le regole di Meta", () => {
+    expect(transcode(DEFAULT_REMINDER_TEMPLATE, "reminder").issues).toEqual([]);
+    expect(transcode(DEFAULT_ANNOUNCEMENT_TEMPLATE, "announcement").issues).toEqual([]);
+  });
+  it("segnala il template che Meta ha rifiutato (troppe variabili)", () => {
+    const v1 = 'Ciao {nome}, ti ricordiamo la lezione "{titolo}" {quando} alle {ora} con {docente}. A presto!';
+    expect(transcode(v1, "reminder").issues.join(" ")).toMatch(/Troppi segnaposto/);
+  });
+  it("segnala inizio/fine con segnaposto, segnaposto attaccati e sconosciuti", () => {
+    expect(transcode("{nome}, la tua lezione di domani è confermata dalla scuola.", "reminder").issues.join()).toMatch(/iniziare/);
+    expect(transcode("La tua lezione di domani è confermata, ci vediamo {ora}.", "reminder").issues.join()).toMatch(/finire/);
+    expect(transcode("Ciao, la lezione {titolo} {ora} è confermata dalla nostra scuola di musica.", "reminder").issues.join()).toMatch(
+      /attaccati/,
+    );
+    expect(transcode("Ciao {studente}, la lezione è confermata dalla scuola.", "reminder").unknown).toEqual(["studente"]);
+    // {testo} non esiste nei promemoria
+    expect(transcode("Ciao, ecco {testo} dalla scuola di musica.", "reminder").unknown).toEqual(["testo"]);
+  });
+  it("prepara le variabili su una riga, come richiede Meta", () => {
     expect(templateParam("riga 1\n\nriga 2\tcon    spazi")).toBe("riga 1 · riga 2 con spazi");
     expect(templateParam("")).toBe("—");
     expect(templateParam("x".repeat(10), 5)).toBe("xxxx…");
-  });
-  it("prepara titolo e testo della comunicazione", () => {
-    expect(announcementParams({ title: "Saggio", content: "# Avviso\nSabato alle **18**" })).toEqual([
+    const vars = announcementVars({ title: "Saggio", content: "# Avviso\nSabato alle **18**" }, { name: "Elena" });
+    expect(metaParams(DEFAULT_ANNOUNCEMENT_TEMPLATE, "announcement", vars)).toEqual([
+      "Elena",
       "Saggio",
       "*Avviso* · Sabato alle *18*",
     ]);
   });
-  it("compone il promemoria nell'ordine del template", () => {
-    const params = reminderParams({ nome: "Elena", titolo: "Tecnica", quando: "domani", ora: "17:30", docente: "" });
-    expect(params).toEqual(["Elena", "Tecnica", "domani", "17:30", "il tuo docente"]);
-    expect(fillTemplate("reminder", params)).toBe(
-      'Ciao Elena, ti ricordiamo la lezione "Tecnica" domani alle 17:30 con il tuo docente. A presto!',
-    );
+  it("nomi dei template unici e validi per Meta", () => {
+    const name = metaTemplateName("reminder", new Date("2026-10-12T09:30:15Z"));
+    expect(name).toBe("musikademy_promemoria_20261012093015");
+    expect(name).toMatch(/^[a-z][a-z0-9_]*$/);
   });
   it("le prove usano il template delle comunicazioni", () => {
-    expect(templateForKind("test")).toBe("announcement");
-    expect(templateForKind("reminder")).toBe("reminder");
+    expect(templateKindOf("test")).toBe("announcement");
+    expect(templateKindOf("reminder")).toBe("reminder");
   });
 });

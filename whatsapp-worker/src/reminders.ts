@@ -9,9 +9,9 @@ import {
   longItalianDate,
   relativeLessonDay,
   reminderMessageId,
-  reminderParams,
   reminderRunDue,
-  renderTemplate,
+  messageText,
+  renderMessage,
   zonedDayStart,
   zonedParts,
 } from "../../src/lib/whatsapp/shared.ts";
@@ -50,7 +50,7 @@ export async function queueReminders(today: string) {
       ora: (l.startTime as string | undefined) || zonedParts(start).time,
       docente: (l.teacherName as string) ?? "",
     };
-    const body = renderTemplate(s.reminderTemplate, vars);
+    const body = renderMessage(messageText(s, "reminder"), vars);
     try {
       await messages()
         .doc(reminderMessageId(lesson.id, target))
@@ -59,8 +59,8 @@ export async function queueReminders(today: string) {
           studentId: l.studentId,
           recipientName: l.studentName ?? `${student.get("name")} ${student.get("surname")}`,
           body,
-          // Variabili per il template ufficiale: il messaggio resta inviabile anche passando a Zernio.
-          templateParams: reminderParams(vars),
+          // Valori dei segnaposto: il messaggio resta inviabile anche passando a Zernio.
+          templateVars: vars,
           refId: lesson.id,
           status: "queued",
           attempts: 0,

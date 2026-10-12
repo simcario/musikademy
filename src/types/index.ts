@@ -360,10 +360,17 @@ export interface WhatsAppSettings {
   reminderTime: string;
   /** 0 = giorno della lezione, 1 = giorno prima, 2 = due giorni prima. */
   daysBefore: number;
-  /** Testo libero dei promemoria: solo con WhatsApp Web (con Zernio il testo è il template approvato). */
+  /**
+   * Testi personalizzati con segnaposto ({nome}, {titolo}…). Con WhatsApp Web si usano così;
+   * con Zernio ogni modifica diventa un template Meta da approvare (vedi metaDrafts).
+   */
   reminderTemplate: string;
+  announcementTemplate: string;
   /** Prefisso aggiunto ai numeri senza prefisso internazionale (es. "39"). */
   countryCode: string;
+  /** Zernio: template approvati in uso e in attesa di approvazione. Scritti solo dal server. */
+  metaTemplates?: Partial<Record<"reminder" | "announcement", { name: string; text: string }>>;
+  metaDrafts?: Partial<Record<"reminder" | "announcement", { name: string; text: string }>>;
   updatedAt?: Timestamp;
 }
 
@@ -380,8 +387,11 @@ export interface WhatsAppMessage {
   to?: string;
   /** Testo leggibile del messaggio (con Zernio: il template con le variabili inserite). */
   body: string;
-  /** Variabili del template WhatsApp Cloud (Zernio), nell'ordine {{1}}, {{2}}, … */
-  templateParams?: string[];
+  /**
+   * Valori dei segnaposto ({ nome: "Elena", … }). Con Zernio, all'invio diventano le variabili
+   * {{1}}, {{2}}… del template in uso in quel momento (trascodifica).
+   */
+  templateVars?: Record<string, string>;
   /** Comunicazione o lezione di origine. */
   refId?: string;
   status: WhatsAppMessageStatus;

@@ -52,3 +52,8 @@ export function useWhatsAppMessages(max = 30) {
 export function useWhatsAppSettings() {
   return useQuery({ queryKey: qk.whatsappSettings(), queryFn: whatsappService.getSettings });
 }
+
+/** Stato di Zernio (numero, template in uso e in approvazione): solo con il servizio Zernio attivo. */
+export function useZernioStatus(enabled: boolean) {
+  return useQuery({ queryKey: ["whatsapp", "zernio"], queryFn: whatsappService.zernioStatus, enabled });
+}
