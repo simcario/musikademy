@@ -147,7 +147,7 @@ function StudentForm({
         items={(courses.data ?? []).filter((c) => c.active).map((c) => ({ id: c.id, label: c.name }))}
         selected={watch_courseIds}
         onChange={(ids) => form.setValue("courseIds", ids, { shouldDirty: true })}
-        emptyText="Nessun corso: creane uno in Impostazioni."
+        emptyText="Nessun corso: creane uno in Organizzazione."
         maxHeight="max-h-40"
       />
       <Field label="Note private (visibili solo ai docenti)" error={errors.notes?.message}>

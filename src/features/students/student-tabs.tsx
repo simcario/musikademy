@@ -2,26 +2,28 @@
 
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, EyeOff, Library, Loader2, Plus } from "lucide-react";
+import { ClipboardCheck, EyeOff, GraduationCap, Library, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
-import { AttendanceBadge } from "@/components/shared/status-badge";
-import { useStaffMutation, useStudentAttendance } from "@/features/admin/hooks";
+import { AttendanceBadge, Pill } from "@/components/shared/status-badge";
+import { useGroups, useStaffMutation, useStudentAttendance } from "@/features/admin/hooks";
 import { StaffAssignmentList } from "@/features/exercises/assignment-list";
 import { StaffLessonList } from "@/features/lessons/lesson-list";
 import { AssignMaterialsDialog } from "@/features/materials/assign-materials-dialog";
 import { MaterialRow } from "@/features/materials/material-card";
 import { StudentFeeCard } from "@/features/payments/fee-form";
 import { StaffPaymentList } from "@/features/payments/payment-list";
+import { useCourses } from "@/features/student-area/hooks";
 import { qk } from "@/hooks/query-keys";
 import { assignmentService } from "@/services/assignmentService";
 import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
-import { EXERCISE_CATEGORY, type Student, type WithId } from "@/types";
-import { formatCurrency, formatDate, formatWeekday } from "@/utils/format";
+import { toCourseMap } from "@/services/userService";
+import { EXERCISE_CATEGORY, type Attendance, type Lesson, type Student, type WithId } from "@/types";
+import { formatCurrency, formatDate, formatWeekday, toDate } from "@/utils/format";
 import { remainingOf, summarizeAttendance } from "@/utils/status";
 
 export function StudentOverviewTab({ studentId }: { studentId: string }) {
@@ -73,6 +75,142 @@ function Card({ label, loading, children }: { label: string; loading: boolean; c
     <div className="card-surface space-y-1 p-4">
       <p className="text-xs font-semibold text-muted-foreground">{label}</p>
       {loading ? <Loader2 className="size-5 animate-spin text-primary" aria-label="Caricamento" /> : children}
+    </div>
+  );
+}
+
+/** Corsi frequentati dallo studente: gruppi, lezioni e presenze di ciascun corso. */
+export function StudentCoursesTab({ student, onEdit }: { student: WithId<Student>; onEdit: () => void }) {
+  const courses = toCourseMap(useCourses().data);
+  const groups = useGroups();
+  const att = useStudentAttendance(student.id);
+  const lessons = useQuery({ queryKey: qk.lessons({ all: student.id }), queryFn: () => lessonService.listForStudent(student.id) });
+
+  if (lessons.isError) return <ErrorState error={lessons.error} onRetry={() => lessons.refetch()} />;
+  if (att.isError) return <ErrorState error={att.error} onRetry={() => att.refetch()} />;
+
+  const all = lessons.data ?? [];
+  const other = all.filter((l) => !l.courseId || !student.courseIds.includes(l.courseId));
+  if (student.courseIds.length === 0 && other.length === 0) {
+    return (
+      <EmptyState
+        icon={GraduationCap}
+        title="Non frequenta nessun corso"
+        action={
+          <Button onClick={onEdit}>
+            <Plus aria-hidden /> Iscrivi a un corso
+          </Button>
+        }
+      />
+    );
+  }
+  const loading = lessons.isPending || att.isPending;
+  const myGroups = (groups.data ?? []).filter((g) => student.groupIds?.includes(g.id));
+
+  return (
+    <div className="space-y-3">
+      {student.courseIds.map((id) => (
+        <CourseDetail
+          key={id}
+          title={courses.get(id)?.name ?? "—"}
+          description={courses.get(id)?.description}
+          groups={myGroups.filter((g) => g.courseId === id).map((g) => g.name)}
+          lessons={all.filter((l) => l.courseId === id)}
+          attendance={att.data ?? []}
+          loading={loading}
+        />
+      ))}
+      {other.length > 0 && (
+        <CourseDetail
+          title="Lezioni senza corso"
+          description="Lezioni non collegate a un corso frequentato."
+          groups={[]}
+          lessons={other}
+          attendance={att.data ?? []}
+          loading={loading}
+        />
+      )}
+    </div>
+  );
+}
+
+function CourseDetail({
+  title,
+  description,
+  groups,
+  lessons,
+  attendance,
+  loading,
+}: {
+  title: string;
+  description?: string;
+  groups: string[];
+  /** Lezioni del corso, dalla più recente. */
+  lessons: WithId<Lesson>[];
+  attendance: WithId<Attendance>[];
+  loading: boolean;
+}) {
+  const ids = new Set(lessons.map((l) => l.id));
+  const rows = attendance.filter((a) => ids.has(a.lessonId));
+  const s = summarizeAttendance(rows.map((a) => a.status));
+  const now = new Date();
+  const next = lessons.findLast((l) => l.status === "scheduled" && (toDate(l.date) ?? now) >= now);
+  const held = lessons.filter((l) => l.status === "completed").length;
+
+  return (
+    <section className="card-surface space-y-3 p-4">
+      <div className="space-y-1.5">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        {groups.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {groups.map((g) => (
+              <Pill key={g} tone="secondary">
+                {g}
+              </Pill>
+            ))}
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <Loader2 className="size-5 animate-spin text-primary" aria-label="Caricamento" />
+      ) : (
+        <>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Frequenza" value={s.total ? `${s.rate}%` : "—"} sub={`${s.present} presenze su ${s.total}`} />
+            <Stat label="Assenze" value={s.absent} sub={`${s.excused} giustificate · ${s.makeup} recuperi`} />
+            <Stat label="Lezioni svolte" value={held} sub={`${lessons.length} in totale`} />
+            <Stat
+              label="Prossima lezione"
+              value={next ? formatDate(next.date, "d MMM") : "—"}
+              sub={next ? [next.startTime, next.title].filter(Boolean).join(" ") : "Nessuna in programma"}
+            />
+          </dl>
+          {rows.length > 0 && (
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {rows.slice(0, 5).map((a) => (
+                <li key={a.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="text-sm font-medium capitalize">{formatDate(a.lessonDate, "EEEE d MMMM yyyy")}</span>
+                  <AttendanceBadge status={a.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {rows.length > 5 && (
+            <p className="text-xs text-muted-foreground">Ultime 5 presenze su {rows.length}: l&apos;elenco completo è nella scheda Presenze.</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+      <dd className="text-xl font-bold">{value}</dd>
+      {sub && <dd className="truncate text-xs text-muted-foreground">{sub}</dd>}
     </div>
   );
 }

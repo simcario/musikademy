@@ -49,7 +49,7 @@ export default function AdminDashboard() {
       </section>
 
       <section aria-label="Indicatori" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Studenti attivi" value={stats.students.data?.length} loading={stats.students.isPending} icon={Users} href="/admin/students" />
+        <Stat label="Studenti attivi" value={stats.students.data?.length} loading={stats.students.isPending} icon={Users} href="/admin/organization?tab=users" />
         <Stat
           label="Lezioni oggi"
           value={stats.today.data}

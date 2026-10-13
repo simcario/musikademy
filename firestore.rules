@@ -99,7 +99,8 @@ service cloud.firestore {
     // Gruppi di studenti (ADR D26): l'appartenenza è in `students.groupIds`.
     match /groups/{groupId} {
       allow read: if isStaff() || (isStudent() && groupId in studentGroups());
-      allow create, update: if isStaff() && requiredStr('name', 80) && optStr('description', 500);
+      allow create, update: if isStaff() && requiredStr('name', 80) && optStr('description', 500)
+        && optStr('courseId', 100);
       allow delete: if isStaff();
     }
 

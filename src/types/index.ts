@@ -67,6 +67,8 @@ export interface Teacher {
 export interface StudentGroup {
   name: string;
   description?: string;
+  /** Corso a cui appartiene (sezione Organizzazione); vuoto o assente = nessun corso. */
+  courseId?: string;
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

@@ -1,11 +1,11 @@
-import { orderBy, updateDoc, where, writeBatch } from "firebase/firestore";
+import { arrayRemove, arrayUnion, orderBy, updateDoc, where, writeBatch } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firestore, firebaseStorage } from "@/lib/firebase/client";
 import { AVATAR_MAX_SIZE, safeFileName } from "@/lib/files";
 import type { AppUser, Course, Student, Teacher, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { buildKeywords } from "@/utils/keywords";
-import { COLLECTIONS, clean, getById, list, ref, timestamps, touched } from "./base";
+import { COLLECTIONS, chunk, clean, getById, list, ref, timestamps, touched } from "./base";
 
 export interface ProfileInput {
   name: string;
@@ -61,6 +61,30 @@ export const courseService = {
 
   update: (id: string, input: Partial<CourseInput>) =>
     updateDoc(ref(COLLECTIONS.courses, id), clean({ ...input, ...touched() })),
+
+  /**
+   * Iscrive e toglie studenti dal corso (`students.courseIds`). Chi esce dal corso esce anche
+   * dai suoi gruppi (`courseGroupIds`).
+   */
+  async setStudents(id: string, added: string[], removed: string[], courseGroupIds: string[] = []) {
+    const writes = [
+      ...added.map((uid) => ({ uid, data: { courseIds: arrayUnion(id), ...touched() } })),
+      ...removed.map((uid) => ({
+        uid,
+        data: {
+          courseIds: arrayRemove(id),
+          ...(courseGroupIds.length ? { groupIds: arrayRemove(...courseGroupIds) } : {}),
+          ...touched(),
+        },
+      })),
+    ];
+    // Limite di 500 scritture per batch.
+    for (const part of chunk(writes, 400)) {
+      const batch = writeBatch(firestore());
+      part.forEach((w) => batch.update(ref(COLLECTIONS.students, w.uid), w.data));
+      await batch.commit();
+    }
+  },
 };
 
 export function studentKeywords(s: Pick<Student, "name" | "surname" | "email">) {

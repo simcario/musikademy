@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search, UserPlus, Users, UsersRound } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronRight, Plus, Search, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -13,59 +14,74 @@ import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/sha
 import { Pill } from "@/components/shared/status-badge";
 import { useGroups, useStudentsPage } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
+import { useSession } from "@/features/auth/auth-provider";
+import { CoursesTab } from "@/features/organization/courses-tab";
 import { useCourses } from "@/features/student-area/hooks";
-import { GroupsTab } from "@/features/students/groups-tab";
 import { StudentFormDialog } from "@/features/students/student-form";
 import { useDebounce } from "@/hooks/use-debounce";
+import { can } from "@/lib/auth/roles";
 import { toGroupMap } from "@/services/groupService";
 import { toCourseMap } from "@/services/userService";
 import type { StudentStatus } from "@/types";
 import { fullName } from "@/utils/format";
 
-type Tab = "students" | "groups";
+type Tab = "courses" | "users";
 
-export default function StudentsPage() {
-  const [tab, setTab] = useState<Tab>("students");
+export default function OrganizationPage() {
+  return (
+    <Suspense>
+      <Organization />
+    </Suspense>
+  );
+}
+
+function Organization() {
+  const router = useRouter();
+  const tab: Tab = useSearchParams().get("tab") === "users" ? "users" : "courses";
+  const { role } = useSession();
   const [creating, setCreating] = useState(false);
-  const [creatingGroup, setCreatingGroup] = useState(false);
-  const groups = useGroups();
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const courses = useCourses();
 
   return (
     <PageContainer className="max-w-5xl">
       <PageHeader
-        title="Studenti"
+        title="Organizzazione"
         actions={
-          tab === "students" ? (
+          tab === "users" ? (
             <Button onClick={() => setCreating(true)}>
               <UserPlus aria-hidden /> Nuovo studente
             </Button>
           ) : (
-            <Button onClick={() => setCreatingGroup(true)}>
-              <UsersRound aria-hidden /> Nuovo gruppo
-            </Button>
+            can(role, "settings:manage") && (
+              <Button onClick={() => setCreatingCourse(true)}>
+                <Plus aria-hidden /> Nuovo corso
+              </Button>
+            )
           )
         }
       />
       <Segmented
         label="Sezione"
         value={tab}
-        onChange={setTab}
+        onChange={(t) => router.replace(t === "users" ? "/admin/organization?tab=users" : "/admin/organization", { scroll: false })}
         className="sm:max-w-sm"
         options={[
-          { value: "students", label: "Studenti" },
-          { value: "groups", label: "Gruppi", count: groups.data?.length },
+          { value: "courses", label: "Corsi", count: courses.data?.length },
+          { value: "users", label: "Utenti" },
         ]}
       />
-      {tab === "students" ? (
-        <StudentsTab creating={creating} onCreatingChange={setCreating} />
+      {tab === "users" ? (
+        <UsersTab creating={creating} onCreatingChange={setCreating} />
       ) : (
-        <GroupsTab creating={creatingGroup} onCreatingChange={setCreatingGroup} />
+        <CoursesTab creating={creatingCourse} onCreatingChange={setCreatingCourse} />
       )}
     </PageContainer>
   );
 }
 
-function StudentsTab({ creating, onCreatingChange }: { creating: boolean; onCreatingChange: (o: boolean) => void }) {
+/** Tutti gli studenti, trasversali ai corsi: uno studente può frequentarne più di uno. */
+function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatingChange: (o: boolean) => void }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StudentStatus | "all">("active");
   const [courseId, setCourseId] = useState("");
@@ -86,7 +102,7 @@ function StudentsTab({ creating, onCreatingChange }: { creating: boolean; onCrea
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca per nome, cognome o email"
-            aria-label="Cerca studenti"
+            aria-label="Cerca utenti"
             className="pl-9"
           />
         </div>
@@ -125,7 +141,7 @@ function StudentsTab({ creating, onCreatingChange }: { creating: boolean; onCrea
         <ul className="card-surface divide-y divide-border">
           {students.map((s) => (
             <li key={s.id}>
-              <Link href={`/admin/students/${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+              <Link href={`/admin/organization/users/${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
                 <UserAvatar person={s} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{fullName(s)}</p>

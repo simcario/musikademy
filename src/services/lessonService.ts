@@ -85,6 +85,10 @@ export const lessonService = {
   },
 
   // ── Docente ──
+  /** Tutte le lezioni dello studente (scheda utente: riepilogo per corso). */
+  listForStudent: (studentId: string) =>
+    list<Lesson>(COLLECTIONS.lessons, where("studentId", "==", studentId), orderBy("date", "desc"), limit(500)),
+
   listInRange: (from: Date, days: number) => {
     const [start, end] = dayRange(from, days);
     return list<Lesson>(COLLECTIONS.lessons, where("date", ">=", start), where("date", "<", end), orderBy("date", "asc"));

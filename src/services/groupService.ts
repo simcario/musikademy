@@ -6,6 +6,8 @@ import { COLLECTIONS, chunk, clean, col, list, ref, timestamps, touched } from "
 export interface GroupInput {
   name: string;
   description?: string;
+  /** Corso del gruppo; vuoto = nessun corso. */
+  courseId?: string;
   /** Studenti che devono far parte del gruppo. */
   memberIds: string[];
 }
@@ -29,7 +31,7 @@ export const groupService = {
   async save(group: WithId<StudentGroup> | null, input: GroupInput, currentMemberIds: string[], createdBy: string) {
     const batch = writeBatch(firestore());
     const groupRef = group ? ref(COLLECTIONS.groups, group.id) : doc(col(COLLECTIONS.groups));
-    const details = { name: input.name, description: input.description ?? "" };
+    const details = { name: input.name, description: input.description ?? "", courseId: input.courseId ?? "" };
     if (group) batch.update(groupRef, { ...details, ...touched() });
     else batch.set(groupRef, clean({ ...details, createdBy, ...timestamps() }));
 

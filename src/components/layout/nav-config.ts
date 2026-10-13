@@ -42,7 +42,7 @@ export const STUDENT_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutGrid, primary: true, exact: true },
-  { href: "/admin/students", label: "Studenti", icon: Users, primary: true },
+  { href: "/admin/organization", label: "Organizzazione", short: "Scuola", icon: Users, primary: true },
   { href: "/admin/lessons", label: "Lezioni", icon: CalendarDays, primary: true },
   { href: "/admin/materials", label: "Materiali", icon: Library, primary: true },
   { href: "/admin/exercises", label: "Esercizi", icon: BookOpen },

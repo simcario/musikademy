@@ -259,7 +259,7 @@ Flusso: `componenti → hook (TanStack Query) → services → Firebase`.
 
 ## Gestione utenti
 
-- **Nessuna registrazione pubblica.** Il docente crea lo studente (*Studenti → Nuovo studente*):
+- **Nessuna registrazione pubblica.** Il docente crea lo studente (*Organizzazione → Utenti → Nuovo studente*):
   l'app crea l'account, assegna il ruolo e genera un **link d'invito** (`/invite#…`, monouso,
   valido 7 giorni) da mandare via WhatsApp, email o copia. Lo studente lo apre e collega il proprio
   account Google; poi accede sempre con *Accedi con Google*. Un account Google non invitato viene rifiutato.

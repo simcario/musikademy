@@ -26,6 +26,7 @@ import type { InviteInfo } from "@/lib/auth/invite-token";
 import {
   StudentAssignmentsTab,
   StudentAttendanceTab,
+  StudentCoursesTab,
   StudentLessonsTab,
   StudentMaterialsTab,
   StudentNotesTab,
@@ -38,9 +39,10 @@ import { formatDate, fullName } from "@/utils/format";
 
 const TABS = [
   { value: "overview", label: "Panoramica" },
+  { value: "courses", label: "Corsi" },
+  { value: "materials", label: "Materiali" },
   { value: "lessons", label: "Lezioni" },
   { value: "attendance", label: "Presenze" },
-  { value: "materials", label: "Materiali" },
   { value: "exercises", label: "Esercizi" },
   { value: "payments", label: "Pagamenti" },
   { value: "notes", label: "Note" },
@@ -79,7 +81,7 @@ function StudentProfile({ studentId }: { studentId: string }) {
   const remove = useStaffMutation(() => studentService.remove(studentId), {
     success: "Studente eliminato",
     invalidate: [["students"]],
-    onSuccess: () => router.replace("/admin/students"),
+    onSuccess: () => router.replace("/admin/organization?tab=users"),
   });
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const newInvite = useStaffMutation(() => studentService.createInvite(studentId), {
@@ -95,17 +97,41 @@ function StudentProfile({ studentId }: { studentId: string }) {
 
   return (
     <PageContainer className="max-w-5xl">
-      <Link href="/admin/students" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-ink">
-        <ArrowLeft className="size-4" aria-hidden /> Studenti
+      <Link href="/admin/organization?tab=users" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-ink">
+        <ArrowLeft className="size-4" aria-hidden /> Utenti
       </Link>
 
-      <header className="card-surface flex items-center gap-2 px-4 py-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <h1 className="truncate text-xl font-bold tracking-tight">{name}</h1>
-          <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
-            {s.status === "active" ? "Attivo" : "Disattivato"}
-          </Pill>
-          {s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
+      <header className="card-surface flex items-start gap-2 px-4 py-3">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate text-xl font-bold tracking-tight">{name}</h1>
+            <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
+              {s.status === "active" ? "Attivo" : "Disattivato"}
+            </Pill>
+            {s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
+          </div>
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <Mail className="size-4 shrink-0" aria-hidden /> <span className="truncate">{s.email}</span>
+            </span>
+            {s.phone && (
+              <span className="inline-flex items-center gap-1.5">
+                <Phone className="size-4 shrink-0" aria-hidden /> {s.phone}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="size-4 shrink-0" aria-hidden /> Iscritto dal {formatDate(s.enrollmentDate)}
+            </span>
+          </p>
+          {s.courseIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {s.courseIds.map((c) => (
+                <Pill key={c} tone="primary">
+                  {courses.get(c)?.name ?? "—"}
+                </Pill>
+              ))}
+            </div>
+          )}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -125,13 +151,6 @@ function StudentProfile({ studentId }: { studentId: string }) {
                   <Phone aria-hidden /> {s.phone}
                 </DropdownMenuItem>
               )}
-              <p className="flex gap-1.5 px-1.5 py-2 text-xs text-muted-foreground">
-                <CalendarDays className="size-4 shrink-0" aria-hidden />
-                <span>
-                  Iscritto dal {formatDate(s.enrollmentDate)}
-                  {s.courseIds.length > 0 && ` · ${s.courseIds.map((c) => courses.get(c)?.name ?? "—").join(", ")}`}
-                </span>
-              </p>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="min-h-10" onClick={() => setEditing(true)}>
@@ -159,12 +178,13 @@ function StudentProfile({ studentId }: { studentId: string }) {
       <FilterChips
         label="Sezioni studente"
         value={tab}
-        onChange={(t) => router.replace(`/admin/students/${studentId}?tab=${t}`, { scroll: false })}
+        onChange={(t) => router.replace(`/admin/organization/users/${studentId}?tab=${t}`, { scroll: false })}
         options={TABS.map((t) => ({ ...t }))}
       />
 
       <div>
         {tab === "overview" && <StudentOverviewTab studentId={studentId} />}
+        {tab === "courses" && <StudentCoursesTab student={s} onEdit={() => setEditing(true)} />}
         {tab === "lessons" && <StudentLessonsTab studentId={studentId} />}
         {tab === "attendance" && <StudentAttendanceTab studentId={studentId} />}
         {tab === "materials" && <StudentMaterialsTab studentId={studentId} studentName={name} />}

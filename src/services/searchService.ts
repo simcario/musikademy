@@ -36,7 +36,7 @@ export async function globalSearch(q: string, perKind = 5): Promise<SearchHit[]>
       kind: "student",
       title: fullName(s),
       subtitle: s.email,
-      href: `/admin/students/${s.id}`,
+      href: `/admin/organization/users/${s.id}`,
     })),
     ...lessons.map<SearchHit>((l) => ({
       id: l.id,
@@ -57,7 +57,7 @@ export async function globalSearch(q: string, perKind = 5): Promise<SearchHit[]>
       kind: "assignment",
       title: a.title,
       subtitle: a.studentName,
-      href: `/admin/students/${a.studentId}?tab=exercises`,
+      href: `/admin/organization/users/${a.studentId}?tab=exercises`,
     })),
     ...announcements.map<SearchHit>((a) => ({
       id: a.id,
