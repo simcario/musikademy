@@ -26,6 +26,8 @@ export interface Student {
   surname: string;
   email: string;
   courseIds: string[];
+  /** Gruppi di cui fa parte (ADR D26). Assente sui documenti precedenti. */
+  groupIds?: string[];
   enrollmentDate: Timestamp;
   status: StudentStatus;
   /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
@@ -60,6 +62,18 @@ export interface Teacher {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+/** Gruppo di studenti (ADR D26): l'appartenenza è in `students.groupIds`. */
+export interface StudentGroup {
+  name: string;
+  description?: string;
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/** Uno studente può stare al massimo in tanti gruppi (limite di `array-contains-any`: 30 valori, uno è il suo UID). */
+export const MAX_GROUPS_PER_STUDENT = 29;
 
 export interface Course {
   name: string;
@@ -133,7 +147,28 @@ export interface Material {
   createdBy: string;
   visibility: Visibility;
   studentIds: string[];
+  /** Gruppi a cui è assegnato direttamente (ADR D26). */
+  groupIds?: string[];
+  /** Cartella che lo contiene; vuoto o assente = nessuna cartella. */
+  folderId?: string;
+  /**
+   * Derivato, mai modificato a mano: `groupIds` + studenti e gruppi con cui è condivisa la cartella.
+   * È il campo che rules e query dello studente interrogano (vedi `materialAudience`).
+   */
+  audience?: string[];
   keywords: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/** Cartella di materiali (ADR D26), condivisibile con singoli studenti e gruppi. */
+export interface MaterialFolder {
+  name: string;
+  studentIds: string[];
+  groupIds: string[];
+  /** Derivato: `studentIds` + `groupIds`. */
+  audience: string[];
+  createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

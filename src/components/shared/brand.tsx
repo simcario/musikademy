@@ -9,11 +9,22 @@ export const BRAND = {
   tagline: "Learn. Practice. Grow.",
 } as const;
 
-export function BrandLockup({ href, context, className }: { href: string; context?: string; className?: string }) {
+export function BrandLockup({
+  href,
+  context,
+  markOnly,
+  className,
+}: {
+  href: string;
+  context?: string;
+  /** Solo il logo, senza nome e slogan (quando accanto c'è il selettore di gruppo/corso). */
+  markOnly?: boolean;
+  className?: string;
+}) {
   return (
     <Link href={href} className={cn("flex min-w-0 items-center gap-2", className)} aria-label={`${BRAND.school} – home`}>
       <Image src="/brand/mark.webp" alt="" width={44} height={32} className="h-8 w-11 shrink-0" priority />
-      <span className="flex min-w-0 flex-col">
+      <span className={cn("flex min-w-0 flex-col", markOnly && "hidden")}>
         <span className="truncate text-lg leading-none font-bold tracking-tight text-brand-ink">{BRAND.school}</span>
         <span className="truncate text-[11px] font-medium text-muted-foreground">
           {BRAND.tagline}

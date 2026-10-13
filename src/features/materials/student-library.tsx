@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FilterChips } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
-import { useMyMaterials } from "@/features/student-area/hooks";
+import { useMyFolders, useMyMaterials } from "@/features/student-area/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useNow } from "@/hooks/use-now";
 import { EXERCISE_CATEGORY, type MaterialCategory } from "@/types";
@@ -24,8 +24,12 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
   const [category, setCategory] = useState<CategoryFilter>(categories[0]);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"recent" | "title">("recent");
+  const [folderChoice, setFolderChoice] = useState("all");
   const debounced = useDebounce(search);
-  const q = useMyMaterials({ category, search: debounced, sort });
+  const folders = useMyFolders().data ?? [];
+  // Cambiando gruppo la cartella scelta può non essere più tra quelle condivise.
+  const folderId = folders.some((f) => f.id === folderChoice) ? folderChoice : "all";
+  const q = useMyMaterials({ category, search: debounced, sort, folderId: folderId === "all" ? undefined : folderId });
   // I materiali degli esercizi si aprono dall'esercizio assegnato, non dalla libreria.
   const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
   const weekAgo = useNow() - 7 * 86_400_000;
@@ -50,6 +54,15 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
           value={category}
           onChange={setCategory}
           options={categories.map((c) => ({ value: c, label: c === "all" ? "Tutti" : CATEGORY_META[c].plural }))}
+        />
+      )}
+
+      {folders.length > 0 && (
+        <FilterChips
+          label="Cartella"
+          value={folderId}
+          onChange={setFolderChoice}
+          options={[{ value: "all", label: "Tutte le cartelle" }, ...folders.map((f) => ({ value: f.id, label: f.name }))]}
         />
       )}
 

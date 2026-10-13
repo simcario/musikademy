@@ -19,6 +19,13 @@ service cloud.firestore {
     function studentCourses() {
       return get(/databases/$(database)/documents/students/$(uid())).data.get('courseIds', []);
     }
+    function studentGroups() {
+      return get(/databases/$(database)/documents/students/$(uid())).data.get('groupIds', []);
+    }
+    // `audience` (ADR D26): UID e gruppi con cui un materiale o una cartella sono condivisi.
+    function sharedWithMe(audience) {
+      return uid() in audience || audience.hasAny(studentGroups());
+    }
 
     function onlyChanges(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -81,10 +88,19 @@ service cloud.firestore {
       allow read: if isStaff() || isOwner(studentId);
       allow create, delete: if false; // Admin SDK; soft delete via `status`
       allow update: if isStaff()
-        && onlyChanges(['name', 'surname', 'phone', 'courseIds', 'enrollmentDate', 'keywords', 'fee', 'updatedAt'])
+        && onlyChanges(['name', 'surname', 'phone', 'courseIds', 'groupIds', 'enrollmentDate', 'keywords', 'fee', 'updatedAt'])
         && requiredStr('name', 60) && requiredStr('surname', 60)
         && request.resource.data.courseIds is list && request.resource.data.courseIds.size() <= 30
+        // 29 gruppi + l'UID = i 30 valori di `array-contains-any` nelle query dello studente.
+        && request.resource.data.get('groupIds', []) is list && request.resource.data.get('groupIds', []).size() <= 29
         && validFee();
+    }
+
+    // Gruppi di studenti (ADR D26): l'appartenenza è in `students.groupIds`.
+    match /groups/{groupId} {
+      allow read: if isStaff() || (isStudent() && groupId in studentGroups());
+      allow create, update: if isStaff() && requiredStr('name', 80) && optStr('description', 500);
+      allow delete: if isStaff();
     }
 
     // Note private del docente sullo studente: mai visibili allo studente (§40).
@@ -138,7 +154,18 @@ service cloud.firestore {
               m.visibility == 'all'
               || uid() in m.get('studentIds', [])
               || (m.visibility == 'course' && m.get('courseId', '') in studentCourses())
+              || sharedWithMe(m.get('audience', []))
            ));
+    }
+
+    // Cartelle di materiali (ADR D26): lo studente vede solo quelle condivise con lui o con un suo gruppo.
+    match /materialFolders/{folderId} {
+      allow read: if isStaff() || (isStudent() && sharedWithMe(resource.data.get('audience', [])));
+      allow create, update: if isStaff() && requiredStr('name', 80)
+        && request.resource.data.studentIds is list
+        && request.resource.data.groupIds is list
+        && request.resource.data.audience is list;
+      allow delete: if isStaff();
     }
 
     match /materials/{materialId} {
@@ -148,6 +175,9 @@ service cloud.firestore {
         && request.resource.data.visibility in ['all', 'course', 'student']
         && request.resource.data.category in ['dispensa', 'ascolto', 'base', 'video', 'spartito', 'immagine', 'esercizio', 'altro']
         && request.resource.data.studentIds is list
+        && request.resource.data.get('groupIds', []) is list
+        && request.resource.data.get('audience', []) is list
+        && optStr('folderId', 100)
         && request.resource.data.storagePath is string
         && optStr('content', 524288);
       allow delete: if isStaff();

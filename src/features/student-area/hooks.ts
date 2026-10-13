@@ -7,6 +7,7 @@ import { useSession } from "@/features/auth/auth-provider";
 import { announcementService } from "@/services/announcementService";
 import { assignmentService } from "@/services/assignmentService";
 import { attendanceService } from "@/services/attendanceService";
+import { folderService } from "@/services/folderService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters, type StudentMaterialCursor } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
@@ -14,6 +15,7 @@ import { studentService } from "@/services/studentService";
 import { courseService, teacherService } from "@/services/userService";
 import type { Assignment, AssignmentStatus, LessonStatus, WithId } from "@/types";
 import { errorMessage } from "@/utils/errors";
+import { useStudentContext } from "./context";
 
 /** Hook dell'area studente: ogni query è vincolata all'UID della sessione. */
 
@@ -105,14 +107,26 @@ export function useSetAssignmentStatus() {
   });
 }
 
+/** Materiali visibili allo studente nel gruppo o corso attivo (vedi StudentContextProvider). */
 export function useMyMaterials(filters: MaterialFilters) {
   const { uid } = useSession();
-  const { courseIds, ready } = useMyCourseIds();
+  const { scope, ready } = useStudentContext();
   return useInfiniteQuery({
-    queryKey: qk.materials({ mine: uid, courseIds, ...filters }),
-    queryFn: ({ pageParam }) => materialService.pageForStudent(uid, courseIds, filters, pageParam),
+    queryKey: qk.materials({ mine: uid, scope, ...filters }),
+    queryFn: ({ pageParam }) => materialService.pageForStudent(uid, scope, filters, pageParam),
     initialPageParam: null as StudentMaterialCursor | null,
     getNextPageParam: (last) => last.cursor ?? undefined,
+    enabled: ready,
+  });
+}
+
+/** Cartelle condivise con lo studente o con il suo gruppo attivo. */
+export function useMyFolders() {
+  const { uid } = useSession();
+  const { scope, ready } = useStudentContext();
+  return useQuery({
+    queryKey: qk.folders({ mine: uid, audienceIds: scope.audienceIds }),
+    queryFn: () => folderService.listShared(scope.audienceIds),
     enabled: ready,
   });
 }

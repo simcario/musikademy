@@ -26,6 +26,7 @@ import type { Material, MaterialCategory, Page, Visibility, WithId } from "@/typ
 import { AppError } from "@/utils/errors";
 import { buildKeywords, searchToken } from "@/utils/keywords";
 import { COLLECTIONS, chunk, clean, getById, paginate, ref, touched } from "./base";
+import { folderService, materialAudience } from "./folderService";
 
 export interface MaterialMeta {
   title: string;
@@ -34,13 +35,17 @@ export interface MaterialMeta {
   courseId?: string;
   visibility: Visibility;
   studentIds: string[];
+  groupIds?: string[];
+  folderId?: string;
 }
 
 export type MaterialDetails = Pick<MaterialMeta, "title" | "description" | "category">;
-export type MaterialAssignment = Pick<MaterialMeta, "courseId" | "visibility" | "studentIds">;
+export type MaterialAssignment = Pick<MaterialMeta, "courseId" | "visibility" | "studentIds" | "groupIds">;
 
 export interface MaterialFilters {
   category?: MaterialCategory | "all";
+  /** Solo i materiali di questa cartella. */
+  folderId?: string;
   search?: string;
   sort?: "recent" | "title";
 }
@@ -57,6 +62,7 @@ function orderFor(sort: MaterialFilters["sort"]): QueryConstraint {
 
 function filterConstraints(f: MaterialFilters): QueryConstraint[] {
   const c: QueryConstraint[] = [];
+  if (f.folderId) c.push(where("folderId", "==", f.folderId));
   if (f.category && f.category !== "all") c.push(where("category", "==", f.category));
   const token = f.search ? searchToken(f.search) : null;
   if (token) c.push(where("keywords", "array-contains", token));
@@ -64,12 +70,23 @@ function filterConstraints(f: MaterialFilters): QueryConstraint[] {
   return c;
 }
 
-/** Cursori separati per le tre "sorgenti" di materiali visibili allo studente. */
+/** "Sorgenti" dei materiali visibili allo studente: ognuna è una query compatibile con le rules. */
+const STUDENT_SOURCES = ["all", "course", "student", "shared"] as const;
+type StudentSource = (typeof STUDENT_SOURCES)[number];
+
+/** Cursori separati per ogni sorgente. */
 export interface StudentMaterialCursor {
-  all: unknown | null;
-  course: unknown | null;
-  student: unknown | null;
-  done: { all: boolean; course: boolean; student: boolean };
+  next: Record<StudentSource, unknown | null>;
+  done: Record<StudentSource, boolean>;
+}
+
+/** Cosa mostrare allo studente: tutto ciò che può vedere, oppure solo un suo gruppo o corso. */
+export interface StudentMaterialScope {
+  courseIds: string[];
+  /** UID e gruppi con cui un materiale (o la sua cartella) può essere condiviso: campo `audience`. */
+  audienceIds: string[];
+  /** Include i materiali per tutti e quelli assegnati personalmente. */
+  personal: boolean;
 }
 
 export const materialService = {
@@ -96,64 +113,61 @@ export const materialService = {
       20,
     ),
 
-  // ── Studente: unione di tre query compatibili con le rules ──
+  // ── Studente: unione di più query compatibili con le rules ──
   async pageForStudent(
     studentId: string,
-    courseIds: string[],
+    scope: StudentMaterialScope,
     filters: MaterialFilters,
     cursor: StudentMaterialCursor | null,
   ): Promise<{ items: WithId<Material>[]; cursor: StudentMaterialCursor | null }> {
     const base = filterConstraints(filters);
-    const state: StudentMaterialCursor = cursor ?? {
-      all: null,
-      course: null,
-      student: null,
-      done: { all: false, course: courseIds.length === 0, student: false },
+    // Un solo array-contains per query: dove ce n'è già uno la ricerca si filtra lato client.
+    const noSearch = filterConstraints({ ...filters, search: undefined });
+    // Limite Firestore: 30 valori per `in` / `array-contains-any` (una scuola privata ne ha molti meno).
+    const courseIds = chunk(scope.courseIds)[0] ?? [];
+    const audienceIds = chunk(scope.audienceIds)[0] ?? [];
+    // In una cartella condivisa ogni materiale ha la condivisione della cartella in `audience`.
+    const inFolder = !!filters.folderId;
+    const personal = scope.personal && !inFolder;
+    const queries: Record<StudentSource, QueryConstraint[] | null> = {
+      all: personal ? [where("visibility", "==", "all"), ...base] : null,
+      course:
+        courseIds.length && !inFolder
+          ? [where("visibility", "==", "course"), where("courseId", "in", courseIds), ...base]
+          : null,
+      student: personal ? [where("studentIds", "array-contains", studentId), ...noSearch] : null,
+      shared: audienceIds.length ? [where("audience", "array-contains-any", audienceIds), ...noSearch] : null,
     };
-    const size = 12;
+    const state: StudentMaterialCursor = cursor ?? {
+      next: { all: null, course: null, student: null, shared: null },
+      done: { all: !queries.all, course: !queries.course, student: !queries.student, shared: !queries.shared },
+    };
     const empty: Page<Material> = { items: [], cursor: null };
-    const [all, course, student] = await Promise.all([
-      state.done.all ? empty : paginate<Material>(COLLECTIONS.materials, [where("visibility", "==", "all"), ...base], state.all, size),
-      state.done.course
-        ? empty
-        : paginate<Material>(
-            COLLECTIONS.materials,
-            // Limite Firestore: 30 valori per `in` (una scuola privata ne ha molti meno).
-            [where("visibility", "==", "course"), where("courseId", "in", chunk(courseIds)[0] ?? ["-"]), ...base],
-            state.course,
-            size,
-          ),
-      state.done.student
-        ? empty
-        : paginate<Material>(
-            COLLECTIONS.materials,
-            filters.search
-              ? // un solo array-contains per query: la ricerca per gli assegnati personali si filtra lato client
-                [where("studentIds", "array-contains", studentId), orderFor(filters.sort)]
-              : [where("studentIds", "array-contains", studentId), ...base],
-            state.student,
-            size,
-          ),
-    ]);
+    const pages = await Promise.all(
+      STUDENT_SOURCES.map((s) => {
+        const q = queries[s];
+        return !q || state.done[s] ? empty : paginate<Material>(COLLECTIONS.materials, q, state.next[s], 12);
+      }),
+    );
 
     const token = filters.search ? searchToken(filters.search) : null;
-    const studentItems = token ? student.items.filter((m) => m.keywords?.includes(token)) : student.items;
     const seen = new Set<string>();
-    const items = [...all.items, ...course.items, ...studentItems].filter((m) => !seen.has(m.id) && seen.add(m.id));
+    const items = pages
+      .flatMap((p) => p.items)
+      .filter((m) => (!token || m.keywords?.includes(token)) && !seen.has(m.id) && seen.add(m.id));
     items.sort((a, b) =>
       filters.sort === "title"
         ? a.title.localeCompare(b.title, "it")
         : (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0),
     );
 
-    const next: StudentMaterialCursor = {
-      all: all.cursor,
-      course: course.cursor,
-      student: student.cursor,
-      done: { all: !all.cursor, course: !course.cursor, student: !student.cursor },
-    };
-    const finished = next.done.all && next.done.course && next.done.student;
-    return { items, cursor: finished ? null : next };
+    const next = { ...state.next };
+    const done = { ...state.done };
+    STUDENT_SOURCES.forEach((s, i) => {
+      next[s] = pages[i].cursor;
+      done[s] = !pages[i].cursor;
+    });
+    return { items, cursor: STUDENT_SOURCES.every((s) => done[s]) ? null : { next, done } };
   },
 
   /**
@@ -174,12 +188,17 @@ export const materialService = {
           try {
             // Markdown: il testo va nel documento, così il viewer non dipende dal CORS del bucket.
             const content = check.type === "markdown" ? await file.text() : undefined;
+            const folder = meta.folderId ? await folderService.get(meta.folderId) : null;
+            const groupIds = meta.groupIds ?? [];
             await setDoc(
               ref(COLLECTIONS.materials, id),
               clean({
                 ...meta,
                 courseId: meta.courseId || undefined,
                 studentIds: meta.studentIds,
+                groupIds,
+                folderId: folder?.id ?? "",
+                audience: materialAudience(groupIds, folder),
                 type: check.type,
                 storagePath,
                 fileName: file.name,
@@ -238,14 +257,29 @@ export const materialService = {
     if (content !== undefined) await this.pruneImages(material, content).catch(() => undefined);
   },
 
-  /** Assegnazione: a chi è visibile il materiale. */
-  updateAssignment: (id: string, a: MaterialAssignment) =>
-    updateDoc(ref(COLLECTIONS.materials, id), {
+  /** Assegnazione: a chi è visibile il materiale (la condivisione della sua cartella resta valida). */
+  async updateAssignment(material: Pick<WithId<Material>, "id" | "folderId">, a: MaterialAssignment) {
+    const folder = material.folderId ? await folderService.get(material.folderId) : null;
+    const groupIds = a.groupIds ?? [];
+    await updateDoc(ref(COLLECTIONS.materials, material.id), {
       visibility: a.visibility,
       courseId: a.courseId || "",
       studentIds: a.studentIds,
+      groupIds,
+      audience: materialAudience(groupIds, folder),
       ...touched(),
-    }),
+    });
+  },
+
+  /** Sposta il materiale in una cartella (`null` = nessuna): ne eredita la condivisione. */
+  async moveToFolder(material: Pick<WithId<Material>, "id" | "groupIds">, folderId: string | null) {
+    const folder = folderId ? await folderService.get(folderId) : null;
+    await updateDoc(ref(COLLECTIONS.materials, material.id), {
+      folderId: folder?.id ?? "",
+      audience: materialAudience(material.groupIds, folder),
+      ...touched(),
+    });
+  },
 
   // ── Immagini inserite nei Markdown (vedi isAssetImage) ──
   /** Carica un'immagine accanto al file del materiale e ne restituisce il nome, da usare nel testo. */

@@ -224,6 +224,82 @@ describe("docente", () => {
   });
 });
 
+describe("cartelle e gruppi (ADR D26)", () => {
+  const CORO = "g-coro";
+  const material = { title: "M", visibility: "student", category: "altro", studentIds: [], storagePath: "x" };
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "groups", CORO), { name: "Coro" });
+      await setDoc(doc(db, "groups", "g-altro"), { name: "Altro" });
+      await updateDoc(doc(db, "students", ALICE), { groupIds: [CORO] });
+      await setDoc(doc(db, "materialFolders", "f-coro"), { name: "Coro", studentIds: [], groupIds: [CORO], audience: [CORO] });
+      await setDoc(doc(db, "materialFolders", "f-bob"), { name: "Bob", studentIds: [BOB], groupIds: [], audience: [BOB] });
+      await setDoc(doc(db, "materialFolders", "f-privata"), { name: "Privata", studentIds: [], groupIds: [], audience: [] });
+      await setDoc(doc(db, "materials", "m-coro"), { ...material, groupIds: [CORO], audience: [CORO] });
+      await setDoc(doc(db, "materials", "m-f-coro"), { ...material, folderId: "f-coro", audience: [CORO] });
+      await setDoc(doc(db, "materials", "m-f-bob"), { ...material, folderId: "f-bob", audience: [BOB] });
+      await setDoc(doc(db, "materials", "m-f-privata"), { ...material, folderId: "f-privata", audience: [] });
+    });
+  });
+
+  it("lo studente vede i materiali del proprio gruppo e delle cartelle condivise", async () => {
+    await assertSucceeds(getDoc(doc(student(ALICE), "materials", "m-coro")));
+    await assertSucceeds(getDoc(doc(student(ALICE), "materials", "m-f-coro")));
+    await assertFails(getDoc(doc(student(BOB), "materials", "m-coro")));
+    await assertFails(getDoc(doc(student(BOB), "materials", "m-f-coro")));
+    await assertSucceeds(getDoc(doc(student(BOB), "materials", "m-f-bob")));
+    await assertFails(getDoc(doc(student(ALICE), "materials", "m-f-bob")));
+    await assertFails(getDoc(doc(student(ALICE), "materials", "m-f-privata")));
+  });
+
+  it("le query della libreria passano solo con il proprio UID e i propri gruppi", async () => {
+    const materials = (uid: string) => collection(student(uid), "materials");
+    await assertSucceeds(getDocs(query(materials(ALICE), where("audience", "array-contains-any", [ALICE, CORO]))));
+    await assertSucceeds(
+      getDocs(query(materials(ALICE), where("folderId", "==", "f-coro"), where("audience", "array-contains-any", [ALICE, CORO]))),
+    );
+    await assertSucceeds(getDocs(query(materials(BOB), where("audience", "array-contains-any", [BOB]))));
+    await assertFails(getDocs(query(materials(BOB), where("audience", "array-contains-any", [BOB, CORO]))));
+    await assertFails(getDocs(query(materials(ALICE), where("folderId", "==", "f-bob"))));
+  });
+
+  it("lo studente vede solo le cartelle condivise con sé o con un suo gruppo", async () => {
+    await assertSucceeds(getDoc(doc(student(ALICE), "materialFolders", "f-coro")));
+    await assertFails(getDoc(doc(student(ALICE), "materialFolders", "f-bob")));
+    await assertFails(getDoc(doc(student(ALICE), "materialFolders", "f-privata")));
+    await assertSucceeds(
+      getDocs(query(collection(student(ALICE), "materialFolders"), where("audience", "array-contains-any", [ALICE, CORO]))),
+    );
+    await assertFails(getDocs(collection(student(ALICE), "materialFolders")));
+    await assertFails(updateDoc(doc(student(ALICE), "materialFolders", "f-coro"), { audience: [ALICE] }));
+  });
+
+  it("lo studente legge solo i propri gruppi e non si aggiunge da solo", async () => {
+    await assertSucceeds(getDoc(doc(student(ALICE), "groups", CORO)));
+    await assertFails(getDoc(doc(student(ALICE), "groups", "g-altro")));
+    await assertFails(getDoc(doc(student(BOB), "groups", CORO)));
+    await assertFails(getDocs(collection(student(ALICE), "groups")));
+    await assertFails(updateDoc(doc(student(BOB), "students", BOB), { groupIds: [CORO] }));
+    await assertFails(setDoc(doc(student(ALICE), "groups", "new"), { name: "X" }));
+  });
+
+  it("il docente gestisce gruppi, appartenenze e cartelle", async () => {
+    await assertSucceeds(setDoc(doc(teacher(), "groups", "new"), { name: "Nuovo", description: "" }));
+    await assertFails(setDoc(doc(teacher(), "groups", "bad"), { name: "" }));
+    await assertSucceeds(updateDoc(doc(teacher(), "students", BOB), { groupIds: [CORO] }));
+    await assertFails(updateDoc(doc(teacher(), "students", BOB), { groupIds: "coro" }));
+    await assertSucceeds(getDoc(doc(student(BOB), "materials", "m-coro")));
+    const folder = { name: "Nuova", studentIds: [], groupIds: [], audience: [] };
+    await assertSucceeds(setDoc(doc(teacher(), "materialFolders", "new"), folder));
+    await assertFails(setDoc(doc(teacher(), "materialFolders", "bad"), { ...folder, audience: "tutti" }));
+    await assertSucceeds(updateDoc(doc(teacher(), "materials", "m-f-privata"), { folderId: "", audience: [], groupIds: [] }));
+    await assertFails(updateDoc(doc(teacher(), "materials", "m-coro"), { audience: "tutti" }));
+    await assertSucceeds(deleteDoc(doc(teacher(), "materialFolders", "f-privata")));
+  });
+});
+
 describe("inviti", () => {
   it("nessun client legge o scrive gli inviti, nemmeno l'admin", async () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "invites", "h1"), { uid: ALICE, acceptedAt: null }));

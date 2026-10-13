@@ -6,6 +6,8 @@ import { qk } from "@/hooks/query-keys";
 import { announcementService } from "@/services/announcementService";
 import { assignmentService } from "@/services/assignmentService";
 import { attendanceService } from "@/services/attendanceService";
+import { folderService } from "@/services/folderService";
+import { groupService } from "@/services/groupService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters } from "@/services/materialService";
 import { paymentService, type PaymentFilters } from "@/services/paymentService";
@@ -45,6 +47,14 @@ export function useStudentsPage(filters: StudentFilters) {
 
 export function useActiveStudents() {
   return useQuery({ queryKey: qk.activeStudents(), queryFn: studentService.listActive, staleTime: 5 * 60_000 });
+}
+
+export function useGroups() {
+  return useQuery({ queryKey: qk.groups(), queryFn: groupService.list, staleTime: 5 * 60_000 });
+}
+
+export function useFolders() {
+  return useQuery({ queryKey: qk.folders("staff"), queryFn: folderService.list, staleTime: 5 * 60_000 });
 }
 
 export function useStudent(uid: string) {

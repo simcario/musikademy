@@ -27,6 +27,8 @@ interface ShellProps {
   profileHref: string;
   notificationsHref?: string;
   onSearch?: () => void;
+  /** Sostituisce nome e slogan nella barra in alto (es. selettore di gruppo/corso dello studente). */
+  brandSlot?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -35,7 +37,7 @@ interface ShellProps {
  * - < 768px: header glass + bottom navigation (5 voci, "Altro" apre le secondarie)
  * - ≥ 768px: sidebar persistente + area contenuti
  */
-export function AppShell({ nav, home, profileHref, notificationsHref, onSearch, children }: ShellProps) {
+export function AppShell({ nav, home, profileHref, notificationsHref, onSearch, brandSlot, children }: ShellProps) {
   const pathname = usePathname();
   const context = titleFor(pathname, nav);
   return (
@@ -54,6 +56,7 @@ export function AppShell({ nav, home, profileHref, notificationsHref, onSearch, 
           profileHref={profileHref}
           notificationsHref={notificationsHref}
           onSearch={onSearch}
+          brandSlot={brandSlot}
         />
         <main id="main" className="flex-1 pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-10">
           {children}
@@ -97,20 +100,31 @@ function TopBar({
   profileHref,
   notificationsHref,
   onSearch,
+  brandSlot,
 }: {
   home: string;
   context?: string;
   profileHref: string;
   notificationsHref?: string;
   onSearch?: () => void;
+  brandSlot?: React.ReactNode;
 }) {
   const { profile, role, signOut } = useSession();
   const router = useRouter();
   return (
     <header className="glass pt-safe sticky top-0 z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div className="flex h-16 items-center justify-between gap-2 px-4 md:px-8">
-        <BrandLockup href={home} context={context} className="md:hidden" />
-        <p className="hidden text-sm font-medium text-muted-foreground md:block">{context}</p>
+        {brandSlot ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandLockup href={home} markOnly className="shrink-0 md:hidden" />
+            {brandSlot}
+          </div>
+        ) : (
+          <>
+            <BrandLockup href={home} context={context} className="md:hidden" />
+            <p className="hidden text-sm font-medium text-muted-foreground md:block">{context}</p>
+          </>
+        )}
         <div className="flex shrink-0 items-center gap-1">
           {onSearch && (
             <button

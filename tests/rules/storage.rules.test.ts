@@ -34,9 +34,11 @@ beforeEach(async () => {
   await env.clearStorage();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, "students", ALICE), { courseIds: ["pop"] });
+    await setDoc(doc(db, "students", ALICE), { courseIds: ["pop"], groupIds: ["g-coro"] });
     await setDoc(doc(db, "students", BOB), { courseIds: ["lirica"] });
     const materials = {
+      "m-coro": { visibility: "student", studentIds: [], audience: ["g-coro"] },
+      "m-folder-bob": { visibility: "student", studentIds: [], folderId: "f-bob", audience: [BOB] },
       "m-draft": { visibility: "student", studentIds: [] },
       "m-alice": { visibility: "student", studentIds: [ALICE] },
       "m-pop": { visibility: "course", courseId: "pop", studentIds: [] },
@@ -53,6 +55,13 @@ describe("studente: download dei materiali", () => {
     await assertSucceeds(getMetadata(file(ALICE, "m-alice")));
     await assertSucceeds(getMetadata(file(ALICE, "m-pop")));
     await assertFails(getMetadata(file(BOB, "m-alice")));
+  });
+
+  it("scarica i materiali del proprio gruppo e delle cartelle condivise con sé (ADR D26)", async () => {
+    await assertSucceeds(getMetadata(file(ALICE, "m-coro")));
+    await assertFails(getMetadata(file(BOB, "m-coro")));
+    await assertSucceeds(getMetadata(file(BOB, "m-folder-bob")));
+    await assertFails(getMetadata(file(ALICE, "m-folder-bob")));
   });
 
   it("un materiale non assegnato è negato finché il docente non lo assegna", async () => {

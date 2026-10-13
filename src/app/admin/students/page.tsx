@@ -2,43 +2,82 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search, UserPlus, Users } from "lucide-react";
+import { ChevronRight, Search, UserPlus, Users, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { UserAvatar } from "@/components/shared/brand";
 import { PageContainer, PageHeader } from "@/components/shared/page";
+import { Segmented } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
-import { useStudentsPage } from "@/features/admin/hooks";
+import { useGroups, useStudentsPage } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
 import { useCourses } from "@/features/student-area/hooks";
+import { GroupsTab } from "@/features/students/groups-tab";
 import { StudentFormDialog } from "@/features/students/student-form";
 import { useDebounce } from "@/hooks/use-debounce";
+import { toGroupMap } from "@/services/groupService";
 import { toCourseMap } from "@/services/userService";
 import type { StudentStatus } from "@/types";
 import { fullName } from "@/utils/format";
 
+type Tab = "students" | "groups";
+
 export default function StudentsPage() {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<StudentStatus | "all">("active");
-  const [courseId, setCourseId] = useState("");
+  const [tab, setTab] = useState<Tab>("students");
   const [creating, setCreating] = useState(false);
-  const debounced = useDebounce(search);
-  const q = useStudentsPage({ search: debounced, status, courseId: courseId || undefined });
-  const courses = toCourseMap(useCourses().data);
-  const students = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const groups = useGroups();
 
   return (
     <PageContainer className="max-w-5xl">
       <PageHeader
         title="Studenti"
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <UserPlus aria-hidden /> Nuovo studente
-          </Button>
+          tab === "students" ? (
+            <Button onClick={() => setCreating(true)}>
+              <UserPlus aria-hidden /> Nuovo studente
+            </Button>
+          ) : (
+            <Button onClick={() => setCreatingGroup(true)}>
+              <UsersRound aria-hidden /> Nuovo gruppo
+            </Button>
+          )
         }
       />
+      <Segmented
+        label="Sezione"
+        value={tab}
+        onChange={setTab}
+        className="sm:max-w-sm"
+        options={[
+          { value: "students", label: "Studenti" },
+          { value: "groups", label: "Gruppi", count: groups.data?.length },
+        ]}
+      />
+      {tab === "students" ? (
+        <StudentsTab creating={creating} onCreatingChange={setCreating} />
+      ) : (
+        <GroupsTab creating={creatingGroup} onCreatingChange={setCreatingGroup} />
+      )}
+    </PageContainer>
+  );
+}
+
+function StudentsTab({ creating, onCreatingChange }: { creating: boolean; onCreatingChange: (o: boolean) => void }) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StudentStatus | "all">("active");
+  const [courseId, setCourseId] = useState("");
+  const setCreating = onCreatingChange;
+  const debounced = useDebounce(search);
+  const q = useStudentsPage({ search: debounced, status, courseId: courseId || undefined });
+  const courses = toCourseMap(useCourses().data);
+  const groups = toGroupMap(useGroups().data);
+  const students = q.data?.pages.flatMap((p) => p.items) ?? [];
+
+  return (
+    <>
       <div className="grid gap-2 sm:grid-cols-[1fr_160px_200px]">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -91,7 +130,13 @@ export default function StudentsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{fullName(s)}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {[s.email, ...s.courseIds.map((c) => courses.get(c)?.name).filter(Boolean)].join(" · ")}
+                    {[
+                      s.email,
+                      ...s.courseIds.map((c) => courses.get(c)?.name),
+                      ...(s.groupIds ?? []).map((g) => groups.get(g)?.name),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 </div>
                 {s.status === "inactive" && <Pill tone="neutral">Disattivato</Pill>}
@@ -103,6 +148,6 @@ export default function StudentsPage() {
       )}
       <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
       <StudentFormDialog open={creating} onOpenChange={setCreating} />
-    </PageContainer>
+    </>
   );
 }

@@ -10,13 +10,14 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, FormDialog } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { useActiveStudents } from "@/features/admin/hooks";
+import { useActiveStudents, useGroups } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
 import { EXERCISE_CATEGORY, LIBRARY_CATEGORIES, MATERIAL_CATEGORIES } from "@/types";
 import { formatFileSize, fullName } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
+import { FolderSelect } from "./folder-dialogs";
 import { useUploadQueue } from "./upload-queue";
 
 const schema = z
@@ -27,6 +28,8 @@ const schema = z
     courseId: z.string().optional(),
     visibility: z.enum(["all", "course", "student"]),
     studentIds: z.array(z.string()),
+    groupIds: z.array(z.string()),
+    folderId: z.string().optional(),
   })
   // "student" senza studenti = materiale non ancora visibile: lo si assegna dopo dalla scheda studente.
   .refine((v) => v.visibility !== "course" || !!v.courseId, { path: ["courseId"], message: "Seleziona il corso" });
@@ -37,11 +40,14 @@ export function MaterialFormDialog({
   open,
   onOpenChange,
   exercise,
+  folderId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   /** Voce del catalogo esercizi: categoria fissa, la visibilità è data dalle assegnazioni. */
   exercise?: boolean;
+  /** Cartella proposta (quella aperta nella pagina Materiali). */
+  folderId?: string;
 }) {
   return (
     <FormDialog
@@ -51,14 +57,15 @@ export function MaterialFormDialog({
       description={exercise ? "Entra nel catalogo: gli studenti lo vedono solo quando glielo assegni." : undefined}
       wide
     >
-      <MaterialForm exercise={exercise} onDone={() => onOpenChange(false)} />
+      <MaterialForm exercise={exercise} folderId={folderId} onDone={() => onOpenChange(false)} />
     </FormDialog>
   );
 }
 
-function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => void }) {
+function MaterialForm({ exercise, folderId, onDone }: { exercise?: boolean; folderId?: string; onDone: () => void }) {
   const { uid } = useSession();
   const students = useActiveStudents();
+  const groups = useGroups();
   const uploads = useUploadQueue();
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -71,10 +78,14 @@ function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => 
       courseId: "",
       visibility: "student",
       studentIds: [],
+      groupIds: [],
+      folderId: folderId ?? "",
     },
   });
   const { errors } = form.formState;
   const watch_studentIds = useWatch({ control: form.control, name: "studentIds" });
+  const watch_groupIds = useWatch({ control: form.control, name: "groupIds" });
+  const watch_folderId = useWatch({ control: form.control, name: "folderId" });
   const visibility = useWatch({ control: form.control, name: "visibility" });
 
   function onFile(f: File | null) {
@@ -129,7 +140,7 @@ function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => 
       </Field>
       {!exercise && (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Categoria">
               {(p) => (
                 <NativeSelect {...p} {...form.register("category")}>
@@ -141,6 +152,7 @@ function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => 
                 </NativeSelect>
               )}
             </Field>
+            <Field label="Cartella">{(p) => <FolderSelect {...p} {...form.register("folderId")} />}</Field>
             <Field label="Visibilità">
               {(p) => (
                 <NativeSelect {...p} {...form.register("visibility")}>
@@ -154,6 +166,15 @@ function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => 
               {(p) => <CourseSelect {...p} {...form.register("courseId")} />}
             </Field>
           </div>
+          {!!groups.data?.length && (
+            <CheckList
+              label="Assegna a gruppi (opzionale)"
+              items={groups.data.map((g) => ({ id: g.id, label: g.name, sub: g.description }))}
+              selected={watch_groupIds}
+              onChange={(ids) => form.setValue("groupIds", ids, { shouldValidate: true })}
+              maxHeight="max-h-36"
+            />
+          )}
           <div className="space-y-1">
             <CheckList
               label={
@@ -166,9 +187,11 @@ function MaterialForm({ exercise, onDone }: { exercise?: boolean; onDone: () => 
               onChange={(ids) => form.setValue("studentIds", ids, { shouldValidate: true })}
               maxHeight="max-h-44"
             />
-            {visibility === "student" && watch_studentIds.length === 0 && (
+            {visibility === "student" && watch_studentIds.length === 0 && watch_groupIds.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Nessuno studente lo vedrà finché non lo assegni (menu del materiale → Assegna).
+                {watch_folderId
+                  ? "Lo vedrà solo chi ha accesso alla cartella."
+                  : "Nessuno studente lo vedrà finché non lo assegni (menu del materiale → Assegna)."}
               </p>
             )}
           </div>

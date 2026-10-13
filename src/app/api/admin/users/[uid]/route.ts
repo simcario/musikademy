@@ -30,6 +30,19 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/admin/users/[
     materials.docs.forEach((d) =>
       writer.update(d.ref, { studentIds: FieldValue.arrayRemove(uid), updatedAt: FieldValue.serverTimestamp() }),
     );
+    // Cartelle condivise con lo studente (ADR D26): via anche dall'`audience` dei materiali che contengono.
+    const folders = await db.collection("materialFolders").where("studentIds", "array-contains", uid).get();
+    folders.docs.forEach((d) =>
+      writer.update(d.ref, {
+        studentIds: FieldValue.arrayRemove(uid),
+        audience: FieldValue.arrayRemove(uid),
+        updatedAt: FieldValue.serverTimestamp(),
+      }),
+    );
+    const shared = await db.collection("materials").where("audience", "array-contains", uid).get();
+    shared.docs.forEach((d) =>
+      writer.update(d.ref, { audience: FieldValue.arrayRemove(uid), updatedAt: FieldValue.serverTimestamp() }),
+    );
     writer.delete(db.doc(`studentNotes/${uid}`));
     writer.delete(db.doc(`students/${uid}`));
     writer.delete(db.doc(`users/${uid}`));

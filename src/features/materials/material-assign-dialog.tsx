@@ -6,7 +6,7 @@ import { z } from "zod";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FormActions, FormDialog } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useGroups, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
 import { materialService } from "@/services/materialService";
 import type { Material, WithId } from "@/types";
@@ -17,12 +17,13 @@ const schema = z
     courseId: z.string().optional(),
     visibility: z.enum(["all", "course", "student"]),
     studentIds: z.array(z.string()),
+    groupIds: z.array(z.string()),
   })
   // "student" senza studenti = materiale non visibile a nessuno: è un'assegnazione valida (la si toglie a tutti).
   .refine((v) => v.visibility !== "course" || !!v.courseId, { path: ["courseId"], message: "Seleziona il corso" });
 type Values = z.infer<typeof schema>;
 
-/** Assegnazione di un materiale: a chi è visibile (tutti, un corso, singoli studenti). Il contenuto si modifica altrove. */
+/** Assegnazione di un materiale: a chi è visibile (tutti, un corso, gruppi, singoli studenti). Il contenuto si modifica altrove. */
 export function MaterialAssignDialog({
   open,
   onOpenChange,
@@ -41,19 +42,25 @@ export function MaterialAssignDialog({
 
 function AssignForm({ material, onDone }: { material: WithId<Material>; onDone: () => void }) {
   const students = useActiveStudents();
+  const groups = useGroups();
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
       courseId: material.courseId ?? "",
       visibility: material.visibility,
       studentIds: material.studentIds ?? [],
+      groupIds: material.groupIds ?? [],
     },
   });
   const { errors } = form.formState;
   const studentIds = useWatch({ control: form.control, name: "studentIds" });
+  const groupIds = useWatch({ control: form.control, name: "groupIds" });
   const visibility = useWatch({ control: form.control, name: "visibility" });
+  // Condiviso anche tramite la cartella: non dipende da questa assegnazione.
+  const viaFolder = (material.audience ?? []).some((id) => !(material.groupIds ?? []).includes(id));
+  const nobody = visibility === "student" && studentIds.length === 0 && groupIds.length === 0 && !viaFolder;
 
-  const assign = useStaffMutation((v: Values) => materialService.updateAssignment(material.id, v), {
+  const assign = useStaffMutation((v: Values) => materialService.updateAssignment(material, v), {
     success: "Assegnazione aggiornata",
     invalidate: [["materials"]],
     onSuccess: onDone,
@@ -75,6 +82,20 @@ function AssignForm({ material, onDone }: { material: WithId<Material>; onDone: 
           {(p) => <CourseSelect {...p} {...form.register("courseId")} />}
         </Field>
       </div>
+      {viaFolder && (
+        <p className="text-sm text-muted-foreground">
+          È visibile anche a chi ha accesso alla sua cartella: la condivisione si gestisce dalla cartella.
+        </p>
+      )}
+      {!!groups.data?.length && (
+        <CheckList
+          label={`Gruppi (${groupIds.length} selezionati)`}
+          items={groups.data.map((g) => ({ id: g.id, label: g.name, sub: g.description }))}
+          selected={groupIds}
+          onChange={(ids) => form.setValue("groupIds", ids, { shouldValidate: true })}
+          maxHeight="max-h-44"
+        />
+      )}
       <div className="space-y-1">
         <CheckList
           label={visibility === "student" ? `Studenti (${studentIds.length} selezionati)` : "Assegna anche a studenti specifici (opzionale)"}
@@ -84,8 +105,8 @@ function AssignForm({ material, onDone }: { material: WithId<Material>; onDone: 
           emptyText={students.isPending ? "Caricamento…" : "Nessuno studente attivo."}
           maxHeight="max-h-72"
         />
-        {visibility === "student" && studentIds.length === 0 && (
-          <p className="text-xs text-muted-foreground">Nessuno studente selezionato: il materiale non sarà visibile a nessuno.</p>
+        {nobody && (
+          <p className="text-xs text-muted-foreground">Nessuno studente o gruppo selezionato: il materiale non sarà visibile a nessuno.</p>
         )}
       </div>
       <FormActions onCancel={onDone} submitting={assign.isPending} submitLabel="Assegna" />

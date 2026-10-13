@@ -21,6 +21,8 @@ export const COLLECTIONS = {
   courses: "courses",
   lessons: "lessons",
   materials: "materials",
+  materialFolders: "materialFolders",
+  groups: "groups",
   assignments: "assignments",
   attendance: "attendance",
   payments: "payments",

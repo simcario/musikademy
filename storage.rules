@@ -20,12 +20,17 @@ service firebase.storage {
     }
 
     // Lo studente scarica un file solo se può leggere il documento `materials` corrispondente.
+    function me() {
+      return firestore.get(/databases/(default)/documents/students/$(request.auth.uid)).data;
+    }
     function studentCanReadMaterial(materialId) {
       let m = firestore.get(/databases/(default)/documents/materials/$(materialId)).data;
       return m.visibility == 'all'
         || request.auth.uid in m.get('studentIds', [])
-        || (m.visibility == 'course'
-            && m.get('courseId', '') in firestore.get(/databases/(default)/documents/students/$(request.auth.uid)).data.get('courseIds', []));
+        // `audience` (ADR D26): gruppi del materiale + studenti e gruppi della sua cartella.
+        || request.auth.uid in m.get('audience', [])
+        || (m.visibility == 'course' && m.get('courseId', '') in me().get('courseIds', []))
+        || m.get('audience', []).hasAny(me().get('groupIds', []));
     }
 
     match /materials/{materialId}/{fileName} {
