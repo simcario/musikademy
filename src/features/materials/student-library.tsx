@@ -25,7 +25,7 @@ const STUDENT_CATEGORIES: CategoryFilter[] = ["all", "dispensa", "ascolto", "bas
 export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories?: CategoryFilter[] }) {
   const [category, setCategory] = useState<CategoryFilter>(categories[0]);
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<"recent" | "title">("recent");
+  const [sort, setSort] = useState<"recent" | "title">("title");
   const [folderChoice, setFolderChoice] = useState("all");
   const debounced = useDebounce(search);
   const folders = useMyFolders().data ?? [];
@@ -108,8 +108,8 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
         <label className="flex items-center gap-2 text-sm">
           <span className="sr-only">Ordina per</span>
           <NativeSelect value={sort} onChange={(e) => setSort(e.target.value as "recent" | "title")} className="w-40">
-            <option value="recent">Più recenti</option>
             <option value="title">Titolo A–Z</option>
+            <option value="recent">Più recenti</option>
           </NativeSelect>
         </label>
       </div>

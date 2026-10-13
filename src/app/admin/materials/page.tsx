@@ -95,7 +95,7 @@ function Materials() {
   const params = useSearchParams();
   const [search, setSearch] = useState(params.get("q") ?? "");
   const [category, setCategory] = useState<MaterialCategory | "all">("all");
-  const [sort, setSort] = useState<"recent" | "title">("recent");
+  const [sort, setSort] = useState<"recent" | "title">("title");
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<WithId<Material> | null>(null);
@@ -251,8 +251,8 @@ function Materials() {
           />
         </div>
         <NativeSelect value={sort} onChange={(e) => setSort(e.target.value as "recent" | "title")} aria-label="Ordina">
-          <option value="recent">Più recenti</option>
           <option value="title">Titolo A–Z</option>
+          <option value="recent">Più recenti</option>
         </NativeSelect>
       </div>
       <FilterChips
