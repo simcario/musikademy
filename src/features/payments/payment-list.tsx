@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { ConfirmDialog, FormActions, FormDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog, FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { PaymentBadge } from "@/components/shared/status-badge";
@@ -191,7 +191,7 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   });
 
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={onOpenChange}
       title="Genera quote"
@@ -235,7 +235,7 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         )}
         <FormActions onCancel={() => onOpenChange(false)} submitting={generate.isPending} submitLabel="Genera quote" />
       </form>
-    </FormDialog>
+    </SidePanel>
   );
 }
 

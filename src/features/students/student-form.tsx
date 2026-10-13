@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useStaffMutation } from "@/features/admin/hooks";
 import { useCourses } from "@/features/student-area/hooks";
@@ -36,7 +36,7 @@ export function StudentFormDialog({
     onOpenChange(o);
   };
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={close}
       title={created ? "Studente creato" : student ? "Modifica studente" : "Nuovo studente"}
@@ -61,7 +61,7 @@ export function StudentFormDialog({
           onSaved={() => close(false)}
         />
       )}
-    </FormDialog>
+    </SidePanel>
   );
 }
 

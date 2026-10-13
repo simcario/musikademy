@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList } from "@/components/shared/form";
 import { LoadMore } from "@/components/shared/states";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
@@ -50,7 +50,7 @@ export function AssignMaterialsDialog({
   );
 
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title="Assegna materiali" description={`A ${studentName}`}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Assegna materiali" description={`A ${studentName}`}>
       <form
         className="space-y-3"
         onSubmit={(e) => {
@@ -73,6 +73,6 @@ export function AssignMaterialsDialog({
         <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
         <FormActions onCancel={() => onOpenChange(false)} submitting={assign.isPending} submitLabel="Assegna" />
       </form>
-    </FormDialog>
+    </SidePanel>
   );
 }

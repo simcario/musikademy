@@ -9,7 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/shared/brand";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { PageContainer, PageHeader } from "@/components/shared/page";
 import { ErrorState, ListSkeleton } from "@/components/shared/states";
@@ -81,9 +81,9 @@ function TeachersSection({ editable }: { editable: boolean }) {
           ))}
         </ul>
       )}
-      <FormDialog open={creating} onOpenChange={setCreating} title="Nuovo docente" description="Riceverà un'email per impostare la password.">
+      <SidePanel open={creating} onOpenChange={setCreating} title="Nuovo docente" description="Riceverà un'email per impostare la password.">
         {creating && <TeacherForm onDone={() => setCreating(false)} />}
-      </FormDialog>
+      </SidePanel>
     </section>
   );
 }

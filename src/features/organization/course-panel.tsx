@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Plus, UserCog } from "lucide-react";
+import { ChevronRight, GraduationCap, Info, Plus, UserCog, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/shared/brand";
-import { FormDialog } from "@/components/shared/dialogs";
-import { FilterChips } from "@/components/shared/segmented";
+import { SidePanel } from "@/components/shared/dialogs";
+import { TabBar } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useActiveStudents, useGroups } from "@/features/admin/hooks";
@@ -63,15 +63,14 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
         badges={course && !course.active && <Pill tone="neutral">Non attivo</Pill>}
       />
       <PanelBody>
-        <FilterChips<Tab>
-          wrap
+        <TabBar<Tab>
           label="Sezioni corso"
           value={tab}
           onChange={panel.setTab}
           options={[
-            { value: "students", label: "Studenti", count: students.length },
-            { value: "groups", label: "Gruppi", count: groups.length },
-            ...(loose ? [] : [{ value: "details" as const, label: "Dettagli" }]),
+            { value: "students", label: "Studenti", icon: GraduationCap, count: students.length },
+            { value: "groups", label: "Gruppi", icon: UsersRound, count: groups.length },
+            ...(loose ? [] : [{ value: "details" as const, label: "Dettagli", icon: Info }]),
           ]}
         />
 
@@ -148,10 +147,10 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
 
       {course && (
         <>
-          <FormDialog open={addingGroup} onOpenChange={setAddingGroup} title="Nuovo gruppo" description={course.name}>
+          <SidePanel open={addingGroup} onOpenChange={setAddingGroup} title="Nuovo gruppo" description={course.name}>
             {addingGroup && <GroupForm group={null} courseId={course.id} onDone={() => setAddingGroup(false)} />}
-          </FormDialog>
-          <FormDialog open={managing} onOpenChange={setManaging} title="Studenti del corso" description={course.name}>
+          </SidePanel>
+          <SidePanel open={managing} onOpenChange={setManaging} title="Studenti del corso" description={course.name}>
             {managing && (
               <CourseStudentsForm
                 course={course}
@@ -160,7 +159,7 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
                 onDone={() => setManaging(false)}
               />
             )}
-          </FormDialog>
+          </SidePanel>
         </>
       )}
     </>

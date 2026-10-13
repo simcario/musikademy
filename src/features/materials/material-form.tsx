@@ -8,7 +8,7 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useGroups } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
@@ -50,7 +50,7 @@ export function MaterialFormDialog({
   folderId?: string;
 }) {
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={onOpenChange}
       title={exercise ? "Nuovo esercizio" : "Nuovo materiale"}
@@ -58,7 +58,7 @@ export function MaterialFormDialog({
       wide
     >
       <MaterialForm exercise={exercise} folderId={folderId} onDone={() => onOpenChange(false)} />
-    </FormDialog>
+    </SidePanel>
   );
 }
 

@@ -11,13 +11,13 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { useAttendanceMap, useLessonsInRange } from "@/features/admin/hooks";
-import { AttendanceDialog } from "@/features/attendance/attendance-picker";
+import { AttendanceButton, AttendanceDialog } from "@/features/attendance/attendance-picker";
 import { cn } from "@/lib/utils";
 import type { Lesson, WithId } from "@/types";
 import { formatDate, toDate } from "@/utils/format";
@@ -266,16 +266,7 @@ function DayAgenda({
                 {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
               </span>
             </button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-11 shrink-0 rounded-full"
-              aria-label={`Gestisci presenza di ${l.studentName}`}
-              title="Presenza"
-              onClick={() => setAttFor(l)}
-            >
-              <ClipboardCheck className={cn("size-5", a && "text-success")} aria-hidden />
-            </Button>
+            <AttendanceButton studentName={l.studentName} status={a?.status} onClick={() => setAttFor(l)} />
           </li>
         );
       })}

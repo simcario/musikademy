@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect, StudentSelect } from "@/features/admin/pickers";
@@ -39,9 +39,9 @@ export function AnnouncementFormDialog({
   announcement?: WithId<Announcement> | null;
 }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title={announcement ? "Modifica comunicazione" : "Nuova comunicazione"}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title={announcement ? "Modifica comunicazione" : "Nuova comunicazione"}>
       <AnnouncementForm key={announcement?.id ?? "new"} announcement={announcement} onDone={() => onOpenChange(false)} />
-    </FormDialog>
+    </SidePanel>
   );
 }
 

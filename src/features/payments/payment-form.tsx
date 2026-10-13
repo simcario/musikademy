@@ -7,7 +7,7 @@ import { Check, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { ConfirmDialog, FormActions, FormDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog, FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { cn } from "@/lib/utils";
 import { useActiveStudents, useStaffMutation, useStudent } from "@/features/admin/hooks";
@@ -55,9 +55,9 @@ export function PaymentFormDialog({
   defaultStudentId?: string;
 }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title={payment ? "Modifica quota" : "Nuova quota"}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title={payment ? "Modifica quota" : "Nuova quota"}>
       <PaymentForm key={payment?.id ?? "new"} payment={payment} defaultStudentId={defaultStudentId} onDone={() => onOpenChange(false)} />
-    </FormDialog>
+    </SidePanel>
   );
 }
 
@@ -205,14 +205,14 @@ export function InstallmentDialog({
   onOpenChange: (o: boolean) => void;
 }) {
   return (
-    <FormDialog
+    <SidePanel
       open={!!payment}
       onOpenChange={onOpenChange}
       title="Registra versamento"
       description={payment ? `${payment.studentName} · ${payment.description}` : undefined}
     >
       {payment && <InstallmentForm key={`${payment.id}-${paidAmountOf(payment)}`} payment={payment} onDone={() => onOpenChange(false)} />}
-    </FormDialog>
+    </SidePanel>
   );
 }
 

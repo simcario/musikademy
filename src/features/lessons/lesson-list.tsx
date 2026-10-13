@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { BookOpen, CalendarDays, CalendarPlus, ClipboardCheck, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
+import { BookOpen, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,8 +14,7 @@ import { ConfirmDialog } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { useAttendanceMap, useLessonsPage, useStaffMutation } from "@/features/admin/hooks";
-import { AttendanceDialog } from "@/features/attendance/attendance-picker";
-import { cn } from "@/lib/utils";
+import { AttendanceButton, AttendanceDialog } from "@/features/attendance/attendance-picker";
 import { lessonService } from "@/services/lessonService";
 import type { Lesson, LessonStatus, WithId } from "@/types";
 import { formatDate } from "@/utils/format";
@@ -103,16 +102,7 @@ export function StaffLessonList({
                 <div className="hidden sm:block">
                   {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-11 shrink-0 rounded-full"
-                  aria-label={`Gestisci presenza di ${l.studentName}`}
-                  title="Presenza"
-                  onClick={() => setAttFor(l)}
-                >
-                  <ClipboardCheck className={cn("size-5", a && "text-success")} aria-hidden />
-                </Button>
+                <AttendanceButton studentName={l.studentName} status={a?.status} onClick={() => setAttFor(l)} />
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     aria-label={`Azioni lezione ${l.title}`}

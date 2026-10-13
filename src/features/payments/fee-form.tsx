@@ -8,7 +8,7 @@ import { CalendarPlus, Pencil, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { ListSkeleton } from "@/components/shared/states";
 import { useStaffMutation } from "@/features/admin/hooks";
@@ -116,7 +116,7 @@ export function FeeDialog({
     enabled: open && needsStart,
   });
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={onOpenChange}
       title="Costo del corso"
@@ -133,7 +133,7 @@ export function FeeDialog({
           onDone={() => onOpenChange(false)}
         />
       )}
-    </FormDialog>
+    </SidePanel>
   );
 }
 

@@ -4,7 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { NativeSelect } from "@/components/ui/native-select";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useGroups, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
@@ -34,9 +34,9 @@ export function MaterialAssignDialog({
   material: WithId<Material> | null;
 }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title="Assegna materiale" description={material?.title}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Assegna materiale" description={material?.title}>
       {material && <AssignForm key={material.id} material={material} onDone={() => onOpenChange(false)} />}
-    </FormDialog>
+    </SidePanel>
   );
 }
 

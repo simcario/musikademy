@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useFolders, useGroups, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
@@ -27,7 +27,7 @@ export function FolderNameDialog({
   onCreated?: (id: string) => void;
 }) {
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={onOpenChange}
       title={folder ? "Rinomina cartella" : parent ? "Nuova sottocartella" : "Nuova cartella"}
@@ -40,7 +40,7 @@ export function FolderNameDialog({
         onCreated={onCreated}
         onDone={() => onOpenChange(false)}
       />
-    </FormDialog>
+    </SidePanel>
   );
 }
 
@@ -88,9 +88,9 @@ function FolderNameForm({
 /** Condivisione di una cartella: tutti i materiali che contiene diventano visibili a studenti e gruppi scelti. */
 export function FolderShareDialog({ open, onOpenChange, folder }: DialogProps & { folder: WithId<MaterialFolder> | null }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title="Condividi cartella" description={folder?.name}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Condividi cartella" description={folder?.name}>
       {folder && <FolderShareForm key={folder.id} folder={folder} onDone={() => onOpenChange(false)} />}
-    </FormDialog>
+    </SidePanel>
   );
 }
 
@@ -145,9 +145,9 @@ function FolderShareForm({ folder, onDone }: { folder: WithId<MaterialFolder>; o
 /** Sposta un materiale in una cartella (o fuori da tutte). */
 export function MoveToFolderDialog({ open, onOpenChange, material }: DialogProps & { material: WithId<Material> | null }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title="Sposta in cartella" description={material?.title}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Sposta in cartella" description={material?.title}>
       {material && <MoveForm key={material.id} material={material} onDone={() => onOpenChange(false)} />}
-    </FormDialog>
+    </SidePanel>
   );
 }
 
@@ -178,9 +178,9 @@ function MoveForm({ material, onDone }: { material: WithId<Material>; onDone: ()
 /** Sposta una cartella dentro un'altra, o al primo livello. */
 export function MoveFolderDialog({ open, onOpenChange, folder }: DialogProps & { folder: WithId<MaterialFolder> | null }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title="Sposta cartella" description={folder?.name}>
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Sposta cartella" description={folder?.name}>
       {folder && <MoveFolderForm key={folder.id} folder={folder} onDone={() => onOpenChange(false)} />}
-    </FormDialog>
+    </SidePanel>
   );
 }
 

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Ban, CircleAlert, CircleCheck, CircleX, ClipboardPen, RotateCcw, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { FormDialog } from "@/components/shared/dialogs";
+import { SidePanel } from "@/components/shared/dialogs";
 import { toneClass } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,45 @@ interface PickerProps {
   current?: WithId<Attendance>;
   /** Id lezioni della query `useAttendanceMap` da aggiornare in modo ottimistico. */
   lessonIds: string[];
+}
+
+const STATUS_ICON: Record<AttendanceStatus, LucideIcon> = {
+  present: CircleCheck,
+  absent: CircleX,
+  excused: CircleAlert,
+  makeup: RotateCcw,
+  cancelled: Ban,
+};
+
+/**
+ * Pulsante della presenza nelle righe delle lezioni: apre la registrazione. L'icona dice lo stato a colpo
+ * d'occhio — da registrare (blocco con penna, neutro) oppure il simbolo dello stato registrato, su fondo colorato.
+ */
+export function AttendanceButton({
+  studentName,
+  status,
+  onClick,
+}: {
+  studentName: string;
+  status?: AttendanceStatus;
+  onClick: () => void;
+}) {
+  const meta = status ? ATTENDANCE_META[status] : null;
+  const Icon = status ? STATUS_ICON[status] : ClipboardPen;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Presenza di ${studentName}: ${meta ? meta.label.toLowerCase() : "da registrare"}`}
+      title={meta ? `Presenza: ${meta.label}` : "Registra presenza"}
+      className={cn(
+        "flex size-11 shrink-0 items-center justify-center rounded-full transition-colors",
+        meta ? cn(toneClass(meta.tone), "hover:brightness-95") : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <Icon className={meta ? "size-6" : "size-5"} aria-hidden />
+    </button>
+  );
 }
 
 /** Selettore rapido della presenza di una lezione (pagina lezioni e dashboard). */
@@ -81,7 +121,7 @@ export function AttendanceDialog({
   onOpenChange,
 }: Omit<PickerProps, "lesson"> & { lesson: WithId<Lesson> | null; onOpenChange: (open: boolean) => void }) {
   return (
-    <FormDialog
+    <SidePanel
       open={!!lesson}
       onOpenChange={onOpenChange}
       title="Presenza"
@@ -97,6 +137,6 @@ export function AttendanceDialog({
           </p>
         </div>
       )}
-    </FormDialog>
+    </SidePanel>
   );
 }

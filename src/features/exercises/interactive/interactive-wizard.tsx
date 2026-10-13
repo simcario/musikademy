@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormDialog } from "@/components/shared/dialogs";
+import { SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
@@ -17,9 +17,9 @@ import { settingsSteps } from "./interactive-settings";
 /** Assegnazione guidata di un esercizio interattivo: un passo per ogni scelta, poi gli studenti. */
 export function InteractiveWizardDialog({ entry, onClose }: { entry: InteractiveCatalogEntry | null; onClose: () => void }) {
   return (
-    <FormDialog open={!!entry} onOpenChange={(o) => !o && onClose()} title={entry ? `Assegna · ${entry.title}` : "Assegna"} wide>
+    <SidePanel open={!!entry} onOpenChange={(o) => !o && onClose()} title={entry ? `Assegna · ${entry.title}` : "Assegna"} wide>
       {entry && <Wizard key={entry.kind} entry={entry} onClose={onClose} />}
-    </FormDialog>
+    </SidePanel>
   );
 }
 

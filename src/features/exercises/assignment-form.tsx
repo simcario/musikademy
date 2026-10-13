@@ -7,7 +7,7 @@ import { FileUp, Paperclip, X } from "lucide-react";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
@@ -51,7 +51,7 @@ export function AssignmentFormDialog({
   defaults?: AssignmentDefaults;
 }) {
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={onOpenChange}
       title={assignment ? "Modifica esercizio" : "Assegna esercizio"}
@@ -59,7 +59,7 @@ export function AssignmentFormDialog({
       wide
     >
       <AssignmentForm key={assignment?.id ?? defaults?.interactive?.kind ?? defaults?.materialIds?.join() ?? "new"} assignment={assignment} defaults={defaults} onDone={() => onOpenChange(false)} />
-    </FormDialog>
+    </SidePanel>
   );
 }
 

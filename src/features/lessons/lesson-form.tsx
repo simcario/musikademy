@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect, StudentSelect } from "@/features/admin/pickers";
@@ -44,7 +44,7 @@ export function LessonFormDialog({
     onOpenChange(o);
   };
   return (
-    <FormDialog
+    <SidePanel
       open={open}
       onOpenChange={close}
       title={editing ? "Modifica lezione" : source ? "Copia lezione" : "Nuova lezione"}
@@ -59,7 +59,7 @@ export function LessonFormDialog({
         onCopy={editing ? () => setCopying(editing) : undefined}
         onDone={() => close(false)}
       />
-    </FormDialog>
+    </SidePanel>
   );
 }
 

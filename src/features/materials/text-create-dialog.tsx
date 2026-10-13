@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { FormActions, FormDialog } from "@/components/shared/dialogs";
+import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
@@ -27,9 +27,9 @@ export function TextCreateDialog({
   onCreated: (material: WithId<Material>) => void;
 }) {
   return (
-    <FormDialog open={open} onOpenChange={onOpenChange} title="Nuovo testo" description="Poi lo scrivi nell'editor e lo associ alle tracce.">
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Nuovo testo" description="Poi lo scrivi nell'editor e lo associ alle tracce.">
       <TextCreateForm folderId={folderId} onCreated={onCreated} onDone={() => onOpenChange(false)} />
-    </FormDialog>
+    </SidePanel>
   );
 }
 

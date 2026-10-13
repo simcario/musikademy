@@ -2,7 +2,7 @@
 
 import { GraduationCap, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FormDialog } from "@/components/shared/dialogs";
+import { SidePanel } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useActiveStudents, useGroups } from "@/features/admin/hooks";
@@ -104,9 +104,9 @@ export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; 
         </div>
       )}
 
-      <FormDialog open={creating} onOpenChange={onCreatingChange} title="Nuovo corso">
+      <SidePanel open={creating} onOpenChange={onCreatingChange} title="Nuovo corso">
         {creating && <CourseForm course={null} onDone={() => onCreatingChange(false)} onCancel={() => onCreatingChange(false)} />}
-      </FormDialog>
+      </SidePanel>
     </>
   );
 }

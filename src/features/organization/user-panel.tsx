@@ -1,7 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Mail, MoreVertical, Pencil, Phone, Power, Send, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  ClipboardCheck,
+  GraduationCap,
+  LayoutDashboard,
+  Library,
+  ListChecks,
+  Mail,
+  MoreVertical,
+  Pencil,
+  Phone,
+  Power,
+  Send,
+  StickyNote,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +27,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ConfirmDialog, FormDialog } from "@/components/shared/dialogs";
-import { FilterChips } from "@/components/shared/segmented";
+import { ConfirmDialog, SidePanel } from "@/components/shared/dialogs";
+import { TabBar } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useStaffMutation, useStudent, useStudentNotes } from "@/features/admin/hooks";
@@ -36,14 +52,14 @@ import { formatDate, fullName } from "@/utils/format";
 import { PanelBody, PanelHeader, usePanel } from "./panel";
 
 const TABS = [
-  { value: "overview", label: "Panoramica" },
-  { value: "courses", label: "Corsi" },
-  { value: "materials", label: "Materiali" },
-  { value: "lessons", label: "Lezioni" },
-  { value: "attendance", label: "Presenze" },
-  { value: "exercises", label: "Esercizi" },
-  { value: "payments", label: "Pagamenti" },
-  { value: "notes", label: "Note" },
+  { value: "overview", label: "Panoramica", icon: LayoutDashboard },
+  { value: "courses", label: "Corsi", icon: GraduationCap },
+  { value: "materials", label: "Materiali", icon: Library },
+  { value: "lessons", label: "Lezioni", icon: CalendarDays },
+  { value: "attendance", label: "Presenze", icon: ClipboardCheck },
+  { value: "exercises", label: "Esercizi", icon: ListChecks },
+  { value: "payments", label: "Pagamenti", icon: Wallet },
+  { value: "notes", label: "Note", icon: StickyNote },
 ] as const;
 
 /** Livello "utente" del pannello: dati dello studente, corsi frequentati, materiali e storico. */
@@ -177,7 +193,7 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
           )}
         </div>
 
-        <FilterChips wrap label="Sezioni studente" value={tab} onChange={panel.setTab} options={TABS.map((t) => ({ ...t }))} />
+        <TabBar label="Sezioni studente" value={tab} onChange={panel.setTab} options={TABS.map((t) => ({ ...t }))} />
 
         <div>
           {tab === "overview" && <StudentOverviewTab studentId={studentId} />}
@@ -192,9 +208,9 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
       </PanelBody>
 
       <StudentFormDialog open={editing} onOpenChange={setEditing} student={s} notes={notes.data} />
-      <FormDialog open={!!invite} onOpenChange={(o) => !o && setInvite(null)} title={`Invito per ${name}`}>
+      <SidePanel open={!!invite} onOpenChange={(o) => !o && setInvite(null)} title={`Invito per ${name}`}>
         {invite && <InviteShare invite={invite} student={s} />}
-      </FormDialog>
+      </SidePanel>
       <ConfirmDialog
         open={confirmStatus}
         onOpenChange={setConfirmStatus}

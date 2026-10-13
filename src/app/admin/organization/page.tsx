@@ -48,7 +48,8 @@ function Organization() {
 
   return (
     // Su schermi larghi l'elenco si restringe accanto al pannello invece di finirci sotto.
-    <PageContainer className={cn("max-w-5xl", panelOpen && "xl:mr-[clamp(480px,40vw,640px)] xl:ml-0 xl:max-w-none")}>
+    // `w-auto`: con `w-full` il margine destro sposterebbe la larghezza fuori dallo schermo senza ridurla.
+    <PageContainer className={cn("max-w-5xl", panelOpen && "xl:mr-[clamp(480px,40vw,640px)] xl:ml-0 xl:w-auto xl:max-w-none")}>
       <PageHeader
         title="Organizzazione"
         actions={
