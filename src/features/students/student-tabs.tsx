@@ -40,7 +40,7 @@ export function StudentOverviewTab({ studentId }: { studentId: string }) {
   const due = (payments.data ?? []).reduce((sum, p) => sum + remainingOf(p), 0);
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2">
       <Card label="Prossima lezione" loading={next.isPending}>
         {next.data ? (
           <>

@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { ConfirmDialog, FormActions, FormDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog, FormActions } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
@@ -25,9 +25,8 @@ export const membersOf = (groupId: string, students: WithId<Student>[] = []) =>
   students.filter((s) => s.groupIds?.includes(groupId));
 
 /** Gruppi di un corso (sezione Organizzazione): a un gruppo si assegnano materiali e cartelle. */
-export function GroupList({ groups }: { groups: WithId<StudentGroup>[] }) {
+export function GroupList({ groups, onOpen }: { groups: WithId<StudentGroup>[]; onOpen: (g: WithId<StudentGroup>) => void }) {
   const students = useActiveStudents();
-  const [editing, setEditing] = useState<WithId<StudentGroup> | null>(null);
   const [toDelete, setToDelete] = useState<WithId<StudentGroup> | null>(null);
 
   const remove = useStaffMutation((g: WithId<StudentGroup>) => groupService.remove(g.id), {
@@ -45,7 +44,7 @@ export function GroupList({ groups }: { groups: WithId<StudentGroup>[] }) {
             <li key={g.id} className="flex items-center gap-1 pr-1">
               <button
                 type="button"
-                onClick={() => setEditing(g)}
+                onClick={() => onOpen(g)}
                 className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50"
               >
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-violet-soft text-violet-ink">
@@ -67,7 +66,7 @@ export function GroupList({ groups }: { groups: WithId<StudentGroup>[] }) {
                   <MoreVertical className="size-5" aria-hidden />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuItem className="min-h-10" onClick={() => setEditing(g)}>
+                  <DropdownMenuItem className="min-h-10" onClick={() => onOpen(g)}>
                     <Pencil aria-hidden /> Modifica e studenti
                   </DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToDelete(g)}>
@@ -80,9 +79,6 @@ export function GroupList({ groups }: { groups: WithId<StudentGroup>[] }) {
         })}
       </ul>
 
-      <FormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} title="Modifica gruppo" description={editing?.name}>
-        {editing && <GroupForm key={editing.id} group={editing} onDone={() => setEditing(null)} />}
-      </FormDialog>
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}

@@ -1,9 +1,8 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Plus, Search, UserPlus, Users } from "lucide-react";
+import { Plus, Search, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -16,10 +15,13 @@ import { useGroups, useStudentsPage } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { CoursesTab } from "@/features/organization/courses-tab";
+import { DetailPanel } from "@/features/organization/detail-panel";
+import { TABLE_HEAD, rowClass, usePanel } from "@/features/organization/panel";
 import { useCourses } from "@/features/student-area/hooks";
 import { StudentFormDialog } from "@/features/students/student-form";
 import { useDebounce } from "@/hooks/use-debounce";
 import { can } from "@/lib/auth/roles";
+import { cn } from "@/lib/utils";
 import { toGroupMap } from "@/services/groupService";
 import { toCourseMap } from "@/services/userService";
 import type { StudentStatus } from "@/types";
@@ -42,9 +44,11 @@ function Organization() {
   const [creating, setCreating] = useState(false);
   const [creatingCourse, setCreatingCourse] = useState(false);
   const courses = useCourses();
+  const panelOpen = usePanel().stack.length > 0;
 
   return (
-    <PageContainer className="max-w-5xl">
+    // Su schermi larghi l'elenco si restringe accanto al pannello invece di finirci sotto.
+    <PageContainer className={cn("max-w-5xl", panelOpen && "2xl:mr-[640px] 2xl:ml-0 2xl:max-w-none")}>
       <PageHeader
         title="Organizzazione"
         actions={
@@ -76,6 +80,7 @@ function Organization() {
       ) : (
         <CoursesTab creating={creatingCourse} onCreatingChange={setCreatingCourse} />
       )}
+      <DetailPanel />
     </PageContainer>
   );
 }
@@ -86,6 +91,7 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
   const [status, setStatus] = useState<StudentStatus | "all">("active");
   const [courseId, setCourseId] = useState("");
   const setCreating = onCreatingChange;
+  const panel = usePanel();
   const debounced = useDebounce(search);
   const q = useStudentsPage({ search: debounced, status, courseId: courseId || undefined });
   const courses = toCourseMap(useCourses().data);
@@ -138,32 +144,68 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
           }
         />
       ) : (
-        <ul className="card-surface divide-y divide-border">
-          {students.map((s) => (
-            <li key={s.id}>
-              <Link href={`/admin/organization/users/${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
-                <UserAvatar person={s} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{fullName(s)}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {[
-                      s.email,
-                      ...s.courseIds.map((c) => courses.get(c)?.name),
-                      ...(s.groupIds ?? []).map((g) => groups.get(g)?.name),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-                {s.status === "inactive" && <Pill tone="neutral">Disattivato</Pill>}
-                <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="card-surface overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className={TABLE_HEAD}>
+              <tr>
+                <th className="px-4 py-3">Nome</th>
+                <th className="hidden px-4 py-3 md:table-cell">Email</th>
+                <th className="hidden px-4 py-3 sm:table-cell">Corsi</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Gruppi</th>
+                <th className="px-4 py-3">Stato</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {students.map((s) => {
+                const selected = panel.selected("user", s.id);
+                return (
+                  <tr key={s.id} onClick={() => panel.show("user", s.id)} aria-selected={selected} className={rowClass(selected)}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <UserAvatar person={s} />
+                        <div className="min-w-0">
+                          <button type="button" className="block max-w-full truncate text-left font-semibold">
+                            {fullName(s)}
+                          </button>
+                          <span className="block truncate text-xs text-muted-foreground md:hidden">{s.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{s.email}</td>
+                    <td className="hidden px-4 py-3 sm:table-cell">
+                      <Tags tone="primary" names={s.courseIds.map((c) => courses.get(c)?.name)} />
+                    </td>
+                    <td className="hidden px-4 py-3 lg:table-cell">
+                      <Tags tone="secondary" names={(s.groupIds ?? []).map((g) => groups.get(g)?.name)} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
+                        {s.status === "active" ? "Attivo" : "Disattivato"}
+                      </Pill>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
       <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
       <StudentFormDialog open={creating} onOpenChange={setCreating} />
     </>
+  );
+}
+
+function Tags({ names, tone }: { names: (string | undefined)[]; tone: "primary" | "secondary" }) {
+  const shown = names.filter((n): n is string => !!n);
+  if (!shown.length) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shown.map((n) => (
+        <Pill key={n} tone={tone}>
+          {n}
+        </Pill>
+      ))}
+    </div>
   );
 }
