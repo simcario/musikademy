@@ -20,6 +20,7 @@ import {
 } from "@/features/auth/schemas";
 import { profileSchema, type ProfileValues } from "@/features/students/schemas";
 import { ROLE_LABEL } from "@/lib/auth/roles";
+import { startInstall, useInstallMode } from "@/lib/pwa";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
 import { errorMessage } from "@/utils/errors";
