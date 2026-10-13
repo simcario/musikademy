@@ -52,6 +52,7 @@ export const CATEGORY_META: Record<MaterialCategory, { label: string; plural: st
   base: { label: "Base", plural: "Basi" },
   video: { label: "Video", plural: "Video" },
   spartito: { label: "Spartito", plural: "Spartiti" },
+  testo: { label: "Testo", plural: "Testi" },
   immagine: { label: "Immagine", plural: "Immagini" },
   esercizio: { label: "Esercizio", plural: "Esercizi" },
   altro: { label: "Altro", plural: "Altro" },

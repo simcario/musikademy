@@ -12,6 +12,7 @@ import {
   FolderPlus,
   Library,
   MoreVertical,
+  NotebookPen,
   Pencil,
   Search,
   Share2,
@@ -39,10 +40,11 @@ import {
   MoveFolderDialog,
   MoveToFolderDialog,
 } from "@/features/materials/folder-dialogs";
-import { MaterialActions, MaterialIcon } from "@/features/materials/material-card";
+import { LyricsButton, MaterialActions, MaterialIcon } from "@/features/materials/material-card";
 import { MaterialAssignDialog } from "@/features/materials/material-assign-dialog";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
+import { TextCreateDialog } from "@/features/materials/text-create-dialog";
 import { useDebounce } from "@/hooks/use-debounce";
 import { folderPath, folderPathName, folderService, parentIdOf, toFolderMap } from "@/services/folderService";
 import { materialService } from "@/services/materialService";
@@ -98,6 +100,7 @@ function Materials() {
   const [sort, setSort] = useState<"recent" | "title">("title");
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingText, setCreatingText] = useState(false);
   const [editing, setEditing] = useState<WithId<Material> | null>(null);
   const [assigning, setAssigning] = useState<WithId<Material> | null>(null);
   const [moving, setMoving] = useState<WithId<Material> | null>(null);
@@ -163,6 +166,9 @@ function Materials() {
           <>
             <Button variant="outline" onClick={() => setFolderForm({ folder: null })}>
               <FolderPlus aria-hidden /> {openFolder ? "Nuova sottocartella" : "Nuova cartella"}
+            </Button>
+            <Button variant="outline" onClick={() => setCreatingText(true)}>
+              <NotebookPen aria-hidden /> Nuovo testo
             </Button>
             <Button onClick={() => setCreating(true)}>
               <FilePlus2 aria-hidden /> Carica materiale
@@ -299,6 +305,7 @@ function Materials() {
                 </div>
                 {audience ? <Pill tone="secondary">{audience}</Pill> : <Pill tone="warning">Non assegnato</Pill>}
                 <div className="flex items-center gap-1">
+                  <LyricsButton material={m} />
                   <MaterialActions material={m} compact />
                   <DropdownMenu>
                     <DropdownMenuTrigger aria-label={`Azioni ${m.title}`} className="flex size-11 items-center justify-center rounded-full hover:bg-muted">
@@ -329,6 +336,7 @@ function Materials() {
 
       {/* La chiave ripropone la cartella aperta a ogni nuovo caricamento. */}
       <MaterialFormDialog key={openFolder?.id ?? "root"} open={creating} onOpenChange={setCreating} folderId={openFolder?.id} />
+      <TextCreateDialog open={creatingText} onOpenChange={setCreatingText} folderId={openFolder?.id} onCreated={setEditing} />
       <MaterialEditorDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} material={editing} />
       <MaterialAssignDialog open={!!assigning} onOpenChange={(o) => !o && setAssigning(null)} material={assigning} />
       <MoveToFolderDialog open={!!moving} onOpenChange={(o) => !o && setMoving(null)} material={moving} />

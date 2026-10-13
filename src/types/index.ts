@@ -116,6 +116,7 @@ export const MATERIAL_CATEGORIES = [
   "base",
   "video",
   "spartito",
+  "testo",
   "immagine",
   "esercizio",
   "altro",
@@ -128,6 +129,8 @@ export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number];
  */
 export const EXERCISE_CATEGORY = "esercizio" satisfies MaterialCategory;
 export const LIBRARY_CATEGORIES = MATERIAL_CATEGORIES.filter((c) => c !== EXERCISE_CATEGORY);
+/** Testi dei brani (ADR D27): Markdown associabili a una o più tracce audio. */
+export const LYRICS_CATEGORY = "testo" satisfies MaterialCategory;
 
 export type Visibility = "all" | "course" | "student";
 
@@ -143,6 +146,12 @@ export interface Material {
   size: number;
   /** Solo per i Markdown: testo del file, letto direttamente da Firestore per la visualizzazione. */
   content?: string;
+  /**
+   * Solo per le tracce audio (ADR D27): il testo associato (`lyricsId` = materiale di categoria `testo`)
+   * e una copia del suo contenuto, così chi può ascoltare la traccia legge il testo senza altri permessi.
+   */
+  lyricsId?: string;
+  lyrics?: string;
   courseId?: string;
   createdBy: string;
   visibility: Visibility;

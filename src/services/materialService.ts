@@ -1,6 +1,7 @@
 import {
   arrayRemove,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   orderBy,
@@ -8,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type QueryConstraint,
 } from "firebase/firestore";
 import {
@@ -22,10 +24,10 @@ import {
 } from "firebase/storage";
 import { firebaseStorage, firestore } from "@/lib/firebase/client";
 import { MARKDOWN_MAX_SIZE, assetImageName, checkFile, dirOf, isAssetImage, safeFileName } from "@/lib/files";
-import type { Material, MaterialCategory, Page, Visibility, WithId } from "@/types";
+import { LYRICS_CATEGORY, type Material, type MaterialCategory, type Page, type Visibility, type WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { buildKeywords, searchToken } from "@/utils/keywords";
-import { COLLECTIONS, chunk, clean, getById, paginate, ref, touched } from "./base";
+import { COLLECTIONS, chunk, clean, getById, list, paginate, ref, touched } from "./base";
 import { folderService, materialAudience } from "./folderService";
 
 export interface MaterialMeta {
@@ -224,6 +226,37 @@ export const materialService = {
     return { task, done };
   },
 
+  // ── Testi (ADR D27) ──
+  /** Nuovo testo vuoto, da scrivere nell'editor: un Markdown come le dispense, senza file da caricare. */
+  createText(title: string, folderId: string | undefined, createdBy: string): Promise<string> {
+    const file = new File([`# ${title}\n`], `${safeFileName(title)}.md`, { type: "text/markdown" });
+    const meta: MaterialMeta = { title, category: LYRICS_CATEGORY, visibility: "student", studentIds: [], folderId };
+    return this.upload(file, meta, createdBy).done;
+  },
+
+  /** Docente: tutte le tracce audio, per associarle a un testo. */
+  async listAudio(): Promise<WithId<Material>[]> {
+    const tracks = await list<Material>(COLLECTIONS.materials, where("type", "==", "audio"));
+    return tracks.sort((a, b) => a.title.localeCompare(b.title, "it"));
+  },
+
+  /** Docente: tracce a cui è associato il testo. */
+  listLyricsTracks: (textId: string) => list<Material>(COLLECTIONS.materials, where("lyricsId", "==", textId)),
+
+  /**
+   * Associa il testo alle tracce `trackIds` (e lo toglie dalle altre). Ogni traccia riceve una copia del
+   * contenuto: lo studente che può ascoltarla legge il testo anche se il testo non gli è assegnato.
+   */
+  async linkLyrics(textId: string, content: string, trackIds: string[]) {
+    const linked = await this.listLyricsTracks(textId);
+    const batch = writeBatch(firestore());
+    trackIds.forEach((id) => batch.update(ref(COLLECTIONS.materials, id), { lyricsId: textId, lyrics: content, ...touched() }));
+    linked
+      .filter((t) => !trackIds.includes(t.id))
+      .forEach((t) => batch.update(ref(COLLECTIONS.materials, t.id), { lyricsId: "", lyrics: deleteField(), ...touched() }));
+    await batch.commit();
+  },
+
   /**
    * URL del file risolto a runtime: getDownloadURL verifica le Storage Rules.
    * Non viene salvato in Firestore (il token dell'URL bypasserebbe le rules).
@@ -305,6 +338,8 @@ export const materialService = {
   },
 
   async remove(material: WithId<Material>) {
+    // Un testo eliminato sparisce anche dalle tracce a cui era associato.
+    if (material.type === "markdown") await this.linkLyrics(material.id, "", []);
     await deleteDoc(ref(COLLECTIONS.materials, material.id));
     await deleteObject(storageRef(firebaseStorage(), material.storagePath)).catch(() => undefined);
     await this.pruneImages(material, "").catch(() => undefined);

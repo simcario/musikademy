@@ -301,6 +301,11 @@ describe("cartelle e gruppi (ADR D26)", () => {
     await assertFails(getDoc(doc(student("carla"), "materialFolders", "sub")));
     await assertSucceeds(updateDoc(doc(teacher(), "materials", "m-f-privata"), { folderId: "", audience: [], groupIds: [] }));
     await assertFails(updateDoc(doc(teacher(), "materials", "m-coro"), { audience: "tutti" }));
+    // Testi (ADR D27): categoria `testo` e copia del testo sulla traccia associata.
+    await assertSucceeds(setDoc(doc(teacher(), "materials", "t-1"), { ...material, category: "testo", content: "# Testo" }));
+    await assertSucceeds(updateDoc(doc(teacher(), "materials", "m-coro"), { lyricsId: "t-1", lyrics: "# Testo" }));
+    await assertFails(updateDoc(doc(teacher(), "materials", "m-coro"), { lyrics: 1 }));
+    await assertFails(updateDoc(doc(student(ALICE), "materials", "m-coro"), { lyrics: "hack" }));
     await assertSucceeds(deleteDoc(doc(teacher(), "materialFolders", "f-privata")));
   });
 });

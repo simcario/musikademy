@@ -191,6 +191,59 @@ export function MaterialCard({ material, badge }: { material: WithId<Material>; 
   );
 }
 
+/** La traccia ha un testo: apre il player a tutto schermo, dove il testo si legge durante l'ascolto. */
+export function LyricsButton({ material }: { material: WithId<Material> }) {
+  const dock = useAudioDock();
+  if (material.type !== "audio" || !material.lyrics) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => dock.openFull(material)}
+      aria-label={`Ascolta con il testo: ${material.title}`}
+      title="Ascolta con il testo"
+      className="flex size-9 shrink-0 items-center justify-center rounded-full text-brand-ink hover:bg-indigo-soft"
+    >
+      <NotebookText className="size-5" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * Elenco tracce audio (libreria studente): stesse informazioni delle card, ma in un unico
+ * riquadro con una linea tra una traccia e l'altra, per occupare meno spazio.
+ */
+export function TrackList({
+  tracks,
+  badge,
+}: {
+  tracks: WithId<Material>[];
+  badge?: (m: WithId<Material>) => React.ReactNode;
+}) {
+  return (
+    <ul className="card-surface divide-y divide-border">
+      {tracks.map((m) => (
+        <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+          <MaterialIcon type={m.type} className="size-10 rounded-lg" />
+          <div className="min-w-0 flex-1 basis-40">
+            <p className="section-label flex items-center gap-2 text-brand-ink">
+              {CATEGORY_META[m.category].label} · {TYPE_META[m.type]?.label}
+              {badge?.(m)}
+            </p>
+            <h3 className="truncate font-semibold">{m.title}</h3>
+            <p className="truncate text-xs text-muted-foreground">
+              {[formatFileSize(m.size), formatShortDate(m.createdAt), m.description].filter(Boolean).join(" • ")}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <LyricsButton material={m} />
+            <MaterialActions material={m} compact />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Riga compatta per dettaglio lezione / esercizio. */
 export function MaterialRow({ material, action }: { material: WithId<Material>; action?: React.ReactNode }) {
   return (
@@ -202,6 +255,7 @@ export function MaterialRow({ material, action }: { material: WithId<Material>; 
           {CATEGORY_META[material.category].label} · {formatFileSize(material.size)}
         </p>
       </div>
+      <LyricsButton material={material} />
       <MaterialActions material={material} compact />
       {action}
     </div>

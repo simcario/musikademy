@@ -2,7 +2,7 @@
 
 import { Suspense, lazy, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileText, Loader2 } from "lucide-react";
 import { z } from "zod";
@@ -12,12 +12,13 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/shared/dialogs";
-import { Field } from "@/components/shared/form";
+import { CheckList, Field } from "@/components/shared/form";
 import type { MarkdownEditorApi } from "@/components/shared/markdown-editor";
 import { useStaffMutation } from "@/features/admin/hooks";
+import { qk } from "@/hooks/query-keys";
 import { dirOf } from "@/lib/files";
 import { materialService } from "@/services/materialService";
-import { LIBRARY_CATEGORIES, MATERIAL_CATEGORIES, type Material, type WithId } from "@/types";
+import { LIBRARY_CATEGORIES, LYRICS_CATEGORY, MATERIAL_CATEGORIES, type Material, type WithId } from "@/types";
 import { errorMessage } from "@/utils/errors";
 import { CATEGORY_META } from "@/utils/status";
 import { useMaterialUrl } from "./material-card";
@@ -74,8 +75,29 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
   });
   const { errors, isDirty } = form.formState;
 
+  // Testi (ADR D27): tracce audio a cui il testo è associato.
+  const isLyrics = useWatch({ control: form.control, name: "category" }) === LYRICS_CATEGORY && isMarkdown;
+  const tracks = useQuery({ queryKey: qk.materials("audio"), queryFn: () => materialService.listAudio(), enabled: isLyrics });
+  const linked = useQuery({
+    queryKey: qk.materials({ lyricsOf: material.id }),
+    queryFn: () => materialService.listLyricsTracks(material.id),
+    enabled: isMarkdown,
+    staleTime: 0,
+  });
+  // `null` finché il docente non tocca la lista: vale l'associazione salvata.
+  const [pickedTracks, setPickedTracks] = useState<string[] | null>(null);
+  const trackIds = pickedTracks ?? linked.data?.map((t) => t.id) ?? [];
+
   const save = useStaffMutation(
-    (v: Values) => materialService.updateDetails(material, v, contentDirty ? editor.current?.getMarkdown() : undefined),
+    async (v: Values) => {
+      const content = contentDirty ? editor.current?.getMarkdown() : undefined;
+      await materialService.updateDetails(material, v, content);
+      // Le tracce associate ricevono il testo aggiornato; cambiando categoria l'associazione decade.
+      const lyrics = v.category === LYRICS_CATEGORY;
+      if (isMarkdown && (lyrics || linked.data?.length)) {
+        await materialService.linkLyrics(material.id, content ?? original ?? "", lyrics ? trackIds : []);
+      }
+    },
     {
       success: exercise ? "Esercizio aggiornato" : "Materiale aggiornato",
       invalidate: [["materials"], ["file-text"]],
@@ -91,7 +113,7 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
 
   function requestClose() {
     if (save.isPending) return;
-    if (isDirty || contentDirty) setConfirmClose(true);
+    if (isDirty || contentDirty || pickedTracks) setConfirmClose(true);
     else discard();
   }
 
@@ -112,7 +134,7 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
             <Button type="button" variant="outline" onClick={requestClose} disabled={save.isPending}>
               Annulla
             </Button>
-            <Button type="submit" disabled={save.isPending || (isMarkdown && original === undefined)}>
+            <Button type="submit" disabled={save.isPending || (isMarkdown && (original === undefined || linked.isPending))}>
               {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
               Salva
             </Button>
@@ -138,6 +160,26 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
                     </NativeSelect>
                   )}
                 </Field>
+              )}
+              {isLyrics && (
+                <div className="space-y-1">
+                  <CheckList
+                    label={`Tracce associate (${trackIds.length})`}
+                    items={(tracks.data ?? []).map((t) => ({
+                      id: t.id,
+                      label: t.title,
+                      sub: t.lyricsId && t.lyricsId !== material.id ? "Ha già un altro testo: verrà sostituito" : CATEGORY_META[t.category].label,
+                    }))}
+                    selected={trackIds}
+                    onChange={setPickedTracks}
+                    emptyText={tracks.isPending ? "Caricamento…" : "Nessuna traccia audio caricata."}
+                    maxHeight="max-h-72"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Il testo compare nel player di queste tracce, per chiunque possa ascoltarle: non serve assegnarlo agli
+                    studenti.
+                  </p>
+                </div>
               )}
             </aside>
 

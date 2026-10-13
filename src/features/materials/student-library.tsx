@@ -11,15 +11,15 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { folderPath, parentIdOf, toFolderMap } from "@/services/folderService";
-import { EXERCISE_CATEGORY, type MaterialCategory } from "@/types";
+import { EXERCISE_CATEGORY, type Material, type MaterialCategory, type WithId } from "@/types";
 import { toDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
-import { NowPlayingCard } from "./audio-dock";
-import { MaterialCard, NewPill } from "./material-card";
+import { useAudioDock } from "./audio-dock";
+import { MaterialCard, NewPill, TrackList } from "./material-card";
 
 type CategoryFilter = MaterialCategory | "all";
 
-const STUDENT_CATEGORIES: CategoryFilter[] = ["all", "dispensa", "ascolto", "base", "video", "spartito", "immagine", "altro"];
+const STUDENT_CATEGORIES: CategoryFilter[] = ["all", "dispensa", "ascolto", "base", "video", "spartito", "testo", "immagine", "altro"];
 
 /** Libreria materiali studente: ricerca, filtri per categoria, ordinamento, paginazione progressiva. */
 export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories?: CategoryFilter[] }) {
@@ -39,19 +39,26 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
   // I materiali degli esercizi si aprono dall'esercizio assegnato, non dalla libreria.
   const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
   const weekAgo = useNow() - 7 * 86_400_000;
+  const tracks = items.filter((m) => m.type === "audio");
+  const others = items.filter((m) => m.type !== "audio");
+  const newBadge = (m: WithId<Material>) => ((toDate(m.createdAt)?.getTime() ?? 0) > weekAgo ? <NewPill /> : undefined);
+  const playing = !!useAudioDock().track;
 
   return (
     <div className="space-y-5">
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cerca spartiti, audio, dispense…"
-          aria-label="Cerca nei materiali"
-          className="h-12 bg-surface-mid pl-10"
-        />
+      {/* Il campo di ricerca resta fisso sotto la barra in alto mentre l'elenco scorre. */}
+      <div className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-20 -mx-4 bg-background px-4 py-2 md:-mx-8 md:px-8">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cerca spartiti, audio, dispense…"
+            aria-label="Cerca nei materiali"
+            className="h-12 bg-surface-mid pl-10"
+          />
+        </div>
       </div>
 
       {categories.length > 1 && (
@@ -99,8 +106,6 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
         </nav>
       )}
 
-      <NowPlayingCard />
-
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">
           {category === "all" ? "Tutti i materiali" : CATEGORY_META[category].plural}
@@ -125,15 +130,23 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
           description={debounced ? "Prova con un'altra parola." : "Quando il docente ti assegnerà dei materiali li troverai qui."}
         />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {items.map((m) => (
-            <li key={m.id}>
-              <MaterialCard material={m} badge={(toDate(m.createdAt)?.getTime() ?? 0) > weekAgo ? <NewPill /> : undefined} />
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-4">
+          {/* Le tracce audio in un unico elenco, il resto in card. */}
+          {tracks.length > 0 && <TrackList tracks={tracks} badge={newBadge} />}
+          {others.length > 0 && (
+            <ul className="grid gap-3 md:grid-cols-2">
+              {others.map((m) => (
+                <li key={m.id}>
+                  <MaterialCard material={m} badge={newBadge(m)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
+      {/* Su mobile il player in basso non deve coprire le ultime righe. */}
+      {playing && <div className="h-16 md:hidden" aria-hidden />}
     </div>
   );
 }

@@ -173,7 +173,9 @@ service cloud.firestore {
       allow create, update: if isStaff()
         && requiredStr('title', 140) && optStr('description', 2000)
         && request.resource.data.visibility in ['all', 'course', 'student']
-        && request.resource.data.category in ['dispensa', 'ascolto', 'base', 'video', 'spartito', 'immagine', 'esercizio', 'altro']
+        && request.resource.data.category in ['dispensa', 'ascolto', 'base', 'video', 'spartito', 'testo', 'immagine', 'esercizio', 'altro']
+        // Testo associato a una traccia (ADR D27): riferimento e copia del contenuto.
+        && optStr('lyricsId', 100) && optStr('lyrics', 524288)
         && request.resource.data.studentIds is list
         && request.resource.data.get('groupIds', []) is list
         && request.resource.data.get('audience', []) is list

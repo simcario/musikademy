@@ -1,8 +1,24 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Loader2, Pause, Play, Repeat, RotateCcw, RotateCw, Volume2, VolumeX, X } from "lucide-react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  Loader2,
+  Maximize2,
+  Music,
+  NotebookText,
+  Pause,
+  Play,
+  Repeat,
+  RotateCcw,
+  RotateCw,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Markdown } from "@/components/shared/markdown";
 import { cn } from "@/lib/utils";
 import { materialService } from "@/services/materialService";
 import type { Material, WithId } from "@/types";
@@ -15,23 +31,24 @@ interface AudioDockValue extends AudioControls {
   track: WithId<Material> | null;
   playMaterial: (m: WithId<Material>) => Promise<void>;
   isCurrent: (id: string) => boolean;
-  /** Il player completo registra la propria presenza: il dock compatto si nasconde. */
-  registerFullPlayer: () => () => void;
-  fullPlayerVisible: boolean;
+  /** Player a tutto schermo (con il testo del brano, se c'è). */
+  expanded: boolean;
+  setExpanded: (open: boolean) => void;
+  /** Apre il player a tutto schermo su questa traccia, avviandola se non è già quella in ascolto. */
+  openFull: (m: WithId<Material>) => void;
 }
 
 const AudioDockContext = createContext<AudioDockValue | null>(null);
 
-/** Un solo player per l'app: la riproduzione continua cambiando pagina (dock persistente). */
+/**
+ * Un solo player per l'app: la riproduzione continua cambiando pagina. Avviato un brano compare
+ * il dock in basso, che si può massimizzare a tutto schermo.
+ */
 export function AudioDockProvider({ children }: { children: React.ReactNode }) {
   const player = useAudioPlayer();
   const [track, setTrack] = useState<WithId<Material> | null>(null);
-  const [fullPlayers, setFullPlayers] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const { load, toggle } = player;
-  const registerFullPlayer = useCallback(() => {
-    setFullPlayers((n) => n + 1);
-    return () => setFullPlayers((n) => n - 1);
-  }, []);
 
   const playMaterial = useCallback(
     async (m: WithId<Material>) => {
@@ -42,16 +59,26 @@ export function AudioDockProvider({ children }: { children: React.ReactNode }) {
         await load(url);
       } catch (e) {
         setTrack(null);
+        setExpanded(false);
         toast.error(errorMessage(e, "Impossibile riprodurre la traccia."));
       }
     },
     [track?.id, load, toggle],
   );
 
+  const openFull = useCallback(
+    (m: WithId<Material>) => {
+      setExpanded(true);
+      if (track?.id !== m.id) void playMaterial(m);
+    },
+    [track?.id, playMaterial],
+  );
+
   const stop = player.stop;
   const close = useCallback(() => {
     stop();
     setTrack(null);
+    setExpanded(false);
   }, [stop]);
 
   const value = useMemo<AudioDockValue>(
@@ -61,16 +88,18 @@ export function AudioDockProvider({ children }: { children: React.ReactNode }) {
       track,
       playMaterial,
       isCurrent: (id: string) => track?.id === id,
-      registerFullPlayer,
-      fullPlayerVisible: fullPlayers > 0,
+      expanded,
+      setExpanded,
+      openFull,
     }),
-    [player, close, track, playMaterial, registerFullPlayer, fullPlayers],
+    [player, close, track, playMaterial, expanded, openFull],
   );
 
   return (
     <AudioDockContext.Provider value={value}>
       {children}
       <AudioDock />
+      <FullPlayer />
     </AudioDockContext.Provider>
   );
 }
@@ -168,65 +197,91 @@ function PlayButton({ size = "md" }: { size?: "md" | "lg" }) {
   );
 }
 
-/** Player completo ("In riproduzione") per la libreria materiali. */
-export function NowPlayingCard() {
+/** Player a tutto schermo: comandi completi e, se la traccia ne ha uno, il testo del brano. */
+function FullPlayer() {
   const dock = useAudioDock();
-  const { track, state, registerFullPlayer } = dock;
-  useEffect(() => registerFullPlayer(), [registerFullPlayer]);
+  const { track, state } = dock;
   if (!track) return null;
   const progress = state.duration ? state.currentTime / state.duration : 0;
   return (
-    <section aria-label="Player audio" className="card-surface space-y-3 bg-gradient-to-b from-surface-low to-card p-4 shadow-card-hover">
-      <div className="flex items-start gap-3">
-        <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Volume2 className="size-6" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="section-label flex items-center gap-1.5 text-brand-ink">
-            In riproduzione {state.playing && <span className="size-1.5 rounded-full bg-success" aria-hidden />}
-          </p>
-          <h2 className="truncate text-lg font-semibold">{track.title}</h2>
-          <p className="truncate text-sm text-muted-foreground">
-            {track.description || CATEGORY_META[track.category].label}
-          </p>
+    <Dialog open={dock.expanded} onOpenChange={dock.setExpanded}>
+      <DialogContent
+        showCloseButton={false}
+        className="top-0 left-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none p-0 ring-0 sm:max-w-none data-open:zoom-in-100 data-closed:zoom-out-100"
+      >
+        <header className="pt-safe shrink-0 border-b border-border bg-popover">
+          <div className="flex items-center gap-2 px-2 py-2">
+            <IconBtn label="Riduci player" onClick={() => dock.setExpanded(false)}>
+              <ChevronDown className="size-6" aria-hidden />
+            </IconBtn>
+            <div className="min-w-0 flex-1">
+              <p className="section-label flex items-center gap-1.5 text-brand-ink">
+                In riproduzione {state.playing && <span className="size-1.5 rounded-full bg-success" aria-hidden />}
+              </p>
+              <DialogTitle className="truncate text-lg font-semibold">{track.title}</DialogTitle>
+              <DialogDescription className="truncate text-sm">
+                {track.description || CATEGORY_META[track.category].label}
+              </DialogDescription>
+            </div>
+            <IconBtn label="Chiudi player" onClick={dock.stop}>
+              <X className="size-5" aria-hidden />
+            </IconBtn>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-low">
+          {track.lyrics ? (
+            <article aria-label="Testo del brano" className="mx-auto max-w-2xl px-5 py-6 text-lg">
+              <Markdown>{track.lyrics}</Markdown>
+            </article>
+          ) : (
+            <div className="flex h-full min-h-40 flex-col items-center justify-center gap-4 p-6 text-center">
+              <span className="flex size-28 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-card-hover">
+                <Music className="size-12" aria-hidden />
+              </span>
+              <p className="text-sm text-muted-foreground">Questa traccia non ha un testo.</p>
+            </div>
+          )}
         </div>
-        <IconBtn label="Chiudi player" onClick={dock.stop}>
-          <X className="size-5" aria-hidden />
-        </IconBtn>
-      </div>
-      <Waveform progress={progress} />
-      <SeekBar />
-      <div className="flex justify-between text-xs font-medium text-muted-foreground tabular-nums">
-        <span>{formatDuration(state.currentTime)}</span>
-        <span>{formatDuration(state.duration)}</span>
-      </div>
-      {state.error && (
-        <p role="alert" className="text-sm text-danger">
-          Impossibile riprodurre il file audio.
-        </p>
-      )}
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={dock.cycleRate}
-          aria-label={`Velocità di riproduzione ${state.rate}x`}
-          className="h-9 min-w-12 rounded-lg bg-surface-mid px-2 text-xs font-semibold text-muted-foreground hover:text-brand-ink"
-        >
-          {state.rate.toFixed(state.rate === 1 ? 1 : 2)}x
-        </button>
-        <IconBtn label="Ripeti" onClick={dock.toggleLoop} active={state.loop}>
-          <Repeat className="size-5" aria-hidden />
-        </IconBtn>
-        <IconBtn label="Indietro 10 secondi" onClick={() => dock.skip(-10)}>
-          <RotateCcw className="size-5" aria-hidden />
-        </IconBtn>
-        <PlayButton size="lg" />
-        <IconBtn label="Avanti 10 secondi" onClick={() => dock.skip(10)}>
-          <RotateCw className="size-5" aria-hidden />
-        </IconBtn>
-        <VolumeControl />
-      </div>
-    </section>
+
+        <footer className="pb-safe shrink-0 border-t border-border bg-popover">
+          <div className="mx-auto max-w-2xl space-y-3 px-4 py-3">
+            <Waveform progress={progress} />
+            <SeekBar />
+            <div className="flex justify-between text-xs font-medium text-muted-foreground tabular-nums">
+              <span>{formatDuration(state.currentTime)}</span>
+              <span>{formatDuration(state.duration)}</span>
+            </div>
+            {state.error && (
+              <p role="alert" className="text-sm text-danger">
+                Impossibile riprodurre il file audio.
+              </p>
+            )}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={dock.cycleRate}
+                aria-label={`Velocità di riproduzione ${state.rate}x`}
+                className="h-9 min-w-12 rounded-lg bg-surface-mid px-2 text-xs font-semibold text-muted-foreground hover:text-brand-ink"
+              >
+                {state.rate.toFixed(state.rate === 1 ? 1 : 2)}x
+              </button>
+              <IconBtn label="Ripeti" onClick={dock.toggleLoop} active={state.loop}>
+                <Repeat className="size-5" aria-hidden />
+              </IconBtn>
+              <IconBtn label="Indietro 10 secondi" onClick={() => dock.skip(-10)}>
+                <RotateCcw className="size-5" aria-hidden />
+              </IconBtn>
+              <PlayButton size="lg" />
+              <IconBtn label="Avanti 10 secondi" onClick={() => dock.skip(10)}>
+                <RotateCw className="size-5" aria-hidden />
+              </IconBtn>
+              <VolumeControl />
+            </div>
+          </div>
+        </footer>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -255,18 +310,26 @@ function VolumeControl() {
 function AudioDock() {
   const dock = useAudioDock();
   const { track, state } = dock;
-  if (!track || dock.fullPlayerVisible) return null;
+  if (!track || dock.expanded) return null;
   return (
     <div
       role="region"
       aria-label="Player audio"
-      className="glass fixed inset-x-3 bottom-[calc(72px+env(safe-area-inset-bottom))] z-30 rounded-2xl border border-border shadow-dock md:inset-x-auto md:right-6 md:bottom-6 md:w-96"
+      className="glass fixed inset-x-3 bottom-[calc(72px+env(safe-area-inset-bottom))] z-30 rounded-2xl border border-border shadow-dock md:inset-x-auto md:right-6 md:bottom-6 md:w-[26rem]"
     >
-      <div className="flex items-center gap-3 p-2.5">
+      <div className="flex items-center gap-2 p-2.5">
         <PlayButton />
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="truncate font-semibold">{track.title}</span>
+            <button
+              type="button"
+              onClick={() => dock.setExpanded(true)}
+              className="flex min-w-0 items-center gap-1 font-semibold hover:text-brand-ink"
+              title={track.lyrics ? "Apri il player con il testo" : "Apri il player a tutto schermo"}
+            >
+              {track.lyrics && <NotebookText className="size-3.5 shrink-0 text-brand-ink" aria-hidden />}
+              <span className="truncate">{track.title}</span>
+            </button>
             <span className="shrink-0 text-muted-foreground tabular-nums">
               {formatDuration(state.currentTime)} / {formatDuration(state.duration)}
             </span>
@@ -277,10 +340,13 @@ function AudioDock() {
           type="button"
           onClick={dock.cycleRate}
           aria-label={`Velocità ${state.rate}x`}
-          className="h-8 rounded-md bg-surface-mid px-2 text-xs font-semibold text-muted-foreground"
+          className="hidden h-8 rounded-md bg-surface-mid px-2 text-xs font-semibold text-muted-foreground sm:block"
         >
           {state.rate}x
         </button>
+        <IconBtn label="Ingrandisci player" onClick={() => dock.setExpanded(true)} className="size-9">
+          <Maximize2 className="size-4" aria-hidden />
+        </IconBtn>
         <IconBtn label="Chiudi player" onClick={dock.stop} className="size-9">
           <X className="size-4" aria-hidden />
         </IconBtn>
