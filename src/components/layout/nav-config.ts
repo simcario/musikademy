@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   CreditCard,
   Headphones,
+  Info,
   LayoutGrid,
   Library,
   Megaphone,
@@ -38,6 +39,7 @@ export const STUDENT_NAV: NavItem[] = [
   { href: "/payments", label: "Pagamenti", icon: CreditCard },
   { href: "/announcements", label: "Comunicazioni", icon: Megaphone },
   { href: "/profile", label: "Profilo", icon: UserRound },
+  { href: "/about", label: "Info app", icon: Info },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
@@ -51,6 +53,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/admin/payments", label: "Pagamenti", icon: CreditCard },
   { href: "/admin/settings", label: "Impostazioni", icon: Settings },
+  { href: "/admin/about", label: "Info app", icon: Info },
 ];
 
 export function isActive(pathname: string, item: NavItem) {

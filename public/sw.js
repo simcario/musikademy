@@ -3,8 +3,11 @@
  * - Navigazioni: network-first con pagina offline di ripiego.
  * - Nessuna richiesta verso Firebase/API viene messa in cache: i dati personali restano
  *   gestiti dalla cache di Firestore, legata alla sessione.
+ * - La versione della cache è il numero di build, passato dalla registrazione (/sw.js?v=<build>):
+ *   a ogni nuova build il service worker cambia e le cache delle build precedenti vengono eliminate.
  */
-const VERSION = "musikademy-v1";
+const BUILD = new URL(self.location.href).searchParams.get("v") || "dev";
+const VERSION = `musikademy-${BUILD}`;
 const STATIC_CACHE = `${VERSION}-static`;
 const OFFLINE_URL = "/offline.html";
 

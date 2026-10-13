@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { BUILD_ID } from "@/lib/build-info";
 
-/** Registra il service worker (solo in produzione, per non interferire con l'HMR in sviluppo). */
+/**
+ * Registra il service worker (solo in produzione, per non interferire con l'HMR in sviluppo).
+ * Il numero di build nell'URL fa installare un nuovo worker, con cache nuova, a ogni rilascio.
+ */
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => undefined);
+    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(BUILD_ID)}`, { scope: "/", updateViaCache: "none" }).catch(() => undefined);
   }, []);
   return null;
 }
