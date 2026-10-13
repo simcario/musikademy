@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Download, LayoutGrid, LogOut, Search, UserRound } from "lucide-react";
-import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu,
@@ -18,7 +17,7 @@ import {
 import { BrandLockup, UserAvatar } from "@/components/shared/brand";
 import { useSession } from "@/features/auth/auth-provider";
 import { ROLE_LABEL } from "@/lib/auth/roles";
-import { hideIosInstallHint, promptInstall, useInstallMode } from "@/lib/pwa";
+import { startInstall, useInstallMode } from "@/lib/pwa";
 import { cn } from "@/lib/utils";
 import { fullName } from "@/utils/format";
 import { isActive, titleFor, type NavItem } from "./nav-config";
@@ -113,7 +112,7 @@ function TopBar({
 }) {
   const { profile, role, signOut } = useSession();
   const router = useRouter();
-  const installMode = useInstallMode();
+  const installMode = useInstallMode({ respectHidden: true });
   return (
     <header className="glass pt-safe sticky top-0 z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div className="flex h-16 items-center justify-between gap-2 px-4 md:px-8">
@@ -169,18 +168,7 @@ function TopBar({
                 <UserRound aria-hidden /> Profilo
               </DropdownMenuItem>
               {installMode && (
-                <DropdownMenuItem
-                  className="min-h-10"
-                  onClick={() => {
-                    if (installMode === "prompt") void promptInstall();
-                    else
-                      toast.info("Installa Musikademy", {
-                        description: "Tocca Condividi nel browser, poi «Aggiungi a schermata Home».",
-                        duration: 10_000,
-                        action: { label: "Non mostrare più", onClick: hideIosInstallHint },
-                      });
-                  }}
-                >
+                <DropdownMenuItem className="min-h-10" onClick={() => startInstall(installMode, { dismissible: true })}>
                   <Download aria-hidden /> Installa app
                 </DropdownMenuItem>
               )}

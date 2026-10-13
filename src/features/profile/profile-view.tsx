@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera, Loader2, LogOut, ShieldCheck } from "lucide-react";
+import { Camera, Download, Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { fullName } from "@/utils/format";
 export function ProfileView() {
   const { uid, user, role, profile, refreshProfile, signOut } = useSession();
   const router = useRouter();
+  const installMode = useInstallMode();
   return (
     <PageContainer className="max-w-2xl">
       <PageHeader title="Profilo" />
@@ -53,6 +54,11 @@ export function ProfileView() {
           cancellazione dei dati contatta la segreteria.
         </p>
       </section>
+      {installMode && (
+        <Button className="w-full" onClick={() => startInstall(installMode)}>
+          <Download aria-hidden /> Installa app
+        </Button>
+      )}
       <Button
         variant="outline"
         className="w-full"
