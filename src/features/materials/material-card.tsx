@@ -2,7 +2,24 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Eye, FileText, Image as ImageIcon, Music, NotebookText, Pause, Play, Video } from "lucide-react";
+import {
+  BookOpen,
+  Download,
+  Ellipsis,
+  Eye,
+  FileMusic,
+  FileText,
+  Headphones,
+  Image as ImageIcon,
+  LayoutGrid,
+  ListChecks,
+  Music,
+  NotebookText,
+  Pause,
+  Play,
+  Video,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FileViewer, type ViewerKind } from "@/components/shared/file-viewer";
@@ -11,7 +28,7 @@ import { qk } from "@/hooks/query-keys";
 import { dirOf, pdfFileName, saveBlob, saveMarkdownAsPdf } from "@/lib/files";
 import { cn } from "@/lib/utils";
 import { materialService } from "@/services/materialService";
-import type { Material, MaterialType, WithId } from "@/types";
+import type { Material, MaterialCategory, MaterialType, WithId } from "@/types";
 import { errorMessage } from "@/utils/errors";
 import { formatFileSize, formatShortDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
@@ -25,6 +42,20 @@ export const TYPE_META: Record<MaterialType, { icon: typeof FileText; tile: stri
   markdown: { icon: NotebookText, tile: "bg-success-soft text-success", label: "Testo" },
   document: { icon: FileText, tile: "bg-info-soft text-info", label: "Documento" },
   other: { icon: FileText, tile: "bg-neutral-soft text-neutral", label: "File" },
+};
+
+/** Icone delle categorie nel selettore della libreria (`TabBar`); `all` = tutte le categorie. */
+export const CATEGORY_ICON: Record<MaterialCategory | "all", LucideIcon> = {
+  all: LayoutGrid,
+  dispensa: BookOpen,
+  ascolto: Headphones,
+  base: Music,
+  video: Video,
+  spartito: FileMusic,
+  testo: NotebookText,
+  immagine: ImageIcon,
+  esercizio: ListChecks,
+  altro: Ellipsis,
 };
 
 export function MaterialIcon({ type, className }: { type: MaterialType; className?: string }) {

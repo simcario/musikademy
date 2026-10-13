@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { PageContainer, PageHeader } from "@/components/shared/page";
-import { FilterChips } from "@/components/shared/segmented";
+import { TabBar } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useFolders, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
@@ -40,7 +40,7 @@ import {
   MoveFolderDialog,
   MoveToFolderDialog,
 } from "@/features/materials/folder-dialogs";
-import { LyricsButton, MaterialActions, MaterialIcon } from "@/features/materials/material-card";
+import { CATEGORY_ICON, LyricsButton, MaterialActions, MaterialIcon } from "@/features/materials/material-card";
 import { MaterialAssignDialog } from "@/features/materials/material-assign-dialog";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
@@ -261,11 +261,15 @@ function Materials() {
           <option value="recent">Più recenti</option>
         </NativeSelect>
       </div>
-      <FilterChips
+      <TabBar
         label="Categoria"
         value={category}
         onChange={setCategory}
-        options={[{ value: "all" as const, label: "Tutti" }, ...LIBRARY_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].plural }))]}
+        options={(["all", ...LIBRARY_CATEGORIES] as const).map((c) => ({
+          value: c,
+          label: c === "all" ? "Tutti" : CATEGORY_META[c].plural,
+          icon: CATEGORY_ICON[c],
+        }))}
       />
 
       {q.isPending ? (

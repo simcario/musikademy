@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { ChevronRight, Folder, FolderOpen, Library, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { FilterChips } from "@/components/shared/segmented";
+import { TabBar } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { useMyFolders, useMyMaterials } from "@/features/student-area/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -15,7 +15,7 @@ import { EXERCISE_CATEGORY, type Material, type MaterialCategory, type WithId } 
 import { toDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 import { useAudioDock } from "./audio-dock";
-import { MaterialCard, NewPill, TrackList } from "./material-card";
+import { CATEGORY_ICON, MaterialCard, NewPill, TrackList } from "./material-card";
 
 type CategoryFilter = MaterialCategory | "all";
 
@@ -62,11 +62,15 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
       </div>
 
       {categories.length > 1 && (
-        <FilterChips
+        <TabBar
           label="Categoria"
           value={category}
           onChange={setCategory}
-          options={categories.map((c) => ({ value: c, label: c === "all" ? "Tutti" : CATEGORY_META[c].plural }))}
+          options={categories.map((c) => ({
+            value: c,
+            label: c === "all" ? "Tutti" : CATEGORY_META[c].plural,
+            icon: CATEGORY_ICON[c],
+          }))}
         />
       )}
 
