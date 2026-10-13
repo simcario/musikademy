@@ -161,12 +161,14 @@ export interface Material {
   updatedAt: Timestamp;
 }
 
-/** Cartella di materiali (ADR D26), condivisibile con singoli studenti e gruppi. */
+/** Cartella di materiali (ADR D26), annidabile e condivisibile con singoli studenti e gruppi. */
 export interface MaterialFolder {
   name: string;
+  /** Cartella superiore; vuoto o assente = primo livello. */
+  parentId?: string;
   studentIds: string[];
   groupIds: string[];
-  /** Derivato: `studentIds` + `groupIds`. */
+  /** Derivato: `studentIds` + `groupIds` + l'`audience` della cartella superiore. */
   audience: string[];
   createdBy: string;
   createdAt: Timestamp;

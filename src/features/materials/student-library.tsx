@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Library, Search } from "lucide-react";
+import { Fragment, useState } from "react";
+import { ChevronRight, Folder, FolderOpen, Library, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FilterChips } from "@/components/shared/segmented";
@@ -9,6 +9,8 @@ import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/sha
 import { useMyFolders, useMyMaterials } from "@/features/student-area/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useNow } from "@/hooks/use-now";
+import { cn } from "@/lib/utils";
+import { folderPath, parentIdOf, toFolderMap } from "@/services/folderService";
 import { EXERCISE_CATEGORY, type MaterialCategory } from "@/types";
 import { toDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
@@ -27,8 +29,12 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
   const [folderChoice, setFolderChoice] = useState("all");
   const debounced = useDebounce(search);
   const folders = useMyFolders().data ?? [];
+  const folderMap = toFolderMap(folders);
   // Cambiando gruppo la cartella scelta può non essere più tra quelle condivise.
-  const folderId = folders.some((f) => f.id === folderChoice) ? folderChoice : "all";
+  const folderId = folderMap.has(folderChoice) ? folderChoice : "all";
+  // Un livello alla volta: le cartelle di primo livello, poi le sottocartelle di quella aperta.
+  const path = folderId === "all" ? [] : folderPath(folderId, folderMap);
+  const subfolders = folders.filter((f) => parentIdOf(f, folderMap) === (folderId === "all" ? "" : folderId));
   const q = useMyMaterials({ category, search: debounced, sort, folderId: folderId === "all" ? undefined : folderId });
   // I materiali degli esercizi si aprono dall'esercizio assegnato, non dalla libreria.
   const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
@@ -58,12 +64,39 @@ export function StudentLibrary({ categories = STUDENT_CATEGORIES }: { categories
       )}
 
       {folders.length > 0 && (
-        <FilterChips
-          label="Cartella"
-          value={folderId}
-          onChange={setFolderChoice}
-          options={[{ value: "all", label: "Tutte le cartelle" }, ...folders.map((f) => ({ value: f.id, label: f.name }))]}
-        />
+        <nav aria-label="Cartelle" className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
+          {[{ id: "all", name: "Tutti i materiali" }, ...path].map((f, i, all) => (
+            <Fragment key={f.id}>
+              {i > 0 && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+              <button
+                type="button"
+                aria-current={i === all.length - 1 ? "page" : undefined}
+                onClick={() => setFolderChoice(f.id)}
+                className={cn(
+                  "flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-4 text-[13px] font-semibold transition-colors",
+                  i === all.length - 1
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {i > 0 && <FolderOpen className="size-4" aria-hidden />}
+                {f.name}
+              </button>
+            </Fragment>
+          ))}
+          {subfolders.length > 0 && <span className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden />}
+          {subfolders.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFolderChoice(f.id)}
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-[13px] font-semibold text-foreground hover:bg-muted"
+            >
+              <Folder className="size-4 text-brand-ink" aria-hidden />
+              {f.name}
+            </button>
+          ))}
+        </nav>
       )}
 
       <NowPlayingCard />

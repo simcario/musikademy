@@ -31,7 +31,8 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/admin/users/[
       writer.update(d.ref, { studentIds: FieldValue.arrayRemove(uid), updatedAt: FieldValue.serverTimestamp() }),
     );
     // Cartelle condivise con lo studente (ADR D26): via anche dall'`audience` dei materiali che contengono.
-    const folders = await db.collection("materialFolders").where("studentIds", "array-contains", uid).get();
+    // Per `audience`, così sono comprese le sottocartelle che ereditano la condivisione.
+    const folders = await db.collection("materialFolders").where("audience", "array-contains", uid).get();
     folders.docs.forEach((d) =>
       writer.update(d.ref, {
         studentIds: FieldValue.arrayRemove(uid),

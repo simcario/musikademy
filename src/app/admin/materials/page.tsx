@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Fragment, Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  ChevronRight,
   FilePlus2,
   Folder,
   FolderInput,
@@ -32,13 +33,18 @@ import { FilterChips } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useFolders, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
-import { FolderNameDialog, FolderShareDialog, MoveToFolderDialog } from "@/features/materials/folder-dialogs";
+import {
+  FolderNameDialog,
+  FolderShareDialog,
+  MoveFolderDialog,
+  MoveToFolderDialog,
+} from "@/features/materials/folder-dialogs";
 import { MaterialActions, MaterialIcon } from "@/features/materials/material-card";
 import { MaterialAssignDialog } from "@/features/materials/material-assign-dialog";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { useDebounce } from "@/hooks/use-debounce";
-import { folderService, toFolderMap } from "@/services/folderService";
+import { folderPath, folderPathName, folderService, parentIdOf, toFolderMap } from "@/services/folderService";
 import { materialService } from "@/services/materialService";
 import {
   EXERCISE_CATEGORY,
@@ -66,12 +72,15 @@ function audienceLabel(m: Material): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-function sharingLabel(f: MaterialFolder): string | null {
+/** Con chi è condivisa la cartella, direttamente o tramite una cartella superiore. */
+function sharingLabel(f: MaterialFolder): string {
+  const own = [...(f.studentIds ?? []), ...(f.groupIds ?? [])];
   const parts = [
     f.groupIds?.length ? count(f.groupIds.length, "gruppo", "gruppi") : null,
     f.studentIds?.length ? count(f.studentIds.length, "studente", "studenti") : null,
+    (f.audience ?? []).some((id) => !own.includes(id)) ? "eredita dalla cartella superiore" : null,
   ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : null;
+  return parts.length ? `Condivisa: ${parts.join(" · ")}` : "Non condivisa";
 }
 
 export default function AdminMaterialsPage() {
@@ -95,11 +104,15 @@ function Materials() {
   const [toDelete, setToDelete] = useState<WithId<Material> | null>(null);
   const [folderForm, setFolderForm] = useState<{ folder: WithId<MaterialFolder> | null } | null>(null);
   const [sharing, setSharing] = useState<WithId<MaterialFolder> | null>(null);
+  const [movingFolder, setMovingFolder] = useState<WithId<MaterialFolder> | null>(null);
   const [folderToDelete, setFolderToDelete] = useState<WithId<MaterialFolder> | null>(null);
   const debounced = useDebounce(search);
   const folders = useFolders();
   const folderMap = toFolderMap(folders.data);
   const openFolder = openFolderId ? (folderMap.get(openFolderId) ?? null) : null;
+  const parentFolder = openFolder?.parentId ? (folderMap.get(openFolder.parentId) ?? null) : null;
+  // Cartelle del livello aperto: quelle di primo livello, oppure le sottocartelle di quella aperta.
+  const subfolders = (folders.data ?? []).filter((f) => parentIdOf(f, folderMap) === (openFolder?.id ?? ""));
   const q = useMaterialsPage({ category, search: debounced, sort, folderId: openFolder?.id });
   // Gli esercizi hanno il loro catalogo nella sezione Esercizi.
   const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
@@ -112,9 +125,10 @@ function Materials() {
   const removeFolder = useStaffMutation((f: WithId<MaterialFolder>) => folderService.remove(f.id), {
     success: "Cartella eliminata",
     invalidate: [["folders"], ["materials"]],
-    onSuccess: () => {
+    onSuccess: (_r, f) => {
       setFolderToDelete(null);
-      setOpenFolderId(null);
+      // Eliminata la cartella aperta: si torna a quella superiore.
+      if (f.id === openFolderId) setOpenFolderId(f.parentId || null);
     },
   });
 
@@ -129,6 +143,9 @@ function Materials() {
         </DropdownMenuItem>
         <DropdownMenuItem className="min-h-10" onClick={() => setFolderForm({ folder: f })}>
           <Pencil aria-hidden /> Rinomina
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-10" onClick={() => setMovingFolder(f)}>
+          <FolderInput aria-hidden /> Sposta
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setFolderToDelete(f)}>
           <Trash2 aria-hidden /> Elimina
@@ -145,7 +162,7 @@ function Materials() {
         actions={
           <>
             <Button variant="outline" onClick={() => setFolderForm({ folder: null })}>
-              <FolderPlus aria-hidden /> Nuova cartella
+              <FolderPlus aria-hidden /> {openFolder ? "Nuova sottocartella" : "Nuova cartella"}
             </Button>
             <Button onClick={() => setCreating(true)}>
               <FilePlus2 aria-hidden /> Carica materiale
@@ -154,47 +171,71 @@ function Materials() {
         }
       />
 
-      {openFolder ? (
-        <div className="card-surface flex items-center gap-2 p-2 pl-1">
-          <Button variant="ghost" size="icon" aria-label="Torna a tutti i materiali" onClick={() => setOpenFolderId(null)}>
-            <ArrowLeft aria-hidden />
-          </Button>
-          <FolderOpen className="size-6 shrink-0 text-brand-ink" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate font-semibold">{openFolder.name}</h2>
-            <p className="truncate text-xs text-muted-foreground">
-              {sharingLabel(openFolder) ? `Condivisa con ${sharingLabel(openFolder)}` : "Non condivisa"}
-            </p>
-          </div>
-          <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setSharing(openFolder)}>
-            <Share2 aria-hidden /> Condividi
-          </Button>
-          {folderMenu(openFolder)}
-        </div>
-      ) : (
-        !!folders.data?.length && (
-          <section aria-label="Cartelle" className="space-y-2">
-            <h2 className="section-label">Cartelle</h2>
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {folders.data.map((f) => (
-                <li key={f.id} className="card-surface flex items-center gap-1 pr-1">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFolderId(f.id)}
-                    className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-muted/50"
-                  >
-                    <Folder className="size-6 shrink-0 text-brand-ink" aria-hidden />
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{f.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{sharingLabel(f) ?? "Non condivisa"}</span>
-                    </span>
+      {openFolder && (
+        <div className="space-y-2">
+          <nav aria-label="Percorso" className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+            <button type="button" className="rounded px-1 font-medium hover:text-foreground hover:underline" onClick={() => setOpenFolderId(null)}>
+              Materiali
+            </button>
+            {folderPath(openFolder.id, folderMap).map((f) => (
+              <Fragment key={f.id}>
+                <ChevronRight className="size-4 shrink-0" aria-hidden />
+                {f.id === openFolder.id ? (
+                  <span aria-current="page" className="px-1 font-semibold text-foreground">
+                    {f.name}
+                  </span>
+                ) : (
+                  <button type="button" className="rounded px-1 font-medium hover:text-foreground hover:underline" onClick={() => setOpenFolderId(f.id)}>
+                    {f.name}
                   </button>
-                  {folderMenu(f)}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )
+                )}
+              </Fragment>
+            ))}
+          </nav>
+          <div className="card-surface flex items-center gap-2 p-2 pl-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={parentFolder ? `Torna a ${parentFolder.name}` : "Torna a tutti i materiali"}
+              onClick={() => setOpenFolderId(parentFolder?.id ?? null)}
+            >
+              <ArrowLeft aria-hidden />
+            </Button>
+            <FolderOpen className="size-6 shrink-0 text-brand-ink" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate font-semibold">{openFolder.name}</h2>
+              <p className="truncate text-xs text-muted-foreground">{sharingLabel(openFolder)}</p>
+            </div>
+            <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setSharing(openFolder)}>
+              <Share2 aria-hidden /> Condividi
+            </Button>
+            {folderMenu(openFolder)}
+          </div>
+        </div>
+      )}
+
+      {subfolders.length > 0 && (
+        <section aria-label={openFolder ? "Sottocartelle" : "Cartelle"} className="space-y-2">
+          <h2 className="section-label">{openFolder ? "Sottocartelle" : "Cartelle"}</h2>
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {subfolders.map((f) => (
+              <li key={f.id} className="card-surface flex items-center gap-1 pr-1">
+                <button
+                  type="button"
+                  onClick={() => setOpenFolderId(f.id)}
+                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-muted/50"
+                >
+                  <Folder className="size-6 shrink-0 text-brand-ink" aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{f.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{sharingLabel(f)}</span>
+                  </span>
+                </button>
+                {folderMenu(f)}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
@@ -244,7 +285,7 @@ function Materials() {
         <ul className="space-y-2">
           {items.map((m) => {
             const audience = audienceLabel(m);
-            const folderName = !openFolder && m.folderId ? folderMap.get(m.folderId)?.name : undefined;
+            const folderName = !openFolder && m.folderId ? folderPathName(m.folderId, folderMap) : undefined;
             return (
               <li key={m.id} className="card-surface flex flex-wrap items-center gap-3 p-3">
                 <MaterialIcon type={m.type} className="size-11" />
@@ -295,9 +336,11 @@ function Materials() {
         open={!!folderForm}
         onOpenChange={(o) => !o && setFolderForm(null)}
         folder={folderForm?.folder}
+        parent={openFolder}
         onCreated={setOpenFolderId}
       />
       <FolderShareDialog open={!!sharing} onOpenChange={(o) => !o && setSharing(null)} folder={sharing} />
+      <MoveFolderDialog open={!!movingFolder} onOpenChange={(o) => !o && setMovingFolder(null)} folder={movingFolder} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
@@ -312,7 +355,7 @@ function Materials() {
         open={!!folderToDelete}
         onOpenChange={(o) => !o && setFolderToDelete(null)}
         title={`Eliminare la cartella “${folderToDelete?.name ?? ""}”?`}
-        description="I materiali non vengono eliminati: escono dalla cartella e non sono più visibili a chi li vedeva solo grazie alla sua condivisione."
+        description="Materiali e sottocartelle non vengono eliminati: salgono nella cartella superiore e non sono più visibili a chi li vedeva solo grazie alla condivisione di questa cartella."
         confirmLabel="Elimina cartella"
         destructive
         loading={removeFolder.isPending}

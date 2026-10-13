@@ -161,7 +161,7 @@ service cloud.firestore {
     // Cartelle di materiali (ADR D26): lo studente vede solo quelle condivise con lui o con un suo gruppo.
     match /materialFolders/{folderId} {
       allow read: if isStaff() || (isStudent() && sharedWithMe(resource.data.get('audience', [])));
-      allow create, update: if isStaff() && requiredStr('name', 80)
+      allow create, update: if isStaff() && requiredStr('name', 80) && optStr('parentId', 100)
         && request.resource.data.studentIds is list
         && request.resource.data.groupIds is list
         && request.resource.data.audience is list;

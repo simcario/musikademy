@@ -294,6 +294,11 @@ describe("cartelle e gruppi (ADR D26)", () => {
     const folder = { name: "Nuova", studentIds: [], groupIds: [], audience: [] };
     await assertSucceeds(setDoc(doc(teacher(), "materialFolders", "new"), folder));
     await assertFails(setDoc(doc(teacher(), "materialFolders", "bad"), { ...folder, audience: "tutti" }));
+    // Sottocartella: eredita la condivisione della superiore tramite `audience`.
+    await assertSucceeds(setDoc(doc(teacher(), "materialFolders", "sub"), { ...folder, parentId: "f-coro", audience: [CORO] }));
+    await assertFails(setDoc(doc(teacher(), "materialFolders", "bad2"), { ...folder, parentId: 1 }));
+    await assertSucceeds(getDoc(doc(student(ALICE), "materialFolders", "sub")));
+    await assertFails(getDoc(doc(student("carla"), "materialFolders", "sub")));
     await assertSucceeds(updateDoc(doc(teacher(), "materials", "m-f-privata"), { folderId: "", audience: [], groupIds: [] }));
     await assertFails(updateDoc(doc(teacher(), "materials", "m-coro"), { audience: "tutti" }));
     await assertSucceeds(deleteDoc(doc(teacher(), "materialFolders", "f-privata")));
