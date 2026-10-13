@@ -61,20 +61,26 @@ export function Segmented<T extends string>({
   );
 }
 
-/** Chip di filtro scorrevoli orizzontalmente (libreria materiali). */
+/** Chip di filtro scorrevoli orizzontalmente (libreria materiali); con `wrap` vanno a capo (pannelli stretti). */
 export function FilterChips<T extends string>({
   options,
   value,
   onChange,
   label,
+  wrap,
 }: {
   options: SegmentOption<T>[];
   value: T;
   onChange: (v: T) => void;
   label: string;
+  wrap?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={wrap ? "flex flex-wrap gap-2" : "no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0"}
+    >
       {options.map((o) => {
         const active = o.value === value;
         return (

@@ -64,6 +64,7 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
       />
       <PanelBody>
         <FilterChips<Tab>
+          wrap
           label="Sezioni corso"
           value={tab}
           onChange={panel.setTab}

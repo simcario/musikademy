@@ -66,7 +66,7 @@ export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; 
           }
         />
       ) : (
-        <div className="card-surface overflow-hidden">
+        <div className="card-surface @container overflow-hidden">
           <table className="w-full text-left text-sm">
             <thead className={TABLE_HEAD}>
               <tr>

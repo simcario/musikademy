@@ -177,7 +177,7 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
           )}
         </div>
 
-        <FilterChips label="Sezioni studente" value={tab} onChange={panel.setTab} options={TABS.map((t) => ({ ...t }))} />
+        <FilterChips wrap label="Sezioni studente" value={tab} onChange={panel.setTab} options={TABS.map((t) => ({ ...t }))} />
 
         <div>
           {tab === "overview" && <StudentOverviewTab studentId={studentId} />}

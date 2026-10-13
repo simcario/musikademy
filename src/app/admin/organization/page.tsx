@@ -48,7 +48,7 @@ function Organization() {
 
   return (
     // Su schermi larghi l'elenco si restringe accanto al pannello invece di finirci sotto.
-    <PageContainer className={cn("max-w-5xl", panelOpen && "2xl:mr-[640px] 2xl:ml-0 2xl:max-w-none")}>
+    <PageContainer className={cn("max-w-5xl", panelOpen && "xl:mr-[clamp(480px,40vw,640px)] xl:ml-0 xl:max-w-none")}>
       <PageHeader
         title="Organizzazione"
         actions={
@@ -144,14 +144,14 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
           }
         />
       ) : (
-        <div className="card-surface overflow-hidden">
+        <div className="card-surface @container overflow-hidden">
           <table className="w-full text-left text-sm">
             <thead className={TABLE_HEAD}>
               <tr>
                 <th className="px-4 py-3">Nome</th>
-                <th className="hidden px-4 py-3 md:table-cell">Email</th>
-                <th className="hidden px-4 py-3 sm:table-cell">Corsi</th>
-                <th className="hidden px-4 py-3 lg:table-cell">Gruppi</th>
+                <th className="hidden px-4 py-3 @2xl:table-cell">Email</th>
+                <th className="hidden px-4 py-3 @md:table-cell">Corsi</th>
+                <th className="hidden px-4 py-3 @4xl:table-cell">Gruppi</th>
                 <th className="px-4 py-3">Stato</th>
               </tr>
             </thead>
@@ -167,15 +167,15 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
                           <button type="button" className="block max-w-full truncate text-left font-semibold">
                             {fullName(s)}
                           </button>
-                          <span className="block truncate text-xs text-muted-foreground md:hidden">{s.email}</span>
+                          <span className="block truncate text-xs text-muted-foreground @2xl:hidden">{s.email}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{s.email}</td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
+                    <td className="hidden px-4 py-3 text-muted-foreground @2xl:table-cell">{s.email}</td>
+                    <td className="hidden px-4 py-3 @md:table-cell">
                       <Tags tone="primary" names={s.courseIds.map((c) => courses.get(c)?.name)} />
                     </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
+                    <td className="hidden px-4 py-3 @4xl:table-cell">
                       <Tags tone="secondary" names={(s.groupIds ?? []).map((g) => groups.get(g)?.name)} />
                     </td>
                     <td className="px-4 py-3">

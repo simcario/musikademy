@@ -16,7 +16,7 @@ export function DetailPanel() {
   return (
     <aside
       aria-label="Dettaglio"
-      className="pt-safe fixed inset-y-0 right-0 z-50 flex w-full animate-in flex-col border-l border-border bg-popover text-sm text-popover-foreground shadow-dialog duration-200 slide-in-from-right-10 fade-in md:w-[640px]"
+      className="pt-safe fixed inset-y-0 right-0 z-50 flex w-full animate-in flex-col border-l border-border bg-popover text-sm text-popover-foreground shadow-dialog duration-200 slide-in-from-right-10 fade-in xl:w-[clamp(480px,40vw,640px)]"
     >
       {kind === "course" && <CoursePanel key={id} courseId={id} tab={tab} />}
       {kind === "group" && <GroupPanel key={id} groupId={id} />}
