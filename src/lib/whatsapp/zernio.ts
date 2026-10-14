@@ -30,9 +30,37 @@ async function zernio<T>(path: string, init: { method?: string; body?: unknown }
     cache: "no-store",
     signal: AbortSignal.timeout(20_000),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string; code?: string } & T;
-  if (!res.ok) throw new ZernioError(data.error || data.message || `Zernio: errore HTTP ${res.status}`, res.status, data.code);
+  const data = (await res.json().catch(() => ({}))) as ZernioErrorBody & T;
+  if (!res.ok) throw new ZernioError(errorMessage(data, res.status), res.status, data.code);
   return data;
+}
+
+interface ZernioErrorBody {
+  error?: string;
+  message?: string;
+  code?: string;
+  /** Errore di Meta passato da Zernio: il dettaglio utile è spesso solo qui. */
+  platformError?: {
+    code?: number | string;
+    error_subcode?: number | string;
+    message?: string;
+    error_user_msg?: string;
+    error_data?: { details?: unknown };
+  };
+}
+
+/** Messaggio di Zernio + dettaglio di Meta (codice e `error_data.details`), se presenti. */
+function errorMessage(data: ZernioErrorBody, status: number) {
+  const base = data.error || data.message || `Zernio: errore HTTP ${status}`;
+  const p = data.platformError;
+  if (!p) return base;
+  const details = p.error_data?.details;
+  const extra = [
+    p.code !== undefined && `codice Meta ${p.code}${p.error_subcode ? `/${p.error_subcode}` : ""}`,
+    p.error_user_msg,
+    typeof details === "string" ? details : details && JSON.stringify(details),
+  ].filter(Boolean);
+  return extra.length ? `${base} (${extra.join(" — ")})` : base;
 }
 
 export interface ZernioAccount {

@@ -56,6 +56,16 @@ export function fullName(p: { name?: string; surname?: string } | null | undefin
   return [p?.name, p?.surname].filter(Boolean).join(" ") || "—";
 }
 
+/** "Cognome Nome": negli elenchi ordinati alfabeticamente, così l'ordine si legge a colpo d'occhio. */
+export function sortName(p: { name?: string; surname?: string } | null | undefined): string {
+  return [p?.surname, p?.name].filter(Boolean).join(" ") || "—";
+}
+
+/** Ordine alfabetico per cognome e nome, senza distinguere maiuscole e accenti (Firestore li distingue). */
+export function byName(a: { name?: string; surname?: string }, b: { name?: string; surname?: string }): number {
+  return sortName(a).localeCompare(sortName(b), "it", { sensitivity: "base" });
+}
+
 export function initials(p: { name?: string; surname?: string } | null | undefined): string {
   return ((p?.name?.[0] ?? "") + (p?.surname?.[0] ?? "")).toUpperCase() || "?";
 }

@@ -37,8 +37,9 @@ export function MaterialExerciseCatalog() {
 
   return (
     <section className="space-y-3" aria-labelledby="material-exercises">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="material-exercises" className="section-label">
+      {/* Il titolo è già nella scheda della pagina Esercizi: resta per gli screen reader. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <h2 id="material-exercises" className="sr-only">
           Esercizi con materiale
         </h2>
         <Button onClick={() => setCreating(true)}>

@@ -34,9 +34,19 @@ export const DEFAULT_REMINDER_TEMPLATE =
   'Ciao {nome}, ti scriviamo dalla scuola Musikademy per ricordarti la tua prossima lezione "{titolo}", ' +
   "in programma {quando} alle {ora}. Se non puoi partecipare, avvisa il prima possibile il tuo docente. A presto!";
 
-// Tono di servizio ("aggiornamento sul tuo corso"): Meta classifica come MARKETING (più caro) i testi
-// che sembrano promozionali o generici, come è successo al primo template delle comunicazioni.
+// Solo avviso, senza {testo}: con un segnaposto libero Meta vede un contenitore generico (tipo newsletter)
+// e classifica il template come MARKETING (più caro), come è successo a v1 e v2. Avvisare di una novità
+// nell'area dell'utente rientra invece nei messaggi di servizio (UTILITY). Il contenuto si legge nell'app.
 export const DEFAULT_ANNOUNCEMENT_TEMPLATE =
+  'Ciao {nome}, la scuola Musikademy ha pubblicato una nuova comunicazione per il tuo corso: "{titolo}". ' +
+  "Puoi leggerla nella tua area dell'app Musikademy.";
+
+/**
+ * Testo del template `musikademy_comunicazione_v2`, già registrato su Meta (classificato MARKETING).
+ * Resta il riferimento finché l'admin non invia il nuovo testo da Impostazioni → WhatsApp: i parametri
+ * si calcolano da questo testo e devono corrispondere al template approvato.
+ */
+const LEGACY_ANNOUNCEMENT_TEMPLATE =
   "Ciao {nome}, ti scriviamo dalla scuola Musikademy con un aggiornamento sul tuo corso.\n\n" +
   "Oggetto: {titolo}\nDettagli: {testo}\n\nTrovi la comunicazione completa nella tua area dell'app Musikademy.";
 
@@ -61,7 +71,7 @@ export interface MetaTemplateRef {
 /** Template Meta in uso prima di ogni personalizzazione. */
 export const DEFAULT_META_TEMPLATES: Record<MessageKind, MetaTemplateRef> = {
   reminder: { name: "musikademy_promemoria_lezione_v2", text: DEFAULT_REMINDER_TEMPLATE },
-  announcement: { name: "musikademy_comunicazione_v2", text: DEFAULT_ANNOUNCEMENT_TEMPLATE },
+  announcement: { name: "musikademy_comunicazione_v2", text: LEGACY_ANNOUNCEMENT_TEMPLATE },
 };
 
 /** Impostazioni iniziali (prima che l'admin le salvi). */

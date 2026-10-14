@@ -2,13 +2,13 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, UserPlus, Users } from "lucide-react";
+import { Plus, School, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { UserAvatar } from "@/components/shared/brand";
 import { PageContainer, PageHeader } from "@/components/shared/page";
-import { Segmented } from "@/components/shared/segmented";
+import { TabBar } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
 import { useGroups, useStudentsPage } from "@/features/admin/hooks";
@@ -17,7 +17,8 @@ import { useSession } from "@/features/auth/auth-provider";
 import { CoursesTab } from "@/features/organization/courses-tab";
 import { DetailPanel } from "@/features/organization/detail-panel";
 import { TABLE_HEAD, rowClass, usePanel } from "@/features/organization/panel";
-import { useCourses } from "@/features/student-area/hooks";
+import { TeachersTab } from "@/features/organization/teachers-tab";
+import { useCourses, useTeachers } from "@/features/student-area/hooks";
 import { StudentFormDialog } from "@/features/students/student-form";
 import { useDebounce } from "@/hooks/use-debounce";
 import { can } from "@/lib/auth/roles";
@@ -25,9 +26,9 @@ import { cn } from "@/lib/utils";
 import { toGroupMap } from "@/services/groupService";
 import { toCourseMap } from "@/services/userService";
 import type { StudentStatus } from "@/types";
-import { fullName } from "@/utils/format";
+import { byName, sortName } from "@/utils/format";
 
-type Tab = "courses" | "users";
+type Tab = "courses" | "users" | "teachers";
 
 export default function OrganizationPage() {
   return (
@@ -39,11 +40,15 @@ export default function OrganizationPage() {
 
 function Organization() {
   const router = useRouter();
-  const tab: Tab = useSearchParams().get("tab") === "users" ? "users" : "courses";
+  const tabParam = useSearchParams().get("tab");
+  const tab: Tab = tabParam === "users" || tabParam === "teachers" ? tabParam : "courses";
   const { role } = useSession();
+  const isAdmin = can(role, "settings:manage");
   const [creating, setCreating] = useState(false);
   const [creatingCourse, setCreatingCourse] = useState(false);
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
   const courses = useCourses();
+  const teachers = useTeachers();
   const panelOpen = usePanel().stack.length > 0;
 
   return (
@@ -57,8 +62,14 @@ function Organization() {
             <Button onClick={() => setCreating(true)}>
               <UserPlus aria-hidden /> Nuovo studente
             </Button>
+          ) : tab === "teachers" ? (
+            isAdmin && (
+              <Button onClick={() => setCreatingTeacher(true)}>
+                <UserPlus aria-hidden /> Nuovo docente
+              </Button>
+            )
           ) : (
-            can(role, "settings:manage") && (
+            isAdmin && (
               <Button onClick={() => setCreatingCourse(true)}>
                 <Plus aria-hidden /> Nuovo corso
               </Button>
@@ -66,18 +77,20 @@ function Organization() {
           )
         }
       />
-      <Segmented
+      <TabBar<Tab>
         label="Sezione"
         value={tab}
-        onChange={(t) => router.replace(t === "users" ? "/admin/organization?tab=users" : "/admin/organization", { scroll: false })}
-        className="sm:max-w-sm"
+        onChange={(t) => router.replace(t === "courses" ? "/admin/organization" : `/admin/organization?tab=${t}`, { scroll: false })}
         options={[
-          { value: "courses", label: "Corsi", count: courses.data?.length },
-          { value: "users", label: "Utenti" },
+          { value: "courses", label: "Corsi", icon: School, count: courses.data?.length },
+          { value: "users", label: "Utenti", icon: Users },
+          { value: "teachers", label: "Docenti", icon: ShieldCheck, count: teachers.data?.length },
         ]}
       />
       {tab === "users" ? (
         <UsersTab creating={creating} onCreatingChange={setCreating} />
+      ) : tab === "teachers" ? (
+        <TeachersTab editable={isAdmin} creating={creatingTeacher} onCreatingChange={setCreatingTeacher} />
       ) : (
         <CoursesTab creating={creatingCourse} onCreatingChange={setCreatingCourse} />
       )}
@@ -97,7 +110,7 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
   const q = useStudentsPage({ search: debounced, status, courseId: courseId || undefined });
   const courses = toCourseMap(useCourses().data);
   const groups = toGroupMap(useGroups().data);
-  const students = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const students = (q.data?.pages.flatMap((p) => p.items) ?? []).sort(byName);
 
   return (
     <>
@@ -166,7 +179,7 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
                         <UserAvatar person={s} />
                         <div className="min-w-0">
                           <button type="button" className="block max-w-full truncate text-left font-semibold">
-                            {fullName(s)}
+                            {sortName(s)}
                           </button>
                           <span className="block truncate text-xs text-muted-foreground @2xl:hidden">{s.email}</span>
                         </div>

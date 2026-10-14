@@ -13,7 +13,7 @@ import { useSession } from "@/features/auth/auth-provider";
 import { useCourses, useTeachers } from "@/features/student-area/hooks";
 import { can } from "@/lib/auth/roles";
 import type { Course, WithId } from "@/types";
-import { fullName } from "@/utils/format";
+import { byName, fullName, sortName } from "@/utils/format";
 import { CourseForm, CourseStudentsForm } from "./course-form";
 import { GroupForm, GroupList } from "./group-list";
 import { NO_COURSE, PanelBody, PanelHeader, usePanel } from "./panel";
@@ -50,9 +50,9 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
 
   const known = new Set((courses.data ?? []).map((c) => c.id));
   const groups = (groupsQ.data ?? []).filter((g) => (loose ? !g.courseId || !known.has(g.courseId) : g.courseId === courseId));
-  const students = (studentsQ.data ?? []).filter((s) =>
-    loose ? !s.courseIds.some((c) => known.has(c)) : s.courseIds.includes(courseId),
-  );
+  const students = (studentsQ.data ?? [])
+    .filter((s) => (loose ? !s.courseIds.some((c) => known.has(c)) : s.courseIds.includes(courseId)))
+    .sort(byName);
   const tab: Tab = tabParam === "groups" || (tabParam === "details" && !loose) ? tabParam : "students";
 
   return (
@@ -103,7 +103,7 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
                       >
                         <UserAvatar person={s} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-semibold">{fullName(s)}</span>
+                          <span className="block truncate font-semibold">{sortName(s)}</span>
                           <span className="block truncate text-xs text-muted-foreground">
                             {inGroups.length ? inGroups.join(" · ") : s.email}
                           </span>

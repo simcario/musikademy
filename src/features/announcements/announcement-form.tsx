@@ -134,7 +134,7 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
             {recipients.length === 1 ? "1 studente" : `${recipients.length} studenti`}
             {withoutPhone > 0 && ` (${withoutPhone} senza numero in anagrafica)`}.{" "}
             {zernio
-              ? "Invio immediato con l'API ufficiale e il testo approvato (vedi WhatsApp → Testi dei messaggi); il testo lungo viene accorciato."
+              ? "Invio immediato con l'API ufficiale e il testo approvato (vedi Impostazioni → WhatsApp → Testi dei messaggi); il testo lungo viene accorciato."
               : wa.connected
                 ? "Invio dal numero collegato, un messaggio ogni pochi secondi."
                 : "WhatsApp non è collegato ora: i messaggi partiranno appena lo sarà."}
