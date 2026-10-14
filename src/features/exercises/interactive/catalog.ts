@@ -58,8 +58,8 @@ export const INTERACTIVE_CATALOG: InteractiveCatalogEntry[] = [
     kind: "staff-measure",
     title: "Suona la battuta",
     summary:
-      "Compare una battuta in 4/4 della difficoltà scelta: lo studente la suona a tempo con il metronomo incorporato. Si assegna con una procedura guidata.",
-    instructions: `${SETUP} Compare una battuta: leggila e premi **Avvia**. Il **metronomo** conta alla rovescia una battuta (4-3-2-1), poi suonala a tempo, una nota dopo l'altra.`,
+      "Compare una battuta in 4/4 della difficoltà scelta: lo studente la suona a tempo con il metronomo incorporato, oppure senza metronomo per esercitare solo la lettura. Si assegna con una procedura guidata.",
+    instructions: `${SETUP} Compare una battuta: leggila e suonala, una nota dopo l'altra. Se l'esercizio prevede il **metronomo**, premi **Avvia**: conta alla rovescia una battuta (4-3-2-1), poi suonala a tempo.`,
     icon: ListMusic,
     defaults: { kind: "staff-measure", clef: "treble", difficulty: "easy", bpm: 60, rounds: 5 },
     wizard: true,

@@ -235,13 +235,13 @@ export interface StaffNotesExercise {
 export const MEASURE_DIFFICULTIES = ["easy", "medium", "hard"] as const;
 export type MeasureDifficulty = (typeof MEASURE_DIFFICULTIES)[number];
 
-/** Battuta sul pentagramma: lo studente suona le note di una battuta in 4/4 a tempo di metronomo. */
+/** Battuta sul pentagramma: lo studente suona le note di una battuta in 4/4, a tempo di metronomo o liberamente. */
 export interface StaffMeasureExercise {
   kind: "staff-measure";
   clef: Clef;
   difficulty: MeasureDifficulty;
-  /** Velocità del metronomo incorporato. */
-  bpm: number;
+  /** Velocità del metronomo incorporato; `null` = senza metronomo, solo lettura e senza vincoli di tempo. */
+  bpm: number | null;
   /** Battute da suonare in una sessione. */
   rounds: number;
 }

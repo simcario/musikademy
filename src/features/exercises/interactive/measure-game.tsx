@@ -29,7 +29,7 @@ const SUCCESS_MS = 2200;
 type Failure = { reason: "wrong"; played: number } | { reason: "late" };
 
 interface State {
-  /** `ready`: la battuta è a video e aspetta che lo studente avvii il metronomo. */
+  /** `ready`: la battuta è a video e aspetta che lo studente avvii il metronomo (senza metronomo si salta). */
   phase: "idle" | "ready" | "counting" | "playing" | "feedback" | "done";
   measure: MeasureNote[];
   /** Quarti trascorsi dal primo clic: i primi `COUNT_IN` sono la battuta a vuoto. */
@@ -41,7 +41,7 @@ interface State {
 }
 
 type Action =
-  | { type: "round"; measure: MeasureNote[]; fresh: boolean }
+  | { type: "round"; measure: MeasureNote[]; fresh: boolean; free: boolean }
   | { type: "start" }
   | { type: "beat"; index: number }
   | { type: "hit"; step: number }
@@ -53,7 +53,7 @@ const INITIAL: State = { phase: "idle", measure: [], beat: 0, step: 0, failure: 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "round":
-      return { ...INITIAL, phase: "ready", measure: action.measure, results: action.fresh ? [] : state.results };
+      return { ...INITIAL, phase: action.free ? "playing" : "ready", measure: action.measure, results: action.fresh ? [] : state.results };
     case "start":
       return state.phase === "ready" ? { ...state, phase: "counting" } : state;
     case "beat":
@@ -81,10 +81,12 @@ function reducer(state: State, action: Action): State {
 /**
  * Battuta sul pentagramma: compare una battuta in 4/4 e lo studente avvia il metronomo quando è pronto;
  * dopo il conto alla rovescia di una battuta (4-3-2-1) suona le note in ordine entro la battuta successiva.
+ * Senza metronomo (`bpm` nullo) la battuta si suona subito, al proprio passo e senza vincoli di tempo.
  */
 export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps<StaffMeasureExercise>) {
   const { clef, difficulty, bpm, rounds } = exercise;
-  const beatLength = 60 / bpm;
+  const free = bpm === null;
+  const beatLength = free ? 0 : 60 / bpm;
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const [tracker] = useState(createNoteTracker);
   const [level, setLevel] = useState(0);
@@ -98,10 +100,13 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
   /** Istante (clock audio) del primo clic del turno. */
   const roundStart = useRef(0);
 
-  /** Nuova battuta a video: il metronomo parte solo quando lo studente lo avvia. */
+  /** Nuova battuta a video: il metronomo parte solo quando lo studente lo avvia; senza metronomo si suona subito. */
   const beginRound = useCallback(
-    (fresh: boolean) => dispatch({ type: "round", measure: generateMeasure(clef, difficulty), fresh }),
-    [clef, difficulty],
+    (fresh: boolean) => {
+      if (free) tracker.reset();
+      dispatch({ type: "round", measure: generateMeasure(clef, difficulty), fresh, free });
+    },
+    [clef, difficulty, free, tracker],
   );
 
   /** I clic del turno sono programmati subito sul clock audio, come nel metronomo. */
@@ -190,9 +195,18 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
   if (phase === "idle") {
     return (
       <GameIntro onStart={start}>
-        Compare una battuta in 4/4: leggila e, quando sei pronto, premi Avvia. Il metronomo ({bpm} BPM) conta alla rovescia una battuta
-        (4-3-2-1), poi suonala a tempo, una nota dopo l&apos;altra, entro la battuta successiva. {rounds} battute. Tieni il volume del
-        dispositivo moderato.
+        {free ? (
+          <>
+            Compare una battuta in 4/4: leggila e suonala, una nota dopo l&apos;altra, al tuo passo. Niente metronomo e nessun limite di
+            tempo. {rounds} battute.
+          </>
+        ) : (
+          <>
+            Compare una battuta in 4/4: leggila e, quando sei pronto, premi Avvia. Il metronomo ({bpm} BPM) conta alla rovescia una battuta
+            (4-3-2-1), poi suonala a tempo, una nota dopo l&apos;altra, entro la battuta successiva. {rounds} battute. Tieni il volume del
+            dispositivo moderato.
+          </>
+        )}
       </GameIntro>
     );
   }
@@ -208,7 +222,7 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
   const ResultIcon = lastOk ? CircleCheckBig : failure?.reason === "late" ? TimerOff : CircleX;
   return (
     <div className="space-y-4">
-      <GameHeader label={`Battuta ${round} di ${rounds} · ${bpm} BPM`} correct={correct} />
+      <GameHeader label={`Battuta ${round} di ${rounds} · ${free ? "senza metronomo" : `${bpm} BPM`}`} correct={correct} />
 
       <GameStage>
         {feedback && lastOk && <Confetti />}
@@ -219,7 +233,8 @@ export function MeasureGame({ exercise, stream, onComplete, onClose }: GameProps
             <Countdown count={COUNT_IN - Math.min(beat, COUNT_IN - 1)} />
           </>
         )}
-        {phase === "playing" && (
+        {phase === "playing" && free && <p className="section-label">Suona le note in ordine, senza fretta</p>}
+        {phase === "playing" && !free && (
           <>
             <p className="section-label">Suona!</p>
             <div className="flex h-[72px] items-center gap-3" aria-hidden>

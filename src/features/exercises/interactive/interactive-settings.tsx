@@ -330,7 +330,8 @@ export function settingsSteps(value: InteractiveExercise, onChange: (v: Interact
                 value={value.bpm}
                 options={[50, 60, 72, 80, 92, 100]}
                 unit="BPM"
-                onChange={(bpm) => onChange({ ...value, bpm: bpm ?? value.bpm })}
+                none="Senza metronomo (solo lettura)"
+                onChange={(bpm) => onChange({ ...value, bpm })}
               />
               <NumberSelect
                 label="Battute da suonare"
