@@ -23,6 +23,7 @@ import { ChevronDown, GripVertical, ListMusic, Music } from "lucide-react";
 import { Marquee } from "@/components/shared/marquee";
 import { Pill } from "@/components/shared/status-badge";
 import { useGroups, useSongs } from "@/features/admin/hooks";
+import { useAudioDock } from "@/features/materials/audio-dock";
 import { CATEGORY_ICON, MaterialRow } from "@/features/materials/material-card";
 import { useMaterialsByIds, useSongsByIds } from "@/features/student-area/hooks";
 import { NotesButton } from "@/features/playlists/song-notes";
@@ -134,6 +135,10 @@ export function SongBlock({
   const panelId = `song-${song.id}`;
   const summary = [song.artist, count(items.length, "materiale", "materiali")].filter(Boolean).join(" · ");
   const expanded = !onOpen && open;
+  // Studente, brano con una sola traccia audio: il clic la avvia (o la mette in pausa) senza aprire il dettaglio.
+  const dock = useAudioDock();
+  const soloAudio = audienceIds && shown.length === 1 && shown[0].material.type === "audio" ? shown[0].material : null;
+  const onClick = soloAudio && onOpen ? () => void dock.playMaterial(soloAudio) : (onOpen ?? (() => setOpen((o) => !o)));
 
   return (
     <article className={cn("card-surface overflow-hidden", dragging && "shadow-dialog ring-2 ring-primary")}>
@@ -141,7 +146,8 @@ export function SongBlock({
         {handle}
         <button
           type="button"
-          onClick={onOpen ?? (() => setOpen((o) => !o))}
+          onClick={onClick}
+          title={soloAudio && onOpen ? "Ascolta" : undefined}
           aria-expanded={onOpen ? undefined : open}
           aria-controls={onOpen ? undefined : panelId}
           className={cn("flex min-h-16 min-w-0 flex-1 items-center gap-3 py-2 pr-2 text-left hover:bg-muted/40", handle ? "pl-1" : "pl-4")}

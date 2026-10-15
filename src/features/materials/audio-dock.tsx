@@ -306,7 +306,11 @@ function VolumeControl() {
   );
 }
 
-/** Dock compatto: sopra la bottom nav su mobile, in basso a destra su desktop. */
+/**
+ * Dock compatto: sopra la bottom nav su mobile, in basso a destra su desktop.
+ * z-[55]: sopra pannelli di dettaglio, sheet e dialog (z-50), così il player resta
+ * visibile qualunque finestra sia aperta.
+ */
 function AudioDock() {
   const dock = useAudioDock();
   const { track, state } = dock;
@@ -315,7 +319,7 @@ function AudioDock() {
     <div
       role="region"
       aria-label="Player audio"
-      className="glass fixed inset-x-3 bottom-[calc(72px+env(safe-area-inset-bottom))] z-30 rounded-2xl border border-border shadow-dock md:inset-x-auto md:right-6 md:bottom-6 md:w-[26rem]"
+      className="glass fixed inset-x-3 bottom-[calc(72px+env(safe-area-inset-bottom))] z-[55]rounded-2xl border border-border shadow-dock md:inset-x-auto md:right-6 md:bottom-6 md:w-[26rem]"
     >
       <div className="flex items-center gap-2 p-2.5">
         <PlayButton />
