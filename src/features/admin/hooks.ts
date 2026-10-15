@@ -11,6 +11,7 @@ import { groupService } from "@/services/groupService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters } from "@/services/materialService";
 import { paymentService, type PaymentFilters } from "@/services/paymentService";
+import { playlistService } from "@/services/playlistService";
 import { studentService, type StudentFilters } from "@/services/studentService";
 import type { AssignmentStatus, LessonStatus } from "@/types";
 import { errorMessage } from "@/utils/errors";
@@ -55,6 +56,10 @@ export function useGroups() {
 
 export function useFolders() {
   return useQuery({ queryKey: qk.folders("staff"), queryFn: folderService.list, staleTime: 5 * 60_000 });
+}
+
+export function usePlaylists() {
+  return useQuery({ queryKey: qk.playlists("staff"), queryFn: playlistService.list });
 }
 
 export function useStudent(uid: string) {

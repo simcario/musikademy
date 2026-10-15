@@ -310,6 +310,58 @@ describe("cartelle e gruppi (ADR D26)", () => {
   });
 });
 
+describe("playlist e video online (ADR D29, D30)", () => {
+  const CORO = "g-coro";
+  const material = { title: "M", visibility: "student", category: "ascolto", studentIds: [], storagePath: "x" };
+  const playlist = { title: "Saggio", tracks: [], materialIds: [], studentIds: [], groupIds: [], audience: [] };
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await updateDoc(doc(db, "students", ALICE), { groupIds: [CORO] });
+      await setDoc(doc(db, "playlists", "p-coro"), {
+        ...playlist,
+        tracks: [{ id: "t1", title: "Brano", materialIds: ["m-pl"] }],
+        materialIds: ["m-pl"],
+        groupIds: [CORO],
+        audience: [CORO],
+      });
+      await setDoc(doc(db, "playlists", "p-privata"), playlist);
+      // Materiale ricevuto solo tramite la playlist: `playlistAudience` confluisce in `audience`.
+      await setDoc(doc(db, "materials", "m-pl"), { ...material, playlistAudience: [CORO], audience: [CORO] });
+    });
+  });
+
+  it("lo studente vede solo le playlist condivise con sé o con un suo gruppo, e i loro materiali", async () => {
+    await assertSucceeds(getDoc(doc(student(ALICE), "playlists", "p-coro")));
+    await assertFails(getDoc(doc(student(BOB), "playlists", "p-coro")));
+    await assertFails(getDoc(doc(student(ALICE), "playlists", "p-privata")));
+    await assertSucceeds(
+      getDocs(query(collection(student(ALICE), "playlists"), where("audience", "array-contains-any", [ALICE, CORO]))),
+    );
+    await assertFails(getDocs(collection(student(ALICE), "playlists")));
+    await assertSucceeds(getDoc(doc(student(ALICE), "materials", "m-pl")));
+    await assertFails(getDoc(doc(student(BOB), "materials", "m-pl")));
+  });
+
+  it("solo lo staff crea e modifica le playlist", async () => {
+    await assertFails(updateDoc(doc(student(ALICE), "playlists", "p-coro"), { audience: [ALICE] }));
+    await assertFails(setDoc(doc(student(ALICE), "playlists", "new"), playlist));
+    await assertSucceeds(setDoc(doc(teacher(), "playlists", "new"), playlist));
+    await assertFails(setDoc(doc(teacher(), "playlists", "bad"), { ...playlist, title: "" }));
+    await assertFails(setDoc(doc(teacher(), "playlists", "bad2"), { ...playlist, tracks: "x" }));
+    await assertSucceeds(updateDoc(doc(teacher(), "materials", "m-pl"), { playlistAudience: [], audience: [] }));
+    await assertFails(updateDoc(doc(teacher(), "materials", "m-pl"), { playlistAudience: "tutti" }));
+    await assertSucceeds(deleteDoc(doc(teacher(), "playlists", "p-privata")));
+  });
+
+  it("un video online ha solo link http(s)", async () => {
+    const link = { ...material, category: "video", storagePath: "", size: 0 };
+    await assertSucceeds(setDoc(doc(teacher(), "materials", "v1"), { ...link, externalUrl: "https://youtu.be/dQw4w9WgXcQ" }));
+    await assertFails(setDoc(doc(teacher(), "materials", "v2"), { ...link, externalUrl: "javascript:alert(1)" }));
+  });
+});
+
 describe("inviti", () => {
   it("nessun client legge o scrive gli inviti, nemmeno l'admin", async () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "invites", "h1"), { uid: ALICE, acceptedAt: null }));

@@ -12,12 +12,12 @@ import {
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
-import { MaterialActions, MaterialIcon } from "@/features/materials/material-card";
+import { MaterialActions, MaterialIcon, materialSizeLabel } from "@/features/materials/material-card";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { materialService } from "@/services/materialService";
 import { EXERCISE_CATEGORY, type Material, type WithId } from "@/types";
-import { formatFileSize, formatShortDate } from "@/utils/format";
+import { formatShortDate } from "@/utils/format";
 import { AssignmentFormDialog } from "./assignment-form";
 
 /** Catalogo docente degli esercizi con materiale (PDF, audio, video…): si caricano qui e si assegnano agli studenti. */
@@ -65,7 +65,7 @@ export function MaterialExerciseCatalog() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{m.title}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {[m.description, formatFileSize(m.size), formatShortDate(m.createdAt)].filter(Boolean).join(" · ")}
+                  {[m.description, materialSizeLabel(m), formatShortDate(m.createdAt)].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <div className="flex items-center gap-1">

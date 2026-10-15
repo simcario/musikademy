@@ -11,6 +11,7 @@ import { folderService } from "@/services/folderService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters, type StudentMaterialCursor } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
+import { playlistService } from "@/services/playlistService";
 import { studentService } from "@/services/studentService";
 import { courseService, teacherService } from "@/services/userService";
 import type { Assignment, AssignmentStatus, LessonStatus, WithId } from "@/types";
@@ -127,6 +128,17 @@ export function useMyFolders() {
   return useQuery({
     queryKey: qk.folders({ mine: uid, audienceIds: scope.audienceIds }),
     queryFn: () => folderService.listShared(scope.audienceIds),
+    enabled: ready,
+  });
+}
+
+/** Playlist condivise con lo studente o con il suo gruppo attivo (ADR D29). */
+export function useMyPlaylists() {
+  const { uid } = useSession();
+  const { scope, ready } = useStudentContext();
+  return useQuery({
+    queryKey: qk.playlists({ mine: uid, audienceIds: scope.audienceIds }),
+    queryFn: () => playlistService.listShared(scope.audienceIds),
     enabled: ready,
   });
 }

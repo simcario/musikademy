@@ -47,6 +47,11 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 - 🟡 WhatsApp con API ufficiale (Zernio, ADR D25): dispatcher server + cron, template, selettore del servizio — unit/rules ✅, dispatcher provato su emulatore contro l'API Zernio reale (account trovato, invio rifiutato per template non ancora creati) · da fare: creare i template, segreti App Hosting, job Cloud Scheduler, prova reale
 - ⬜ WhatsApp: decidere dove far girare il worker in produzione (PC della scuola sempre acceso o VPS)
 
+- 🟡 Playlist (ADR D29): sezione docente e studente, brani con più materiali, condivisione con studenti/gruppi — tsc/eslint ✅, rules 41/41 ✅ · da provare a mano · `deploy:rules` necessario (nuova collezione `playlists`, campi `playlistAudience`/`externalUrl`)
+- 🟡 Link YouTube/Vimeo come materiali (ADR D30), anche come Ascolto/Base — unit ✅ · da provare a mano
+- 🟡 Caricamento materiale: categoria proposta = scheda aperta; con "Tutti" va scelta (obbligatoria)
+- ⬜ Playlist: "Riproduci tutto" in sequenza (il player audio non ha ancora la coda)
+
 ## V2+ (roadmap §55 — non implementare ora)
 
 Calendario · push attive (Cloud Functions) · promemoria · statistiche avanzate · playlist e A/B repeat ·

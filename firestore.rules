@@ -180,9 +180,28 @@ service cloud.firestore {
         && request.resource.data.studentIds is list
         && request.resource.data.get('groupIds', []) is list
         && request.resource.data.get('audience', []) is list
+        // Derivato dalle playlist che contengono il materiale (ADR D29).
+        && request.resource.data.get('playlistAudience', []) is list
         && optStr('folderId', 100)
         && request.resource.data.storagePath is string
+        // Video online (ADR D30): solo link http(s).
+        && (!('externalUrl' in request.resource.data)
+            || (str('externalUrl', 2048) && request.resource.data.externalUrl.matches('^https?://.+')))
         && optStr('content', 524288);
+      allow delete: if isStaff();
+    }
+
+    // Playlist (ADR D29): brani con i loro materiali. Lo studente vede solo quelle condivise con lui
+    // o con un suo gruppo; i materiali dei brani gli diventano leggibili tramite `audience`.
+    match /playlists/{playlistId} {
+      allow read: if isStaff() || (isStudent() && sharedWithMe(resource.data.get('audience', [])));
+      allow create, update: if isStaff()
+        && requiredStr('title', 140) && optStr('description', 2000)
+        && request.resource.data.tracks is list && request.resource.data.tracks.size() <= 200
+        && request.resource.data.materialIds is list
+        && request.resource.data.studentIds is list
+        && request.resource.data.groupIds is list
+        && request.resource.data.audience is list;
       allow delete: if isStaff();
     }
 

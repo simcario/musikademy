@@ -6,6 +6,7 @@ import {
   BookOpen,
   Download,
   Ellipsis,
+  ExternalLink,
   Eye,
   FileMusic,
   FileText,
@@ -27,6 +28,7 @@ import { Pill } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
 import { dirOf, pdfFileName, saveBlob, saveMarkdownAsPdf } from "@/lib/files";
 import { cn } from "@/lib/utils";
+import { VIDEO_PROVIDER_LABEL, parseVideoUrl } from "@/lib/video";
 import { materialService } from "@/services/materialService";
 import type { Material, MaterialCategory, MaterialType, WithId } from "@/types";
 import { errorMessage } from "@/utils/errors";
@@ -67,9 +69,15 @@ export function MaterialIcon({ type, className }: { type: MaterialType; classNam
   );
 }
 
-export function useMaterialUrl(material: Pick<Material, "storagePath"> | null, enabled = true) {
+/** Dimensione del file, oppure il servizio per i video online (YouTube, Vimeo…). */
+export function materialSizeLabel(m: Pick<Material, "size" | "externalUrl">): string {
+  if (!m.externalUrl) return formatFileSize(m.size);
+  return VIDEO_PROVIDER_LABEL[parseVideoUrl(m.externalUrl)?.provider ?? "link"];
+}
+
+export function useMaterialUrl(material: Pick<Material, "storagePath" | "externalUrl"> | null, enabled = true) {
   return useQuery({
-    queryKey: qk.materialUrl(material?.storagePath ?? ""),
+    queryKey: qk.materialUrl(material?.externalUrl || material?.storagePath || ""),
     queryFn: () => materialService.fileUrl(material!),
     enabled: !!material && enabled,
     staleTime: 30 * 60_000,
@@ -96,8 +104,16 @@ export function MaterialViewer({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const kind = VIEWER_KIND[material.type] ?? "other";
-  const needsUrl = !(kind === "markdown" && material.content !== undefined);
+  // Video online (ADR D30): player di YouTube/Vimeo incorporato, oppure il file video dal suo indirizzo.
+  const online = material.externalUrl ? parseVideoUrl(material.externalUrl) : null;
+  const kind: ViewerKind = online
+    ? online.embedUrl
+      ? "embed"
+      : online.provider === "file"
+        ? "video"
+        : "other"
+    : (VIEWER_KIND[material.type] ?? "other");
+  const needsUrl = !online && !(kind === "markdown" && material.content !== undefined);
   const url = useMaterialUrl(material, open && needsUrl);
   return (
     <FileViewer
@@ -106,7 +122,8 @@ export function MaterialViewer({
       title={material.title}
       fileName={material.fileName}
       kind={kind}
-      url={url.data}
+      url={online?.url ?? url.data}
+      embedUrl={online?.embedUrl}
       urlPending={needsUrl && url.isPending}
       urlError={url.error}
       content={material.content}
@@ -148,6 +165,9 @@ export function MaterialActions({ material, compact }: { material: WithId<Materi
   const dock = useAudioDock();
   const [viewing, setViewing] = useState(false);
   const isAudio = material.type === "audio";
+  const online = material.externalUrl ? parseVideoUrl(material.externalUrl) : null;
+  // Un link che non è un video riconosciuto si apre direttamente nel sito d'origine.
+  const linkOut = !!material.externalUrl && (!online || online.provider === "link");
   const current = dock.isCurrent(material.id);
   const playing = current && dock.state.playing;
 
@@ -157,38 +177,64 @@ export function MaterialActions({ material, compact }: { material: WithId<Materi
       : material.category === "base"
         ? "Ascolta base"
         : "Ascolta"
-    : material.type === "video"
-      ? "Guarda video"
-      : material.category === "spartito"
-        ? "Apri spartito"
-        : material.type === "image"
-          ? "Visualizza"
-          : "Leggi";
+    : material.externalUrl && (material.category === "ascolto" || material.category === "base")
+      ? material.category === "base"
+        ? "Ascolta base"
+        : "Ascolta"
+      : material.type === "video"
+        ? "Guarda video"
+        : material.category === "spartito"
+          ? "Apri spartito"
+          : material.type === "image"
+            ? "Visualizza"
+            : "Leggi";
 
   return (
     <div className="flex items-center gap-2">
       <Button
         size={compact ? "sm" : "default"}
         variant={isAudio && current ? "default" : "secondary"}
-        onClick={() => (isAudio ? dock.playMaterial(material) : setViewing(true))}
+        onClick={() =>
+          isAudio
+            ? dock.playMaterial(material)
+            : linkOut
+              ? window.open(material.externalUrl, "_blank", "noopener,noreferrer")
+              : setViewing(true)
+        }
         aria-label={`${label}: ${material.title}`}
       >
         {isAudio ? (
           playing ? <Pause className="fill-current" aria-hidden /> : <Play className="fill-current" aria-hidden />
+        ) : linkOut ? (
+          <ExternalLink aria-hidden />
         ) : (
           <Eye aria-hidden />
         )}
         {label}
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => download(material)}
-        aria-label={`Scarica ${material.title}${material.type === "markdown" ? " in PDF" : ""}`}
-        title={material.type === "markdown" ? "Scarica in PDF" : undefined}
-      >
-        <Download className="size-5" aria-hidden />
-      </Button>
+      {material.externalUrl ? (
+        // I video online non si scaricano: si aprono sul sito d'origine.
+        <a
+          href={material.externalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Apri ${material.title} su ${materialSizeLabel(material)}`}
+          title={`Apri su ${materialSizeLabel(material)}`}
+          className="flex size-10 items-center justify-center rounded-full text-foreground hover:bg-muted"
+        >
+          <ExternalLink className="size-5" aria-hidden />
+        </a>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => download(material)}
+          aria-label={`Scarica ${material.title}${material.type === "markdown" ? " in PDF" : ""}`}
+          title={material.type === "markdown" ? "Scarica in PDF" : undefined}
+        >
+          <Download className="size-5" aria-hidden />
+        </Button>
+      )}
       {!isAudio && <MaterialViewer material={material} open={viewing} onOpenChange={setViewing} />}
     </div>
   );
@@ -210,7 +256,7 @@ export function MaterialCard({ material, badge }: { material: WithId<Material>; 
           </div>
           <h3 className="truncate font-semibold">{material.title}</h3>
           <p className="line-clamp-2 text-xs text-muted-foreground">
-            {[formatFileSize(material.size), material.description].filter(Boolean).join(" • ")}
+            {[materialSizeLabel(material), material.description].filter(Boolean).join(" • ")}
           </p>
         </div>
       </div>
@@ -262,7 +308,7 @@ export function TrackList({
             </p>
             <h3 className="truncate font-semibold">{m.title}</h3>
             <p className="truncate text-xs text-muted-foreground">
-              {[formatFileSize(m.size), formatShortDate(m.createdAt), m.description].filter(Boolean).join(" • ")}
+              {[materialSizeLabel(m), formatShortDate(m.createdAt), m.description].filter(Boolean).join(" • ")}
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -283,7 +329,7 @@ export function MaterialRow({ material, action }: { material: WithId<Material>; 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{material.title}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {CATEGORY_META[material.category].label} · {formatFileSize(material.size)}
+          {CATEGORY_META[material.category].label} · {materialSizeLabel(material)}
         </p>
       </div>
       <LyricsButton material={material} />

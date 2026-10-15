@@ -16,11 +16,15 @@ const unique = (ids: string[]) => Array.from(new Set(ids));
 
 /**
  * `audience` di un materiale (ADR D26): i suoi gruppi + l'`audience` della cartella che lo contiene
- * (che comprende già quella delle cartelle superiori). Va ricalcolato ogni volta che cambiano i gruppi
- * del materiale, la sua cartella o la condivisione di una cartella sopra di lui.
+ * (che comprende già quella delle cartelle superiori) + chi riceve le playlist che lo contengono (ADR D29).
+ * Va ricalcolato ogni volta che cambiano i gruppi del materiale, la sua cartella, la condivisione di una
+ * cartella sopra di lui o quella di una sua playlist.
  */
-export const materialAudience = (groupIds: string[] = [], folder?: Pick<MaterialFolder, "audience"> | null) =>
-  unique([...groupIds, ...(folder?.audience ?? [])]);
+export const materialAudience = (
+  groupIds: string[] = [],
+  folder?: Pick<MaterialFolder, "audience"> | null,
+  playlistAudience: string[] = [],
+) => unique([...groupIds, ...(folder?.audience ?? []), ...playlistAudience]);
 
 export type FolderMap = Map<string, Folder>;
 export const toFolderMap = (folders: Folder[] = []): FolderMap => new Map(folders.map((f) => [f.id, f]));
@@ -98,7 +102,10 @@ async function subtreeWrites(root: Folder, folders: Folder[]): Promise<Write[]> 
     materials.forEach((m) =>
       writes.push({
         ref: ref(COLLECTIONS.materials, m.id),
-        data: { audience: materialAudience(m.groupIds, { audience: audiences.get(m.folderId ?? "") ?? [] }), ...touched() },
+        data: {
+          audience: materialAudience(m.groupIds, { audience: audiences.get(m.folderId ?? "") ?? [] }, m.playlistAudience),
+          ...touched(),
+        },
       }),
     );
   }
@@ -192,7 +199,7 @@ export const folderService = {
     materials.forEach((m) =>
       writes.push({
         ref: ref(COLLECTIONS.materials, m.id),
-        data: { folderId: parent?.id ?? "", audience: materialAudience(m.groupIds, parent), ...touched() },
+        data: { folderId: parent?.id ?? "", audience: materialAudience(m.groupIds, parent, m.playlistAudience), ...touched() },
       }),
     );
     writes.push({ ref: ref(COLLECTIONS.materialFolders, id), data: null });

@@ -7,6 +7,7 @@ export const qk = {
   activeStudents: () => ["students", "active"] as const,
   groups: () => ["groups"] as const,
   folders: (scope: unknown) => ["folders", scope] as const,
+  playlists: (scope: unknown) => ["playlists", scope] as const,
   courses: () => ["courses"] as const,
   teachers: () => ["teachers"] as const,
   lessons: (scope: unknown) => ["lessons", scope] as const,

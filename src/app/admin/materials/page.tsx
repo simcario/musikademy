@@ -40,7 +40,7 @@ import {
   MoveFolderDialog,
   MoveToFolderDialog,
 } from "@/features/materials/folder-dialogs";
-import { CATEGORY_ICON, LyricsButton, MaterialActions, MaterialIcon } from "@/features/materials/material-card";
+import { CATEGORY_ICON, LyricsButton, MaterialActions, MaterialIcon, materialSizeLabel } from "@/features/materials/material-card";
 import { MaterialAssignDialog } from "@/features/materials/material-assign-dialog";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
@@ -56,7 +56,7 @@ import {
   type MaterialFolder,
   type WithId,
 } from "@/types";
-import { formatFileSize, formatShortDate } from "@/utils/format";
+import { formatShortDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -64,12 +64,13 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 /** A chi è visibile il materiale, in breve; `null` = a nessuno. */
 function audienceLabel(m: Material): string | null {
   const groups = m.groupIds?.length ?? 0;
-  const viaFolder = (m.audience ?? []).some((id) => !(m.groupIds ?? []).includes(id));
+  const viaFolder = (m.audience ?? []).some((id) => !(m.groupIds ?? []).includes(id) && !(m.playlistAudience ?? []).includes(id));
   const parts = [
     m.visibility === "all" ? "Tutti" : m.visibility === "course" ? "Corso" : null,
     groups ? count(groups, "gruppo", "gruppi") : null,
     m.studentIds?.length ? count(m.studentIds.length, "studente", "studenti") : null,
     viaFolder ? "Cartella" : null,
+    m.playlistAudience?.length ? "Playlist" : null,
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
 }
@@ -302,7 +303,7 @@ function Materials() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{m.title}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {[CATEGORY_META[m.category].label, formatFileSize(m.size), formatShortDate(m.createdAt), folderName]
+                    {[CATEGORY_META[m.category].label, materialSizeLabel(m), formatShortDate(m.createdAt), folderName]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
@@ -338,8 +339,14 @@ function Materials() {
       )}
       <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
 
-      {/* La chiave ripropone la cartella aperta a ogni nuovo caricamento. */}
-      <MaterialFormDialog key={openFolder?.id ?? "root"} open={creating} onOpenChange={setCreating} folderId={openFolder?.id} />
+      {/* La chiave ripropone cartella e categoria aperte a ogni nuovo caricamento ("Tutti" = categoria da scegliere). */}
+      <MaterialFormDialog
+        key={`${openFolder?.id ?? "root"}:${category}`}
+        open={creating}
+        onOpenChange={setCreating}
+        folderId={openFolder?.id}
+        category={category === "all" ? undefined : category}
+      />
       <TextCreateDialog open={creatingText} onOpenChange={setCreatingText} folderId={openFolder?.id} onCreated={setEditing} />
       <MaterialEditorDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} material={editing} />
       <MaterialAssignDialog open={!!assigning} onOpenChange={(o) => !o && setAssigning(null)} material={assigning} />

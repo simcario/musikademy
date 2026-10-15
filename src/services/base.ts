@@ -22,6 +22,7 @@ export const COLLECTIONS = {
   lessons: "lessons",
   materials: "materials",
   materialFolders: "materialFolders",
+  playlists: "playlists",
   groups: "groups",
   assignments: "assignments",
   attendance: "attendance",

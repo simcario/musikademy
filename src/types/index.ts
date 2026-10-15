@@ -154,6 +154,11 @@ export interface Material {
    */
   lyricsId?: string;
   lyrics?: string;
+  /**
+   * Video online (ADR D30): link a YouTube, Vimeo o a un file video pubblico. Il materiale non ha
+   * un file su Storage (`storagePath` e `fileName` vuoti, `size` 0).
+   */
+  externalUrl?: string;
   courseId?: string;
   createdBy: string;
   visibility: Visibility;
@@ -167,10 +172,45 @@ export interface Material {
    * È il campo che rules e query dello studente interrogano (vedi `materialAudience`).
    */
   audience?: string[];
+  /**
+   * Derivato (ADR D29): studenti e gruppi delle playlist che contengono il materiale. Entra in `audience`,
+   * così chi riceve una playlist può aprirne i materiali.
+   */
+  playlistAudience?: string[];
   keywords: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+/** Brano di una playlist: un titolo con i suoi materiali (ascolto, base, spartito, testo, video…). */
+export interface PlaylistTrack {
+  /** Identificativo stabile dentro la playlist (non è un documento). */
+  id: string;
+  title: string;
+  /** Autore o interprete. */
+  artist?: string;
+  notes?: string;
+  materialIds: string[];
+}
+
+/** Playlist (ADR D29): elenco ordinato di brani, condiviso con studenti e gruppi. */
+export interface Playlist {
+  title: string;
+  description?: string;
+  tracks: PlaylistTrack[];
+  /** Derivato: i materiali di tutti i brani, per trovare le playlist che contengono un materiale. */
+  materialIds: string[];
+  studentIds: string[];
+  groupIds: string[];
+  /** Derivato: `studentIds` + `groupIds`, il campo che rules e query dello studente interrogano. */
+  audience: string[];
+  createdBy: string;
+  keywords: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export const MAX_PLAYLIST_TRACKS = 200;
 
 /** Cartella di materiali (ADR D26), annidabile e condivisibile con singoli studenti e gruppi. */
 export interface MaterialFolder {
