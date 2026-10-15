@@ -53,7 +53,11 @@ function DetailsForm({
   const save = useStaffMutation(
     async () => {
       if (playlist) await playlistService.updateDetails(playlist.id, { title: trimmed, description });
-      else onCreated?.(await playlistService.create({ title: trimmed, description }, uid));
+      else {
+        // Prima si crea, poi si avvisa: con `onCreated?.(await …)` la creazione salterebbe se `onCreated` manca.
+        const id = await playlistService.create({ title: trimmed, description }, uid);
+        onCreated?.(id);
+      }
     },
     { success: playlist ? "Playlist aggiornata" : "Playlist creata", invalidate: [["playlists"]], onSuccess: onDone },
   );

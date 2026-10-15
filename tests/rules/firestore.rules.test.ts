@@ -365,6 +365,22 @@ describe("playlist e video online (ADR D29, D30)", () => {
     });
   });
 
+  it("l'admin crea un brano come fa l'app (songService.create)", async () => {
+    const admin = as("admin1", "admin");
+    const payload = {
+      title: "Alive",
+      items: [{ materialId: "m-pl", groupIds: [] }],
+      materialIds: ["m-pl"],
+      audience: [],
+      createdBy: "admin1",
+      keywords: ["alive"],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await assertSucceeds(setDoc(doc(admin, "songs", "s-app"), payload));
+    await assertSucceeds(setDoc(doc(admin, "songs", "s-app2"), { ...payload, artist: "Autore", notes: "Note" }));
+  });
+
   it("lo studente vede solo le playlist condivise con sé o con un suo gruppo, e i loro materiali", async () => {
     await assertSucceeds(getDoc(doc(student(ALICE), "playlists", "p-coro")));
     await assertFails(getDoc(doc(student(BOB), "playlists", "p-coro")));

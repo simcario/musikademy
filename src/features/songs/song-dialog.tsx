@@ -51,7 +51,11 @@ function SongForm({ song, onCreated, onDone }: { song: WithId<Song> | null; onCr
     async () => {
       const details = { title: trimmed, artist, notes };
       if (song) await songService.update(song.id, details, items);
-      else onCreated?.(await songService.create(details, items, uid));
+      else {
+        // Prima si crea, poi si avvisa: con `onCreated?.(await …)` la creazione salterebbe se `onCreated` manca.
+        const id = await songService.create(details, items, uid);
+        onCreated?.(id);
+      }
     },
     { success: song ? "Brano aggiornato" : "Brano creato", invalidate: [["songs"], ["materials"]], onSuccess: onDone },
   );
