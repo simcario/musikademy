@@ -135,9 +135,9 @@ export function SongBlock({
   const panelId = `song-${song.id}`;
   const summary = [song.artist, count(items.length, "materiale", "materiali")].filter(Boolean).join(" · ");
   const expanded = !onOpen && open;
-  // Studente, brano con una sola traccia audio: il clic la avvia (o la mette in pausa) senza aprire il dettaglio.
+  // Brano con una sola traccia audio: il clic la avvia (o la mette in pausa) senza aprire il dettaglio.
   const dock = useAudioDock();
-  const soloAudio = audienceIds && shown.length === 1 && shown[0].material.type === "audio" ? shown[0].material : null;
+  const soloAudio = shown.length === 1 && shown[0].material.type === "audio" ? shown[0].material : null;
   const onClick = soloAudio && onOpen ? () => void dock.playMaterial(soloAudio) : (onOpen ?? (() => setOpen((o) => !o)));
 
   return (

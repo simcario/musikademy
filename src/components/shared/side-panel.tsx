@@ -1,6 +1,7 @@
 "use client";
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useDockVisible } from "@/features/materials/audio-dock";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +26,7 @@ export function SidePanel({
   /** Form con molti campi affiancati (es. caricamento materiale). */
   wide?: boolean;
 }) {
+  const dockVisible = useDockVisible();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -41,6 +43,10 @@ export function SidePanel({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 [&>form]:flex [&>form]:min-h-full [&>form]:flex-col">
           {children}
         </div>
+        {/* Il player audio resta sopra il pannello: lascia spazio così non copre i pulsanti in fondo. */}
+        {dockVisible && (
+          <div className="h-[calc(140px+env(safe-area-inset-bottom))] shrink-0 border-t border-border md:h-24" aria-hidden />
+        )}
       </SheetContent>
     </Sheet>
   );

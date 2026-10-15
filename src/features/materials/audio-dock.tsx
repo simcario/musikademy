@@ -110,6 +110,12 @@ export function useAudioDock() {
   return ctx;
 }
 
+/** C'è una traccia nel dock? Non richiede il provider: fuori dalle aree con il player vale `false`. */
+export function useDockVisible() {
+  const ctx = useContext(AudioDockContext);
+  return !!ctx?.track && !ctx.expanded;
+}
+
 // ─────────────────────────── UI ───────────────────────────
 
 function Waveform({ progress, bars = 36 }: { progress: number; bars?: number }) {
