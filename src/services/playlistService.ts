@@ -1,10 +1,12 @@
-import { doc, documentId, getDoc, orderBy, where, writeBatch, type DocumentReference } from "firebase/firestore";
+import { deleteField, doc, documentId, getDoc, orderBy, where, writeBatch, type DocumentReference } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import {
   MAX_PLAYLIST_SONGS,
   MAX_SONG_ITEMS,
+  MAX_SONG_NOTES,
   type Material,
   type Playlist,
+  type PlaylistNote,
   type Song,
   type SongItem,
   type WithId,
@@ -53,6 +55,16 @@ export function playlistAudienceOf(materialId: string, { playlists, songs }: Sta
     }
   }
   return unique(out);
+}
+
+/**
+ * Note del brano `songId` nella playlist. Con `audienceIds` (studente: UID + gruppi) solo quelle per tutti e
+ * per i suoi gruppi; senza (docente) tutte.
+ */
+export function songNotesOf(p: Pick<Playlist, "songNotes">, songId: string, audienceIds?: string[]): PlaylistNote[] {
+  return (p.songNotes?.[songId] ?? []).filter(
+    (n) => !audienceIds || n.groupIds.length === 0 || n.groupIds.some((g) => audienceIds.includes(g)),
+  );
 }
 
 /** Chi riceve il brano: tutte le playlist condivise che lo contengono. */
@@ -192,7 +204,7 @@ export const songService = {
     await commit([
       ...touchedPlaylists.map((p) => ({
         ref: ref(COLLECTIONS.playlists, p.id),
-        data: { songIds: songIdsOf(p).filter((s) => s !== id), ...touched() },
+        data: { songIds: songIdsOf(p).filter((s) => s !== id), [`songNotes.${id}`]: deleteField(), ...touched() },
       })),
       { ref: ref(COLLECTIONS.songs, id), data: null },
       ...(await syncWrites(after, [], before?.materialIds ?? [])),
@@ -287,12 +299,31 @@ export const playlistService = {
     ]);
   },
 
-  /** Brani nell'ordine dato. */
+  /** Brani nell'ordine dato; le note dei brani tolti si eliminano con loro. */
   async setSongs(id: string, songIds: string[]) {
     const next = unique(songIds);
     if (next.length > MAX_PLAYLIST_SONGS) throw new AppError(`Una playlist può contenere al massimo ${MAX_PLAYLIST_SONGS} brani.`);
     const p = await loadPlaylist(id);
-    await applyPlaylist(id, { ...p, songIds: next }, { songIds: next, ...touched() });
+    const dropped = Object.fromEntries(
+      Object.keys(p.songNotes ?? {})
+        .filter((s) => !next.includes(s))
+        .map((s) => [`songNotes.${s}`, deleteField()]),
+    );
+    await applyPlaylist(id, { ...p, songIds: next }, { songIds: next, ...dropped, ...touched() });
+  },
+
+  /** Note del brano valide solo in questa playlist (lista vuota = nessuna nota). */
+  async setSongNotes(id: string, songId: string, notes: PlaylistNote[]) {
+    const next = notes
+      .map((n) => ({ id: n.id, text: n.text.trim(), groupIds: unique(n.groupIds) }))
+      .filter((n) => n.text);
+    if (next.length > MAX_SONG_NOTES) throw new AppError(`Un brano può avere al massimo ${MAX_SONG_NOTES} note.`);
+    await commit([
+      {
+        ref: ref(COLLECTIONS.playlists, id),
+        data: { [`songNotes.${songId}`]: next.length ? next : deleteField(), ...touched() },
+      },
+    ]);
   },
 
   /** Condivisione: chi la riceve vede la playlist, i suoi brani e i materiali per tutti o per il proprio gruppo. */

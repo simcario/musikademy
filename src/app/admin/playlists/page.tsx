@@ -18,7 +18,7 @@ import { AddSongsDialog, PlaylistDetailsDialog, PlaylistShareDialog } from "@/fe
 import { PlaylistCover, PlaylistSongs, playlistSummary } from "@/features/playlists/playlist-songs";
 import { SongDetailPanel } from "@/features/songs/song-detail";
 import { SongDialog } from "@/features/songs/song-dialog";
-import { playlistService } from "@/services/playlistService";
+import { playlistService, songNotesOf } from "@/services/playlistService";
 import type { Playlist, Song, WithId } from "@/types";
 
 export default function AdminPlaylistsPage() {
@@ -202,7 +202,7 @@ function PlaylistDetail({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem className="min-h-10" onClick={() => setEditing(s)}>
-                <Pencil aria-hidden /> Modifica brano
+                <Pencil aria-hidden /> Modifica brano e note
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToRemove(s)}>
                 <Trash2 aria-hidden /> Togli dalla playlist
@@ -215,13 +215,14 @@ function PlaylistDetail({
       <AddSongsDialog open={adding} onOpenChange={setAdding} playlist={playlist} />
       <SongDetailPanel
         song={viewing}
+        notes={viewing ? songNotesOf(playlist, viewing.id) : []}
         onOpenChange={(o) => !o && setViewing(null)}
         onEdit={(s) => {
           setViewing(null);
           setEditing(s);
         }}
       />
-      <SongDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} song={editing} />
+      <SongDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} song={editing} playlist={playlist} />
       <ConfirmDialog
         open={!!toRemove}
         onOpenChange={(o) => !o && setToRemove(null)}

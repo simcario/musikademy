@@ -25,8 +25,10 @@ import { Pill } from "@/components/shared/status-badge";
 import { useGroups, useSongs } from "@/features/admin/hooks";
 import { CATEGORY_ICON, MaterialRow } from "@/features/materials/material-card";
 import { useMaterialsByIds, useSongsByIds } from "@/features/student-area/hooks";
+import { NotesButton } from "@/features/playlists/song-notes";
 import { cn } from "@/lib/utils";
-import type { Material, MaterialCategory, Playlist, Song, WithId } from "@/types";
+import { songNotesOf } from "@/services/playlistService";
+import type { Material, MaterialCategory, Playlist, PlaylistNote, Song, WithId } from "@/types";
 import { CATEGORY_META } from "@/utils/status";
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -106,6 +108,7 @@ export function SongBlock({
   footer,
   dragging,
   onOpen,
+  notes = [],
 }: {
   song: WithId<Song>;
   index?: number;
@@ -120,6 +123,8 @@ export function SongBlock({
   dragging?: boolean;
   /** Apre il brano nel pannello laterale invece di espandere la riga. */
   onOpen?: () => void;
+  /** Note del brano nella playlist (già filtrate per lo studente): icona in evidenza che le apre come post-it. */
+  notes?: PlaylistNote[];
 }) {
   const [open, setOpen] = useState(false);
   const items = (song.items ?? []).filter(
@@ -158,6 +163,11 @@ export function SongBlock({
             <ChevronDown className={cn("size-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
           )}
         </button>
+        {notes.length > 0 && (
+          <span className={cn("flex shrink-0 items-center", actions ? "pl-1" : "px-2")}>
+            <NotesButton notes={notes} songTitle={song.title} groupNames={groupNames} />
+          </span>
+        )}
         {actions}
       </div>
       {expanded && (
@@ -221,8 +231,8 @@ function SortableSong(props: Omit<React.ComponentProps<typeof SongBlock>, "handl
 }
 
 /**
- * Brani della playlist, nell'ordine scelto. Docente: tutti i materiali con i gruppi e, con `onReorder`,
- * ordinamento a trascinamento; studente: i materiali per tutti e del proprio gruppo.
+ * Brani della playlist, nell'ordine scelto. Docente: tutti i materiali e le note con i gruppi e, con `onReorder`,
+ * ordinamento a trascinamento; studente: i materiali e le note per tutti e del proprio gruppo.
  */
 export function PlaylistSongs({
   playlist,
@@ -236,7 +246,7 @@ export function PlaylistSongs({
   /** Studente: UID + gruppi attivi. Assente = vista docente. */
   audienceIds?: string[];
   songActions?: (song: WithId<Song>, index: number) => React.ReactNode;
-  /** Docente: il clic su un brano lo apre nel pannello laterale invece di espanderlo. */
+  /** Il clic su un brano lo apre nel pannello laterale invece di espanderlo. */
   onOpenSong?: (song: WithId<Song>) => void;
   /** Salva il nuovo ordine dei brani dopo un trascinamento; se fallisce torna l'ordine salvato. */
   onReorder?: (songIds: string[]) => Promise<unknown>;
@@ -272,6 +282,7 @@ export function PlaylistSongs({
     groupNames,
     actions: songActions?.(s, i),
     onOpen: onOpenSong ? () => onOpenSong(s) : undefined,
+    notes: songNotesOf(playlist, s.id, audienceIds),
   });
 
   if (!onReorder) {

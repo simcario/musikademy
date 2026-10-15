@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FileUp, Link2 } from "lucide-react";
+import { FileUp, Link2, Plus } from "lucide-react";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +19,14 @@ import { useSession } from "@/features/auth/auth-provider";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
 import { VIDEO_PROVIDER_LABEL, parseVideoUrl } from "@/lib/video";
 import { materialService } from "@/services/materialService";
-import { EXERCISE_CATEGORY, LIBRARY_CATEGORIES, MATERIAL_CATEGORIES, type MaterialCategory } from "@/types";
+import {
+  EXERCISE_CATEGORY,
+  LIBRARY_CATEGORIES,
+  MATERIAL_CATEGORIES,
+  type Material,
+  type MaterialCategory,
+  type WithId,
+} from "@/types";
 import { formatFileSize, fullName } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
 import { FolderSelect } from "./folder-dialogs";
@@ -53,6 +61,9 @@ export function MaterialFormDialog({
   exercise,
   folderId,
   category,
+  description,
+  onCreated,
+  songPicker = true,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -62,17 +73,68 @@ export function MaterialFormDialog({
   folderId?: string;
   /** Categoria proposta (la scheda aperta nella pagina Materiali); assente = da scegliere. */
   category?: MaterialCategory;
+  description?: string;
+  /** Materiale pronto (link salvato o file caricato, anche a pannello già chiuso). */
+  onCreated?: (id: string) => void;
+  /** Scelta del brano a cui aggiungerlo: no quando il materiale nasce già dentro un brano. */
+  songPicker?: boolean;
 }) {
   return (
     <SidePanel
       open={open}
       onOpenChange={onOpenChange}
       title={exercise ? "Nuovo esercizio" : "Nuovo materiale"}
-      description={exercise ? "Entra nel catalogo: gli studenti lo vedono solo quando glielo assegni." : undefined}
+      description={description ?? (exercise ? "Entra nel catalogo: gli studenti lo vedono solo quando glielo assegni." : undefined)}
       wide
     >
-      <MaterialForm exercise={exercise} folderId={folderId} category={category} onDone={() => onOpenChange(false)} />
+      <MaterialForm
+        exercise={exercise}
+        folderId={folderId}
+        category={category}
+        onCreated={onCreated}
+        songPicker={songPicker}
+        onDone={() => onOpenChange(false)}
+      />
     </SidePanel>
+  );
+}
+
+/**
+ * "Nuovo materiale" dentro un selettore di materiali: apre il form di caricamento sopra il pannello in corso
+ * (che resta com'è) e, a materiale pronto, lo passa a `onCreated` per selezionarlo.
+ */
+export function CreateMaterialButton({
+  onCreated,
+  songPicker,
+  context,
+  className,
+}: {
+  onCreated: (material: WithId<Material>) => void;
+  songPicker?: boolean;
+  /** Dove finirà il materiale, mostrato nel pannello (es. il titolo del brano). */
+  context?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button type="button" variant="outline" className={className} onClick={() => setOpen(true)}>
+        <Plus aria-hidden /> Nuovo materiale
+      </Button>
+      {/* Gli eventi React attraversano i portali: il submit di questo form non deve arrivare al form che lo contiene. */}
+      <span className="contents" onSubmit={(e) => e.stopPropagation()}>
+        <MaterialFormDialog
+          open={open}
+          onOpenChange={setOpen}
+          songPicker={songPicker}
+          description={context ? `Sarà aggiunto a: ${context}` : "Sarà selezionato appena pronto."}
+          onCreated={async (id) => {
+            const [m] = await materialService.getMany([id]);
+            if (m) onCreated(m);
+          }}
+        />
+      </span>
+    </>
   );
 }
 
@@ -81,11 +143,15 @@ function MaterialForm({
   folderId,
   category,
   onDone,
+  onCreated,
+  songPicker = true,
 }: {
   exercise?: boolean;
   folderId?: string;
   category?: MaterialCategory;
   onDone: () => void;
+  onCreated?: (id: string) => void;
+  songPicker?: boolean;
 }) {
   const { uid } = useSession();
   const students = useActiveStudents();
@@ -97,7 +163,7 @@ function MaterialForm({
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   // Brano a cui aggiungere il materiale (ADR D29) e gruppi per cui vale nel brano.
-  const songs = useSongs(!exercise);
+  const songs = useSongs(!exercise && songPicker);
   const [songId, setSongId] = useState("");
   const [songGroups, setSongGroups] = useState<string[]>([]);
   const video = link.trim() ? parseVideoUrl(link) : null;
@@ -148,7 +214,10 @@ function MaterialForm({
   const createLink = useStaffMutation((v: Values) => materialService.createLink(link, withSong(v), uid), {
     success: "Link aggiunto",
     invalidate: [["materials"], ["songs"]],
-    onSuccess: onDone,
+    onSuccess: (id) => {
+      onCreated?.(id);
+      onDone();
+    },
   });
 
   function submit(v: Values) {
@@ -157,7 +226,11 @@ function MaterialForm({
       return createLink.mutate(v);
     }
     if (!file) return setFileError("Seleziona un file da caricare");
-    uploads.start(file, withSong(v), uid); // upload in background: il dialog si chiude subito
+    // Upload in background: il dialog si chiude subito, `onCreated` arriva a caricamento finito.
+    uploads.start(file, withSong(v), uid).then(
+      (id) => onCreated?.(id),
+      () => {}, // errore già mostrato dalla coda di upload
+    );
     onDone();
   }
 
@@ -263,7 +336,7 @@ function MaterialForm({
               {(p) => <CourseSelect {...p} {...form.register("courseId")} />}
             </Field>
           </div>
-          {!!songs.data?.length && (
+          {songPicker && !!songs.data?.length && (
             <div className="space-y-2 rounded-lg border border-input p-3">
               <Field label="Brano (opzionale)" hint="Il materiale entra nel brano e arriva a chi riceve una playlist che lo contiene.">
                 {(p) => (

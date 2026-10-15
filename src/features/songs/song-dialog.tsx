@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Library, Plus, Search, Trash2, UsersRound } from "lucide-react";
+import { FileText, Library, Plus, Search, StickyNote, Trash2, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,11 +13,21 @@ import { WizardActions, WizardProgress } from "@/components/shared/wizard";
 import { useGroups, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
 import { MaterialIcon, MaterialRow } from "@/features/materials/material-card";
+import { CreateMaterialButton } from "@/features/materials/material-form";
 import { useMaterialsByIds } from "@/features/student-area/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
-import { songService } from "@/services/playlistService";
-import { EXERCISE_CATEGORY, type Material, type Song, type SongItem, type WithId } from "@/types";
+import { playlistService, songNotesOf, songService } from "@/services/playlistService";
+import {
+  EXERCISE_CATEGORY,
+  MAX_SONG_NOTES,
+  type Material,
+  type Playlist,
+  type PlaylistNote,
+  type Song,
+  type SongItem,
+  type WithId,
+} from "@/types";
 import { CATEGORY_META } from "@/utils/status";
 
 type DialogProps = { open: boolean; onOpenChange: (o: boolean) => void };
@@ -26,13 +36,24 @@ type DialogProps = { open: boolean; onOpenChange: (o: boolean) => void };
  * Nuovo brano (wizard: dati → materiali → gruppi) oppure modifica di `song` a schede, con un unico salvataggio.
  * Ogni materiale vale per tutti o per alcuni gruppi (ADR D29).
  */
-export function SongDialog({ open, onOpenChange, song, onCreated }: DialogProps & { song: WithId<Song> | null; onCreated?: (id: string) => void }) {
+export function SongDialog({
+  open,
+  onOpenChange,
+  song,
+  onCreated,
+  playlist,
+}: DialogProps & {
+  song: WithId<Song> | null;
+  onCreated?: (id: string) => void;
+  /** Modifica dalla playlist: compare la scheda Note, con le note del brano valide solo in questa playlist. */
+  playlist?: WithId<Playlist>;
+}) {
   const onDone = () => onOpenChange(false);
   return (
     <SidePanel open={open} onOpenChange={onOpenChange} title={song ? "Modifica brano" : "Nuovo brano"} description={song?.title} wide>
       {open &&
         (song ? (
-          <SongEditForm key={song.id} song={song} onDone={onDone} />
+          <SongEditForm key={song.id} song={song} playlist={playlist} onDone={onDone} />
         ) : (
           <SongWizard key="new" onCreated={onCreated} onDone={onDone} />
         ))}
@@ -41,12 +62,19 @@ export function SongDialog({ open, onOpenChange, song, onCreated }: DialogProps 
 }
 
 /** Stato condiviso da wizard e modifica: dati, materiali scelti con i loro gruppi, ricerca e salvataggio. */
-function useSongDraft(song: WithId<Song> | null, onDone: () => void, onCreated?: (id: string) => void) {
+function useSongDraft(
+  song: WithId<Song> | null,
+  onDone: () => void,
+  onCreated?: (id: string) => void,
+  playlist?: WithId<Playlist>,
+) {
   const { uid } = useSession();
+  const savedNotes = song && playlist ? songNotesOf(playlist, song.id) : [];
+  const [notes, setNotes] = useState<PlaylistNote[]>(savedNotes);
   const groups = useGroups();
   const [title, setTitle] = useState(song?.title ?? "");
   const [artist, setArtist] = useState(song?.artist ?? "");
-  const [notes, setNotes] = useState(song?.notes ?? "");
+  const [studyNotes, setStudyNotes] = useState(song?.notes ?? "");
   const [items, setItems] = useState<SongItem[]>(song?.items ?? []);
   const [search, setSearch] = useState("");
   const debounced = useDebounce(search);
@@ -61,16 +89,30 @@ function useSongDraft(song: WithId<Song> | null, onDone: () => void, onCreated?:
 
   const save = useStaffMutation(
     async () => {
-      const details = { title: trimmed, artist, notes };
-      if (song) await songService.update(song.id, details, items);
-      else {
+      const details = { title: trimmed, artist, notes: studyNotes };
+      if (song) {
+        await songService.update(song.id, details, items);
+        if (playlist && JSON.stringify(notes) !== JSON.stringify(savedNotes)) {
+          await playlistService.setSongNotes(playlist.id, song.id, notes);
+        }
+      } else {
         // Prima si crea, poi si avvisa: con `onCreated?.(await …)` la creazione salterebbe se `onCreated` manca.
         const id = await songService.create(details, items, uid);
         onCreated?.(id);
       }
     },
-    { success: song ? "Brano aggiornato" : "Brano creato", invalidate: [["songs"], ["materials"]], onSuccess: onDone },
+    {
+      success: song ? "Brano aggiornato" : "Brano creato",
+      invalidate: [["songs"], ["materials"], ["playlists"]],
+      onSuccess: onDone,
+    },
   );
+
+  /** Materiale appena creato dal selettore: entra nel brano già spuntato, per tutti. */
+  const addCreated = (m: WithId<Material>) => {
+    setPicked((x) => new Map([...x, [m.id, m]]));
+    setItems((xs) => (xs.some((x) => x.materialId === m.id) ? xs : [...xs, { materialId: m.id, groupIds: [] }]));
+  };
 
   /** Spunte della pagina di ricerca: i materiali fuori dalla pagina restano come sono. */
   const pick = (ids: string[]) => {
@@ -90,10 +132,13 @@ function useSongDraft(song: WithId<Song> | null, onDone: () => void, onCreated?:
     setTitle,
     artist,
     setArtist,
+    studyNotes,
+    setStudyNotes,
     notes,
     setNotes,
     trimmed,
     items,
+    addCreated,
     known,
     search,
     setSearch,
@@ -166,11 +211,14 @@ function SongWizard({ onCreated, onDone }: { onCreated?: (id: string) => void; o
   );
 }
 
-type EditTab = "details" | "materials" | "groups";
+type EditTab = "details" | "materials" | "groups" | "notes";
 
-/** Modifica a schede: dati, materiali (con "Aggiungi materiale") e assegnazione ai gruppi; "Salva" vale per tutte. */
-function SongEditForm({ song, onDone }: { song: WithId<Song>; onDone: () => void }) {
-  const d = useSongDraft(song, onDone);
+/**
+ * Modifica a schede: dati, materiali (con "Aggiungi materiale"), assegnazione ai gruppi e, dalla playlist,
+ * le note del brano in quella playlist; "Salva" vale per tutte.
+ */
+function SongEditForm({ song, playlist, onDone }: { song: WithId<Song>; playlist?: WithId<Playlist>; onDone: () => void }) {
+  const d = useSongDraft(song, onDone, undefined, playlist);
   const [tab, setTab] = useState<EditTab>("details");
   const [touched, setTouched] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -195,6 +243,7 @@ function SongEditForm({ song, onDone }: { song: WithId<Song>; onDone: () => void
             { value: "details", label: "Dati", icon: FileText },
             { value: "materials", label: "Materiali", icon: Library, count: d.items.length },
             { value: "groups", label: "Assegnazione", icon: UsersRound },
+            ...(playlist ? [{ value: "notes" as const, label: "Note", icon: StickyNote, count: d.notes.length }] : []),
           ]}
         />
         {tab === "details" && <SongDetails d={d} touched={touched} />}
@@ -217,6 +266,7 @@ function SongEditForm({ song, onDone }: { song: WithId<Song>; onDone: () => void
             <SongItems d={d} withGroups emptyText="Nessun materiale: aggiungili dalla scheda Materiali." />
           </section>
         )}
+        {tab === "notes" && playlist && <SongNotesEditor d={d} playlistTitle={playlist.title} />}
         <FormActions onCancel={onDone} submitting={d.save.isPending} submitLabel="Salva" />
       </form>
       {/* Fuori dal form: gli eventi React attraversano i portali. */}
@@ -292,15 +342,82 @@ function SongDetails({ d, touched }: { d: Draft; touched: boolean }) {
         </Field>
       </div>
       <Field label="Note per chi lo studia">
-        {(p) => <Textarea {...p} rows={2} value={d.notes} onChange={(e) => d.setNotes(e.target.value)} maxLength={2000} />}
+        {(p) => <Textarea {...p} rows={2} value={d.studyNotes} onChange={(e) => d.setStudyNotes(e.target.value)} maxLength={2000} />}
       </Field>
     </>
+  );
+}
+
+/**
+ * Note del brano valide solo nella playlist: ognuna per tutti o per alcuni gruppi, come i materiali.
+ * Chi la riceve le vede come post-it dall'icona nella riga del brano.
+ */
+function SongNotesEditor({ d, playlistTitle }: { d: Draft; playlistTitle: string }) {
+  const update = (id: string, patch: Partial<PlaylistNote>) =>
+    d.setNotes((ns) => ns.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+  const add = () => d.setNotes((ns) => [...ns, { id: crypto.randomUUID(), text: "", groupIds: [] }]);
+  return (
+    <section className="space-y-3" aria-label="Note del brano nella playlist">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          Valgono solo nella playlist &quot;{playlistTitle}&quot;: chi la riceve le apre come post-it dalla riga del brano.
+        </p>
+        <Button type="button" onClick={add} disabled={d.notes.length >= MAX_SONG_NOTES} className="shrink-0">
+          <Plus aria-hidden /> Aggiungi nota
+        </Button>
+      </div>
+      {d.notes.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-input p-3 text-sm text-muted-foreground">
+          Nessuna nota: aggiungine una con &quot;Aggiungi nota&quot;.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {d.notes.map((n, i) => (
+            <li key={n.id} className="space-y-2 rounded-lg border border-yellow-300 bg-yellow-50 p-2.5">
+              <div className="flex items-start gap-2">
+                <Textarea
+                  value={n.text}
+                  onChange={(e) => update(n.id, { text: e.target.value })}
+                  rows={3}
+                  maxLength={1000}
+                  placeholder="Es. Attenzione all'attacco della seconda strofa"
+                  aria-label={`Testo della nota ${i + 1}`}
+                  autoFocus={!n.text}
+                  className="bg-card"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Elimina la nota ${i + 1}`}
+                  onClick={() => d.setNotes((ns) => ns.filter((x) => x.id !== n.id))}
+                >
+                  <Trash2 aria-hidden />
+                </Button>
+              </div>
+              <GroupChips
+                groups={d.groups}
+                value={n.groupIds}
+                onChange={(groupIds) => update(n.id, { groupIds })}
+                label={`Per chi è la nota ${i + 1}`}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">Le note vuote non vengono salvate.</p>
+    </section>
   );
 }
 
 function MaterialPicker({ d }: { d: Draft }) {
   return (
     <div className="space-y-2">
+      {/* Materiale non ancora caricato: lo si crea qui sopra, senza perdere il brano, e arriva già spuntato. */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">Non lo trovi? Caricalo ora: entra nel brano appena è pronto.</p>
+        <CreateMaterialButton onCreated={d.addCreated} songPicker={false} context={d.trimmed || "questo brano"} className="shrink-0" />
+      </div>
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input

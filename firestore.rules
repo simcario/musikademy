@@ -210,7 +210,8 @@ service cloud.firestore {
         && request.resource.data.songIds is list && request.resource.data.songIds.size() <= 200
         && request.resource.data.studentIds is list
         && request.resource.data.groupIds is list
-        && request.resource.data.audience is list;
+        && request.resource.data.audience is list
+        && request.resource.data.get('songNotes', {}) is map;
       allow delete: if can('materials:manage');
     }
 

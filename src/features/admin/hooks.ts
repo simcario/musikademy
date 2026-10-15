@@ -58,8 +58,8 @@ export function useFolders() {
   return useQuery({ queryKey: qk.folders("staff"), queryFn: folderService.list, staleTime: 5 * 60_000 });
 }
 
-export function usePlaylists() {
-  return useQuery({ queryKey: qk.playlists("staff"), queryFn: playlistService.list });
+export function usePlaylists(enabled = true) {
+  return useQuery({ queryKey: qk.playlists("staff"), queryFn: playlistService.list, enabled });
 }
 
 /** Tutti i brani (ADR D29). */

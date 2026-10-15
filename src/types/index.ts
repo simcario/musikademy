@@ -224,14 +224,24 @@ export interface Playlist {
   groupIds: string[];
   /** Derivato: `studentIds` + `groupIds`, il campo che rules e query dello studente interrogano. */
   audience: string[];
+  /** Note dei brani valide solo in questa playlist, per ID del brano. */
+  songNotes?: Record<string, PlaylistNote[]>;
   createdBy: string;
   keywords: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
+/** Nota di un brano dentro una playlist: per tutti (`groupIds` vuoto) o per alcuni gruppi, come i materiali. */
+export interface PlaylistNote {
+  id: string;
+  text: string;
+  groupIds: string[];
+}
+
 export const MAX_PLAYLIST_SONGS = 200;
 export const MAX_SONG_ITEMS = 50;
+export const MAX_SONG_NOTES = 20;
 
 /** Cartella di materiali (ADR D26), annidabile e condivisibile con singoli studenti e gruppi. */
 export interface MaterialFolder {

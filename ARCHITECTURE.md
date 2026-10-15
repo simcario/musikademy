@@ -81,7 +81,7 @@ Collezioni come da spec §29–38, con queste aggiunte (motivate sopra):
 - `lessons`: `studentName` denormalizzato (liste docente senza N letture)
 - `materials`: `fileName`, `contentType`, `size`, `category` include `immagine`; `folderId`, `groupIds`, `audience` (ADR D26)
 - `materialFolders/{id}`, `groups/{id}`, `students.groupIds`: cartelle e gruppi (ADR D26)
-- `songs/{id}`, `playlists/{id}`, `materials.playlistAudience`: brani e playlist (ADR D29); `materials.externalUrl`: link online (ADR D30)
+- `songs/{id}`, `playlists/{id}`, `materials.playlistAudience`: brani e playlist (ADR D29); `playlists.songNotes`: note dei brani valide solo in quella playlist, `{ [songId]: { id, text, groupIds }[] }` (per tutti o per gruppi come i materiali; il filtro per gruppo è solo nell'app: chi riceve la playlist può leggere tutto il documento); `materials.externalUrl`: link online (ADR D30)
 - `roles/{id}`, `users.roleId`, `students.roleId`, `teachers.roleId`, claim `roleId`/`perms`: ruoli configurabili (ADR D31)
 - `assignments`: `studentName`, `lessonTitle?` denormalizzati; `interactive?` per gli esercizi interattivi (ADR D22)
 - `payments`: `studentName`, `description` (es. "Quota ottobre"), `paidAmount`, `installments[]`, `period` (inizio del ciclo, `YYYY-MM-DD`)

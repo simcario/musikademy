@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ListMusic } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,9 @@ import { useAudioDock } from "@/features/materials/audio-dock";
 import { PlaylistCover, PlaylistSongs, playlistSummary } from "@/features/playlists/playlist-songs";
 import { useStudentContext } from "@/features/student-area/context";
 import { useMyPlaylists } from "@/features/student-area/hooks";
+import { SongDetailPanel } from "@/features/songs/song-detail";
+import { songNotesOf } from "@/services/playlistService";
+import type { Song, WithId } from "@/types";
 
 export default function PlaylistsPage() {
   return (
@@ -19,7 +22,10 @@ export default function PlaylistsPage() {
   );
 }
 
-/** Playlist ricevute (ADR D29): di ogni brano, i materiali per tutti e quelli del proprio gruppo. */
+/**
+ * Playlist ricevute (ADR D29), come nella gestione: righe con le icone dei materiali e delle note, il brano si
+ * apre nel pannello laterale. Di ogni brano, materiali e note per tutti e quelli del proprio gruppo.
+ */
 function Playlists() {
   const params = useSearchParams();
   const router = useRouter();
@@ -30,6 +36,7 @@ function Playlists() {
   const openId = params.get("id");
   const open = openId ? (q.data?.find((p) => p.id === openId) ?? null) : null;
   const playing = !!useAudioDock().track;
+  const [viewing, setViewing] = useState<WithId<Song> | null>(null);
 
   return (
     <PageContainer>
@@ -39,7 +46,7 @@ function Playlists() {
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : open ? (
         <>
-          <div className="flex items-center gap-2">
+          <div className="card-surface flex items-center gap-2 p-2 pl-1">
             <Button variant="ghost" size="icon" aria-label="Torna alle playlist" onClick={() => router.push(pathname)}>
               <ArrowLeft aria-hidden />
             </Button>
@@ -50,7 +57,13 @@ function Playlists() {
             </div>
           </div>
           {open.description && <p className="text-sm whitespace-pre-line text-muted-foreground">{open.description}</p>}
-          <PlaylistSongs playlist={open} audienceIds={audienceIds} />
+          <PlaylistSongs playlist={open} audienceIds={audienceIds} onOpenSong={setViewing} />
+          <SongDetailPanel
+            song={viewing}
+            audienceIds={audienceIds}
+            notes={viewing ? songNotesOf(open, viewing.id, audienceIds) : []}
+            onOpenChange={(o) => !o && setViewing(null)}
+          />
         </>
       ) : (
         <>
