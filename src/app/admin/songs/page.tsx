@@ -84,6 +84,7 @@ export default function AdminSongsPage() {
                   materials={materials.map}
                   groupNames={groupNames}
                   footer={lists.length ? `In playlist: ${lists.join(", ")}` : "Non è in nessuna playlist"}
+                  onOpen={() => setEditing({ song: s })}
                   actions={
                     <DropdownMenu>
                       <DropdownMenuTrigger aria-label={`Azioni brano ${s.title}`} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted">

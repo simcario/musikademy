@@ -16,6 +16,7 @@ import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states
 import { usePlaylists, useStaffMutation } from "@/features/admin/hooks";
 import { AddSongsDialog, PlaylistDetailsDialog, PlaylistShareDialog } from "@/features/playlists/playlist-dialogs";
 import { PlaylistCover, PlaylistSongs, playlistSummary } from "@/features/playlists/playlist-songs";
+import { SongDetailPanel } from "@/features/songs/song-detail";
 import { SongDialog } from "@/features/songs/song-dialog";
 import { playlistService } from "@/services/playlistService";
 import type { Playlist, Song, WithId } from "@/types";
@@ -156,6 +157,7 @@ function PlaylistDetail({
   onShare: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [viewing, setViewing] = useState<WithId<Song> | null>(null);
   const [editing, setEditing] = useState<WithId<Song> | null>(null);
   const [toRemove, setToRemove] = useState<WithId<Song> | null>(null);
   const songIds = playlist.songIds ?? [];
@@ -192,6 +194,7 @@ function PlaylistDetail({
         playlist={playlist}
         emptyText="Nessun brano: aggiungili con “Aggiungi brani”."
         onReorder={(ids) => setSongs.mutateAsync(ids)}
+        onOpenSong={setViewing}
         songActions={(s) => (
           <DropdownMenu>
             <DropdownMenuTrigger aria-label={`Azioni brano ${s.title}`} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted">
@@ -210,6 +213,14 @@ function PlaylistDetail({
       />
 
       <AddSongsDialog open={adding} onOpenChange={setAdding} playlist={playlist} />
+      <SongDetailPanel
+        song={viewing}
+        onOpenChange={(o) => !o && setViewing(null)}
+        onEdit={(s) => {
+          setViewing(null);
+          setEditing(s);
+        }}
+      />
       <SongDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} song={editing} />
       <ConfirmDialog
         open={!!toRemove}

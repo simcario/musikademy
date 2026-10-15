@@ -1,17 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Trash2 } from "lucide-react";
+import { FileText, Library, Plus, Search, Trash2, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
+import { TabBar } from "@/components/shared/segmented";
 import { LoadMore } from "@/components/shared/states";
 import { WizardActions, WizardProgress } from "@/components/shared/wizard";
 import { useGroups, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
-import { MaterialIcon } from "@/features/materials/material-card";
+import { MaterialIcon, MaterialRow } from "@/features/materials/material-card";
 import { useMaterialsByIds } from "@/features/student-area/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ import { CATEGORY_META } from "@/utils/status";
 type DialogProps = { open: boolean; onOpenChange: (o: boolean) => void };
 
 /**
- * Nuovo brano (wizard: dati → materiali → gruppi) oppure modifica di `song` su una sola pagina.
+ * Nuovo brano (wizard: dati → materiali → gruppi) oppure modifica di `song` a schede, con un unico salvataggio.
  * Ogni materiale vale per tutti o per alcuni gruppi (ADR D29).
  */
 export function SongDialog({ open, onOpenChange, song, onCreated }: DialogProps & { song: WithId<Song> | null; onCreated?: (id: string) => void }) {
@@ -103,6 +104,8 @@ function useSongDraft(song: WithId<Song> | null, onDone: () => void, onCreated?:
     unpick,
     setGroups,
     save,
+    /** I materiali già nel brano sono ancora in lettura. */
+    loading: chosen.isPending,
   };
 }
 
@@ -163,29 +166,117 @@ function SongWizard({ onCreated, onDone }: { onCreated?: (id: string) => void; o
   );
 }
 
+type EditTab = "details" | "materials" | "groups";
+
+/** Modifica a schede: dati, materiali (con "Aggiungi materiale") e assegnazione ai gruppi; "Salva" vale per tutte. */
 function SongEditForm({ song, onDone }: { song: WithId<Song>; onDone: () => void }) {
   const d = useSongDraft(song, onDone);
+  const [tab, setTab] = useState<EditTab>("details");
   const [touched, setTouched] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   return (
-    <form
-      className="space-y-4"
-      noValidate
-      onSubmit={(e) => {
-        e.preventDefault();
-        setTouched(true);
-        if (d.trimmed) d.save.mutate(undefined);
-      }}
-    >
-      <SongDetails d={d} touched={touched} />
-      <section className="space-y-2" aria-label="Materiali del brano">
-        <h3 className="text-[13px] font-medium">Materiali del brano ({d.items.length})</h3>
-        <SongItems d={d} withGroups emptyText="Nessun materiale: aggiungili dall'elenco qui sotto." />
-        <GroupsHint />
-      </section>
-      <MaterialPicker d={d} />
-      <FormActions onCancel={onDone} submitting={d.save.isPending} submitLabel="Salva" />
-    </form>
+    <>
+      <form
+        className="space-y-4"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          setTouched(true);
+          if (d.trimmed) d.save.mutate(undefined);
+          else setTab("details");
+        }}
+      >
+        <TabBar<EditTab>
+          label="Sezioni del brano"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "details", label: "Dati", icon: FileText },
+            { value: "materials", label: "Materiali", icon: Library, count: d.items.length },
+            { value: "groups", label: "Assegnazione", icon: UsersRound },
+          ]}
+        />
+        {tab === "details" && <SongDetails d={d} touched={touched} />}
+        {tab === "materials" && (
+          <section className="space-y-3" aria-label="Materiali del brano">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                {d.items.length === 1 ? "1 materiale" : `${d.items.length} materiali`} nel brano.
+              </p>
+              <Button type="button" onClick={() => setAdding(true)} className="shrink-0">
+                <Plus aria-hidden /> Aggiungi materiale
+              </Button>
+            </div>
+            <SongMaterialList d={d} />
+          </section>
+        )}
+        {tab === "groups" && (
+          <section className="space-y-3" aria-label="Assegnazione dei materiali">
+            <GroupsHint />
+            <SongItems d={d} withGroups emptyText="Nessun materiale: aggiungili dalla scheda Materiali." />
+          </section>
+        )}
+        <FormActions onCancel={onDone} submitting={d.save.isPending} submitLabel="Salva" />
+      </form>
+      {/* Fuori dal form: gli eventi React attraversano i portali. */}
+      <SidePanel open={adding} onOpenChange={setAdding} title="Aggiungi materiale" description={d.trimmed || song.title} wide>
+        {adding && (
+          <div className="flex min-h-full flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Spunta i materiali da aggiungere al brano; poi assegnali ai gruppi e salva il brano.
+            </p>
+            <MaterialPicker d={d} />
+            <div className="pb-safe sticky bottom-0 -mx-5 mt-auto -mb-4 flex justify-end border-t border-border bg-popover px-5 py-3">
+              <Button type="button" onClick={() => setAdding(false)}>
+                Fatto
+              </Button>
+            </div>
+          </div>
+        )}
+      </SidePanel>
+    </>
+  );
+}
+
+/** Scheda Materiali: ogni materiale si può ascoltare o aprire, oppure togliere dal brano. */
+function SongMaterialList({ d }: { d: Draft }) {
+  if (d.items.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-input p-3 text-sm text-muted-foreground">
+        Nessun materiale: aggiungili con &quot;Aggiungi materiale&quot;.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {d.items.map((i) => {
+        const m = d.known.get(i.materialId);
+        const remove = <RemoveItem d={d} materialId={i.materialId} title={m?.title} />;
+        return (
+          <li key={i.materialId}>
+            {m ? (
+              <MaterialRow material={m} action={remove} />
+            ) : (
+              <div className="flex items-center gap-3 rounded-lg bg-surface-low p-2.5">
+                <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                  {d.loading ? "Caricamento…" : "Materiale non disponibile"}
+                </p>
+                {remove}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function RemoveItem({ d, materialId, title }: { d: Draft; materialId: string; title?: string }) {
+  return (
+    <Button type="button" variant="ghost" size="icon" aria-label={`Togli ${title ?? "materiale"} dal brano`} onClick={() => d.unpick(materialId)}>
+      <Trash2 aria-hidden />
+    </Button>
   );
 }
 
@@ -252,18 +343,12 @@ function SongItems({ d, withGroups, emptyText }: { d: Draft; withGroups?: boolea
             <div className="flex items-center gap-3">
               {m && <MaterialIcon type={m.type} className="size-9 rounded-lg" />}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{m?.title ?? "Materiale non disponibile"}</p>
+                <p className="truncate text-sm font-semibold">
+                  {m?.title ?? (d.loading ? "Caricamento…" : "Materiale non disponibile")}
+                </p>
                 {m && <p className="truncate text-xs text-muted-foreground">{CATEGORY_META[m.category].label}</p>}
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Togli ${m?.title ?? "materiale"} dal brano`}
-                onClick={() => d.unpick(i.materialId)}
-              >
-                <Trash2 aria-hidden />
-              </Button>
+              <RemoveItem d={d} materialId={i.materialId} title={m?.title} />
             </div>
             {withGroups && (
               <GroupChips

@@ -23,10 +23,11 @@ import { ChevronDown, GripVertical, ListMusic, Music } from "lucide-react";
 import { Marquee } from "@/components/shared/marquee";
 import { Pill } from "@/components/shared/status-badge";
 import { useGroups, useSongs } from "@/features/admin/hooks";
-import { MaterialRow } from "@/features/materials/material-card";
+import { CATEGORY_ICON, MaterialRow } from "@/features/materials/material-card";
 import { useMaterialsByIds, useSongsByIds } from "@/features/student-area/hooks";
 import { cn } from "@/lib/utils";
-import type { Material, Playlist, Song, WithId } from "@/types";
+import type { Material, MaterialCategory, Playlist, Song, WithId } from "@/types";
+import { CATEGORY_META } from "@/utils/status";
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -51,8 +52,46 @@ export function PlaylistCover({ className = "size-12", song }: { className?: str
   );
 }
 
+/** Destinatari di un materiale del brano: "Tutti" oppure i nomi dei gruppi. */
+export function AudiencePills({ groupIds, groupNames }: { groupIds: string[]; groupNames: Map<string, string> }) {
+  return (
+    <div className="flex flex-wrap gap-1 pl-1">
+      {groupIds.length === 0 ? (
+        <Pill tone="neutral">Tutti</Pill>
+      ) : (
+        groupIds.map((g) => (
+          <Pill key={g} tone="secondary">
+            {groupNames.get(g) ?? "Gruppo eliminato"}
+          </Pill>
+        ))
+      )}
+    </div>
+  );
+}
+
+/** Un'icona per ogni categoria di materiale presente nel brano (ascolto, base, spartito…). */
+function MaterialKinds({ materials }: { materials: WithId<Material>[] }) {
+  const present = new Set(materials.map((m) => m.category));
+  const kinds = (Object.keys(CATEGORY_META) as MaterialCategory[]).filter((c) => present.has(c));
+  if (kinds.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap gap-1">
+      {kinds.map((c) => {
+        const Icon = CATEGORY_ICON[c];
+        return (
+          <span key={c} title={CATEGORY_META[c].label} className="flex size-6 items-center justify-center rounded-md bg-indigo-soft text-brand-ink">
+            <Icon className="size-3.5" aria-hidden />
+          </span>
+        );
+      })}
+      <span className="sr-only">Materiali: {kinds.map((c) => CATEGORY_META[c].label).join(", ")}</span>
+    </span>
+  );
+}
+
 /**
- * Un brano come riga espandibile: chiusa mostra titolo, autore e quanti materiali ha; aperta i materiali.
+ * Un brano in elenco. Con `onOpen` (docente) il clic apre il pannello laterale e la riga mostra le icone delle
+ * categorie di materiali; senza (studente) la riga si espande e mostra i materiali.
  * Con `audienceIds` (studente: UID + gruppi) mostra solo i materiali per tutti e quelli dei suoi gruppi;
  * senza (docente) li mostra tutti, con i gruppi a cui sono destinati.
  */
@@ -66,6 +105,7 @@ export function SongBlock({
   handle,
   footer,
   dragging,
+  onOpen,
 }: {
   song: WithId<Song>;
   index?: number;
@@ -78,6 +118,8 @@ export function SongBlock({
   /** Riga di dettaglio sotto il titolo (es. "In playlist: …"). */
   footer?: React.ReactNode;
   dragging?: boolean;
+  /** Apre il brano nel pannello laterale invece di espandere la riga. */
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const items = (song.items ?? []).filter(
@@ -86,6 +128,7 @@ export function SongBlock({
   const shown = items.flatMap((i) => (materials.has(i.materialId) ? [{ item: i, material: materials.get(i.materialId)! }] : []));
   const panelId = `song-${song.id}`;
   const summary = [song.artist, count(items.length, "materiale", "materiali")].filter(Boolean).join(" · ");
+  const expanded = !onOpen && open;
 
   return (
     <article className={cn("card-surface overflow-hidden", dragging && "shadow-dialog ring-2 ring-primary")}>
@@ -93,9 +136,9 @@ export function SongBlock({
         {handle}
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          aria-controls={panelId}
+          onClick={onOpen ?? (() => setOpen((o) => !o))}
+          aria-expanded={onOpen ? undefined : open}
+          aria-controls={onOpen ? undefined : panelId}
           className={cn("flex min-h-16 min-w-0 flex-1 items-center gap-3 py-2 pr-2 text-left hover:bg-muted/40", handle ? "pl-1" : "pl-4")}
         >
           {index !== undefined ? (
@@ -109,12 +152,15 @@ export function SongBlock({
             <Marquee className="font-semibold">{song.title}</Marquee>
             <span className="block truncate text-xs text-muted-foreground">{summary}</span>
             {footer && <span className="block truncate text-xs text-muted-foreground">{footer}</span>}
+            {onOpen && <MaterialKinds materials={shown.map((s) => s.material)} />}
           </span>
-          <ChevronDown className={cn("size-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
+          {!onOpen && (
+            <ChevronDown className={cn("size-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
+          )}
         </button>
         {actions}
       </div>
-      {open && (
+      {expanded && (
         <div id={panelId} className="space-y-3 border-t border-border px-4 py-3">
           {song.notes && <p className="text-sm whitespace-pre-line">{song.notes}</p>}
           {shown.length > 0 ? (
@@ -122,19 +168,7 @@ export function SongBlock({
               {shown.map(({ item, material }) => (
                 <li key={material.id} className="space-y-1">
                   <MaterialRow material={material} />
-                  {groupNames && (
-                    <div className="flex flex-wrap gap-1 pl-1">
-                      {item.groupIds.length === 0 ? (
-                        <Pill tone="neutral">Tutti</Pill>
-                      ) : (
-                        item.groupIds.map((g) => (
-                          <Pill key={g} tone="secondary">
-                            {groupNames.get(g) ?? "Gruppo eliminato"}
-                          </Pill>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  {groupNames && <AudiencePills groupIds={item.groupIds} groupNames={groupNames} />}
                 </li>
               ))}
             </ul>
@@ -194,6 +228,7 @@ export function PlaylistSongs({
   playlist,
   audienceIds,
   songActions,
+  onOpenSong,
   onReorder,
   emptyText = "Nessun brano in questa playlist.",
 }: {
@@ -201,6 +236,8 @@ export function PlaylistSongs({
   /** Studente: UID + gruppi attivi. Assente = vista docente. */
   audienceIds?: string[];
   songActions?: (song: WithId<Song>, index: number) => React.ReactNode;
+  /** Docente: il clic su un brano lo apre nel pannello laterale invece di espanderlo. */
+  onOpenSong?: (song: WithId<Song>) => void;
   /** Salva il nuovo ordine dei brani dopo un trascinamento; se fallisce torna l'ordine salvato. */
   onReorder?: (songIds: string[]) => Promise<unknown>;
   emptyText?: string;
@@ -234,6 +271,7 @@ export function PlaylistSongs({
     audienceIds,
     groupNames,
     actions: songActions?.(s, i),
+    onOpen: onOpenSong ? () => onOpenSong(s) : undefined,
   });
 
   if (!onReorder) {
