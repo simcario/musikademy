@@ -1,4 +1,4 @@
-import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, orderBy, where, writeBatch } from "firebase/firestore";
+import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, orderBy, updateDoc, where, writeBatch } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import type { Material, MaterialFolder, Student, StudentGroup, WithId } from "@/types";
 import { COLLECTIONS, chunk, clean, col, list, ref, timestamps, touched } from "./base";
@@ -42,6 +42,10 @@ export const groupService = {
     await batch.commit();
     return groupRef.id;
   },
+
+  /** Gruppi di uno studente, dalla sua scheda: sostituisce l'elenco intero. */
+  setForStudent: (studentId: string, groupIds: string[]) =>
+    updateDoc(ref(COLLECTIONS.students, studentId), { groupIds: [...new Set(groupIds)], ...touched() }),
 
   /** Elimina il gruppo e lo toglie da studenti, materiali e cartelle a cui era assegnato. */
   async remove(id: string) {

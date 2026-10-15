@@ -16,6 +16,7 @@ import {
   Send,
   StickyNote,
   Trash2,
+  UsersRound,
   Wallet,
 } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ import {
   StudentAssignmentsTab,
   StudentAttendanceTab,
   StudentCoursesTab,
+  StudentGroupsTab,
   StudentLessonsTab,
   StudentMaterialsTab,
   StudentNotesTab,
@@ -55,6 +57,7 @@ import { PanelBody, PanelHeader, usePanel } from "./panel";
 const TABS = [
   { value: "overview", label: "Panoramica", icon: LayoutDashboard },
   { value: "courses", label: "Corsi", icon: GraduationCap },
+  { value: "groups", label: "Gruppi", icon: UsersRound },
   { value: "materials", label: "Materiali", icon: Library },
   { value: "lessons", label: "Lezioni", icon: CalendarDays },
   { value: "attendance", label: "Presenze", icon: ClipboardCheck },
@@ -206,6 +209,7 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
         <div>
           {tab === "overview" && <StudentOverviewTab studentId={studentId} />}
           {tab === "courses" && <StudentCoursesTab student={s} onEdit={() => setEditing(true)} />}
+          {tab === "groups" && <StudentGroupsTab key={studentId} student={s} />}
           {tab === "lessons" && <StudentLessonsTab studentId={studentId} />}
           {tab === "attendance" && <StudentAttendanceTab studentId={studentId} />}
           {tab === "materials" && <StudentMaterialsTab studentId={studentId} studentName={name} />}

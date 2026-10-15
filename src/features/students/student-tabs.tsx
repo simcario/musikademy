@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, EyeOff, GraduationCap, Library, Loader2, Plus } from "lucide-react";
+import { ClipboardCheck, EyeOff, GraduationCap, Library, Loader2, Plus, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CheckList } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { AttendanceBadge, Pill } from "@/components/shared/status-badge";
 import { useGroups, useStaffMutation, useStudentAttendance } from "@/features/admin/hooks";
@@ -17,12 +18,14 @@ import { StaffPaymentList } from "@/features/payments/payment-list";
 import { useCourses } from "@/features/student-area/hooks";
 import { qk } from "@/hooks/query-keys";
 import { assignmentService } from "@/services/assignmentService";
+import { groupService } from "@/services/groupService";
 import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
 import { toCourseMap } from "@/services/userService";
-import { EXERCISE_CATEGORY, type Attendance, type Lesson, type Student, type WithId } from "@/types";
+import { EXERCISE_CATEGORY, MAX_GROUPS_PER_STUDENT, type Attendance, type Lesson, type Student, type WithId } from "@/types";
+import { AppError } from "@/utils/errors";
 import { formatCurrency, formatDate, formatWeekday, toDate } from "@/utils/format";
 import { remainingOf, summarizeAttendance } from "@/utils/status";
 
@@ -131,6 +134,86 @@ export function StudentCoursesTab({ student, onEdit }: { student: WithId<Student
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Gruppi dello studente (ADR D26): quelli dei suoi corsi e quelli senza corso, come nel form del gruppo.
+ * I gruppi di altri corsi compaiono solo se ne fa già parte, per poterlo togliere.
+ */
+export function StudentGroupsTab({ student }: { student: WithId<Student> }) {
+  const courses = toCourseMap(useCourses().data);
+  const groups = useGroups();
+  const current = student.groupIds ?? [];
+  // `null` finché il docente non tocca le spunte: dopo il salvataggio torna ai dati dello studente.
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const selected = picked ?? current;
+  const changed = selected.length !== current.length || selected.some((id) => !current.includes(id));
+
+  const save = useStaffMutation(
+    async () => {
+      if (selected.length > MAX_GROUPS_PER_STUDENT) throw new AppError(`Al massimo ${MAX_GROUPS_PER_STUDENT} gruppi per studente.`);
+      await groupService.setForStudent(student.id, selected);
+    },
+    { success: "Gruppi aggiornati", invalidate: [["students"]], onSuccess: () => setPicked(null) },
+  );
+
+  if (groups.isPending) return <ListSkeleton rows={3} />;
+  if (groups.isError) return <ErrorState error={groups.error} onRetry={() => groups.refetch()} />;
+
+  const visible = groups.data.filter((g) => !g.courseId || student.courseIds.includes(g.courseId) || current.includes(g.id));
+  if (visible.length === 0) {
+    return (
+      <EmptyState
+        icon={UsersRound}
+        title="Nessun gruppo disponibile"
+        description="Crea i gruppi dalla scheda del corso, in Organizzazione: qui compaiono quelli dei corsi frequentati e quelli senza corso."
+      />
+    );
+  }
+  // Prima i corsi frequentati, nell'ordine dello studente; poi i gruppi senza corso; infine gli altri corsi.
+  const order = [...student.courseIds, "", ...new Set(visible.map((g) => g.courseId ?? "").filter((c) => c && !student.courseIds.includes(c)))];
+  const sections = order
+    .map((courseId) => ({
+      courseId,
+      label: courseId ? (courses.get(courseId)?.name ?? "Corso non disponibile") : "Senza corso",
+      groups: visible.filter((g) => (g.courseId ?? "") === courseId),
+    }))
+    .filter((s) => s.groups.length > 0);
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(undefined);
+      }}
+    >
+      <p className="text-sm text-muted-foreground">
+        Lo studente vede i materiali, le cartelle e le parti dei brani assegnati ai suoi gruppi. Fa parte di{" "}
+        {selected.length === 1 ? "1 gruppo" : `${selected.length} gruppi`}.
+      </p>
+      {sections.map((s) => (
+        <CheckList
+          key={s.courseId || "none"}
+          label={s.label}
+          items={s.groups.map((g) => ({ id: g.id, label: g.name, sub: g.description || undefined }))}
+          selected={selected.filter((id) => s.groups.some((g) => g.id === id))}
+          onChange={(ids) => setPicked([...selected.filter((id) => !s.groups.some((g) => g.id === id)), ...ids])}
+          maxHeight="max-h-72"
+        />
+      ))}
+      <div className="flex gap-2">
+        <Button type="submit" disabled={save.isPending || !changed}>
+          {save.isPending && <Loader2 className="animate-spin" aria-hidden />} Salva gruppi
+        </Button>
+        {changed && (
+          <Button type="button" variant="outline" disabled={save.isPending} onClick={() => setPicked(null)}>
+            Annulla modifiche
+          </Button>
+        )}
+      </div>
+    </form>
   );
 }
 
