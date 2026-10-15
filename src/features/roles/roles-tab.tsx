@@ -21,7 +21,7 @@ export const KIND_LABEL: Record<RoleKind, string> = { member: "Area personale", 
 
 const KIND_HINT: Record<RoleKind, string> = {
   member: "Entra nell'area personale (come gli studenti, con invito Google) e vede solo i contenuti condivisi con lui.",
-  staff: "Entra nell'area di gestione (con email e password) e gestisce le sezioni scelte.",
+  staff: "Entra nell'area di gestione (con Google) e gestisce le sezioni scelte.",
 };
 
 const metaOf = (kind: RoleKind) => (kind === "member" ? AREA_PERMISSIONS : MANAGE_PERMISSIONS);

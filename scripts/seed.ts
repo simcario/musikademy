@@ -14,8 +14,7 @@ import { getStorage } from "firebase-admin/storage";
 import { cycleKey, cycleLabel } from "../src/utils/cycles";
 import { buildKeywords } from "../src/utils/keywords";
 import { initAdmin, usingEmulators } from "./lib/admin-env";
-
-const PASSWORD = "Musikademy2026!";
+import { createInviteLink } from "./lib/invite";
 
 function day(offset: number, h = 16, m = 30) {
   const d = new Date();
@@ -44,7 +43,7 @@ async function main() {
 
   async function account(email: string, name: string, surname: string, role: "admin" | "teacher" | "student") {
     const user = await auth.getUserByEmail(email).catch(() =>
-      auth.createUser({ email, password: PASSWORD, displayName: `${name} ${surname}`, emailVerified: true }),
+      auth.createUser({ email, displayName: `${name} ${surname}`, emailVerified: true }),
     );
     await auth.setCustomUserClaims(user.uid, { role });
     await db.doc(`users/${user.uid}`).set({
@@ -187,8 +186,14 @@ async function main() {
     publishedAt: day(-2, 9), keywords: buildKeywords("Saggio di fine corso Lirico"), createdAt: now, updatedAt: now, ...demo,
   });
 
-  console.log(`\n✓ Dati demo creati. Password per tutti: ${PASSWORD}`);
-  console.log("  admin@musikademy.test (admin) · elena@musikademy.test · luca@musikademy.test (studenti)\n");
+  // Accesso solo con Google (ADR D33): un link d'invito per ogni account demo.
+  console.log("\n✓ Dati demo creati. Collega un account Google aprendo il link d'invito:");
+  const people: [string, string][] = [
+    ["admin@musikademy.test (admin)", adminId],
+    ...studentIds.map((id, i): [string, string] => [`studente ${i + 1}`, id]),
+  ];
+  for (const [label, uid] of people) console.log(`  ${label}: ${await createInviteLink(db, uid)}`);
+  console.log("");
 }
 
 /** WAV PCM mono 8kHz di silenzio (file audio valido e leggerissimo). */

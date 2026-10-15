@@ -3,24 +3,21 @@
  * Non mostrare mai all'utente il messaggio tecnico originale (§45).
  */
 const MESSAGES: Record<string, string> = {
-  "auth/invalid-credential": "Email o password non corretti.",
+  "auth/invalid-credential": "Accesso non riuscito. Riprova con il tuo account Google.",
   "auth/invalid-email": "L'indirizzo email non è valido.",
   "auth/user-disabled": "Questo account è stato disattivato. Contatta la scuola.",
-  "auth/user-not-found": "Email o password non corretti.",
-  "auth/wrong-password": "Email o password non corretti.",
   "auth/too-many-requests": "Troppi tentativi. Riprova tra qualche minuto.",
   "auth/network-request-failed": "Connessione assente. Controlla la rete e riprova.",
   "auth/requires-recent-login": "Per sicurezza, esci e accedi di nuovo prima di questa operazione.",
   "auth/email-already-in-use": "Esiste già un account con questa email.",
   "auth/email-already-exists": "Esiste già un account con questa email.",
-  "auth/weak-password": "La password deve contenere almeno 8 caratteri.",
   "auth/popup-closed-by-user": "Accesso con Google annullato.",
   "auth/cancelled-popup-request": "Accesso con Google annullato.",
   "auth/user-cancelled": "Accesso con Google annullato.",
   "auth/popup-blocked": "Il browser ha bloccato la finestra di Google: consenti i popup per questo sito e riprova.",
   "auth/credential-already-in-use": "Questo account Google è già collegato a un altro utente. Scegline un altro.",
   "auth/account-exists-with-different-credential":
-    "Esiste già un account con questa email: accedi con email e password o usa il link d'invito.",
+    "Questo account Google non è collegato a Musikademy: usa il link d'invito ricevuto dalla scuola.",
   "auth/unauthorized-domain": "Accesso con Google non abilitato per questo indirizzo del sito. Contatta la scuola.",
   "auth/operation-not-allowed": "Metodo di accesso non abilitato. Contatta la scuola.",
   "auth/invalid-custom-token": "Link d'invito non valido. Chiedi alla scuola di inviartene uno nuovo.",

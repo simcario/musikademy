@@ -11,8 +11,8 @@ import { buildKeywords } from "@/utils/keywords";
  * Crea un account con un ruolo dell'organizzazione (ADR D31: Studente, Musicista, Docente, Segreteria…).
  * - ruoli dell'area personale: richiede `students:manage`
  * - ruoli dello staff e amministratore: richiede `roles:manage` (solo admin)
- * Lo studente riceve un link d'invito per collegare il proprio account Google (ADR D20);
- * lo staff imposta la password tramite il link di reset (nessuna password custom, §56).
+ * Ogni nuovo account riceve un link d'invito per collegare il proprio account Google (ADR D20),
+ * da condividere a mano (WhatsApp, email, copia). È l'unico modo di accedere (ADR D33).
  */
 export async function POST(req: Request) {
   try {
@@ -74,7 +74,9 @@ export async function POST(req: Request) {
           name: input.name,
           surname: input.surname,
           email: input.email,
+          phone: input.phone ?? "",
           courseIds: input.courseIds,
+          inviteStatus: "pending",
           createdAt: now,
           updatedAt: now,
         });
@@ -86,12 +88,8 @@ export async function POST(req: Request) {
       throw e;
     }
 
-    if (role === "student") {
-      const invite = await createInvite(user.uid, caller.uid);
-      return Response.json({ uid: user.uid, invite }, { status: 201 });
-    }
-    const resetLink = await auth.generatePasswordResetLink(input.email).catch(() => undefined);
-    return Response.json({ uid: user.uid, resetLink }, { status: 201 });
+    const invite = await createInvite(user.uid, caller.uid);
+    return Response.json({ uid: user.uid, invite }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
   }

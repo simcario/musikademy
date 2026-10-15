@@ -84,9 +84,12 @@ function StudentForm({
 }) {
   const courses = useCourses();
   const roles = useRolesOfKind("member");
-  // Il ruolo si sceglie alla creazione; cambiarlo dopo cambia i permessi, quindi spetta all'amministratore.
+  const staffRoles = useRolesOfKind("staff");
+  // Il ruolo si sceglie alla creazione; cambiarlo dopo cambia i permessi, quindi spetta all'amministratore,
+  // che può anche promuovere l'utente a un ruolo dello staff.
   const { access } = useSession();
   const roleEditable = !student || can(access, "roles:manage");
+  const canPromote = !!student && can(access, "roles:manage");
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
     defaultValues: {
@@ -102,6 +105,8 @@ function StudentForm({
   });
   const { errors } = form.formState;
   const watch_courseIds = useWatch({ control: form.control, name: "courseIds" });
+  const watch_roleId = useWatch({ control: form.control, name: "roleId" });
+  const promoting = canPromote && !!staffRoles.data?.some((r) => r.id === watch_roleId);
 
   const save = useStaffMutation(
     async (v: StudentFormValues) => {
@@ -117,17 +122,19 @@ function StudentForm({
       };
       if (student) {
         await studentService.update(student.id, input);
-        if (v.roleId !== (student.roleId ?? "student")) await studentService.setRole(student.id, v.roleId);
         if ((v.notes ?? "") !== (notes ?? "")) await studentService.setNotes(student.id, v.notes ?? "");
         if (v.email !== student.email) await studentService.changeEmail(student.id, v.email);
+        // Per ultimo: dopo una promozione il profilo studente è archiviato.
+        if (v.roleId !== (student.roleId ?? "student")) await studentService.setRole(student.id, v.roleId);
         return null;
       }
       const res = await studentService.create(input);
       return { name: v.name, email: v.email, phone: v.phone || undefined, invite: res.invite };
     },
     {
-      success: () => (student ? "Utente aggiornato" : "Utente creato"),
-      invalidate: [["students"], ["studentNotes"]],
+      success: () =>
+        promoting ? "Utente promosso allo staff: varrà dal prossimo accesso" : student ? "Utente aggiornato" : "Utente creato",
+      invalidate: [["students"], ["studentNotes"], ["teachers"]],
       onSuccess: (r) => (r ? onCreated(r) : onSaved()),
     },
   );
@@ -155,15 +162,35 @@ function StudentForm({
           label="Ruolo"
           error={errors.roleId?.message}
           required
-          hint={roleEditable ? (student ? "Cambiandolo, l'utente dovrà accedere di nuovo." : undefined) : "Lo cambia l'amministratore."}
+          hint={
+            promoting
+              ? "Passerà allo staff: il profilo da studente resta archiviato con lo storico. Non si può annullare."
+              : roleEditable
+                ? student
+                  ? "Cambiandolo, l'utente dovrà accedere di nuovo."
+                  : undefined
+                : "Lo cambia l'amministratore."
+          }
         >
           {(p) => (
             <NativeSelect {...p} {...form.register("roleId")} disabled={!roleEditable || roles.isPending}>
-              {(roles.data ?? [{ id: "student", name: "Studente" }]).map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
+              <optgroup label="Area personale">
+                {(roles.data ?? [{ id: "student", name: "Studente" }]).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </optgroup>
+              {canPromote && !!staffRoles.data?.length && (
+                <optgroup label="Promuovi allo staff">
+                  {staffRoles.data.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                      {r.id === "admin" ? " (accesso completo)" : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </NativeSelect>
           )}
         </Field>

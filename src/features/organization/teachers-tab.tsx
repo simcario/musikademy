@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ShieldCheck, UserPlus } from "lucide-react";
+import { Send, ShieldCheck, UserPlus } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +17,10 @@ import { useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
 import { useRolesOfKind } from "@/features/roles/hooks";
 import { useTeachers } from "@/features/student-area/hooks";
+import { InviteShare } from "@/features/students/invite-share";
+import type { InviteInfo } from "@/lib/auth/invite-token";
 import { emailField } from "@/lib/validation";
-import { adminApi, authService } from "@/services/authService";
+import { adminApi } from "@/services/authService";
 import type { Teacher, WithId } from "@/types";
 import { byName, sortName } from "@/utils/format";
 
@@ -25,13 +28,21 @@ const staffSchema = z.object({
   name: z.string().trim().min(1, "Inserisci il nome").max(60),
   surname: z.string().trim().min(1, "Inserisci il cognome").max(60),
   email: emailField("Email non valida"),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .regex(/^[+0-9 ()./-]*$/, "Numero di telefono non valido"),
   roleId: z.string().min(1, "Scegli il ruolo"),
 });
 type StaffValues = z.infer<typeof staffSchema>;
 
+/** Destinatario del link d'invito da condividere (WhatsApp, email, copia). */
+type InviteTarget = { name: string; email: string; phone?: string; invite: InviteInfo };
+
 /**
  * Staff (docenti, segreteria, amministratori…; ADR D31): solo l'admin crea account e cambia ruoli,
- * gli altri li consultano.
+ * gli altri li consultano. Come per gli studenti, l'accesso avviene con Google tramite invito (ADR D20).
  */
 export function TeachersTab({
   editable,
@@ -45,6 +56,16 @@ export function TeachersTab({
   const q = useTeachers();
   const roles = useRolesOfKind("staff");
   const teachers = [...(q.data ?? [])].sort(byName);
+  const [invite, setInvite] = useState<InviteTarget | null>(null);
+  const newInvite = useStaffMutation(
+    async (t: WithId<Teacher>) => ({
+      name: t.name,
+      email: t.email,
+      phone: t.phone || undefined,
+      invite: await adminApi<InviteInfo>(`users/${t.id}/invite`, { method: "POST" }),
+    }),
+    { success: "Nuovo invito creato: i link precedenti non valgono più", invalidate: [], onSuccess: setInvite },
+  );
   return (
     <>
       {!editable && (
@@ -77,8 +98,20 @@ export function TeachersTab({
                 <p className="truncate font-semibold">{sortName(t)}</p>
                 <p className="truncate text-xs text-muted-foreground">{t.email}</p>
               </div>
+              {t.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
               {editable ? (
-                <StaffRoleSelect teacher={t} />
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => newInvite.mutate(t)}
+                    disabled={newInvite.isPending}
+                    aria-label={`Invito Google per ${sortName(t)}`}
+                  >
+                    <Send aria-hidden /> Invito
+                  </Button>
+                  <StaffRoleSelect teacher={t} />
+                </>
               ) : (
                 <Pill tone="secondary">{roles.data?.find((r) => r.id === (t.roleId ?? "teacher"))?.name ?? "Docente"}</Pill>
               )}
@@ -87,14 +120,12 @@ export function TeachersTab({
         </ul>
       )}
       {editable && (
-        <SidePanel
-          open={creating}
-          onOpenChange={onCreatingChange}
-          title="Nuovo membro dello staff"
-          description="Riceverà un'email per impostare la password."
-        >
-          {creating && <StaffForm onDone={() => onCreatingChange(false)} />}
-        </SidePanel>
+        <>
+          <StaffFormDialog open={creating} onOpenChange={onCreatingChange} />
+          <SidePanel open={!!invite} onOpenChange={(o) => !o && setInvite(null)} title={`Invito per ${invite?.name ?? ""}`}>
+            {invite && <InviteShare invite={invite.invite} student={invite} />}
+          </SidePanel>
+        </>
       )}
     </>
   );
@@ -128,18 +159,48 @@ function StaffRoleSelect({ teacher }: { teacher: WithId<Teacher> }) {
   );
 }
 
-function StaffForm({ onDone }: { onDone: () => void }) {
+function StaffFormDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const [created, setCreated] = useState<InviteTarget | null>(null);
+  const close = (o: boolean) => {
+    if (!o) setCreated(null);
+    onOpenChange(o);
+  };
+  return (
+    <SidePanel
+      open={open}
+      onOpenChange={close}
+      title={created ? "Account creato" : "Nuovo membro dello staff"}
+      description={created ? undefined : "Riceverai un link d'invito da inviargli per accedere con Google."}
+    >
+      {created ? (
+        <div className="space-y-4 pb-2">
+          <InviteShare invite={created.invite} student={created} />
+          <Button className="w-full" onClick={() => close(false)}>
+            Fatto
+          </Button>
+        </div>
+      ) : (
+        open && <StaffForm onCancel={() => close(false)} onCreated={setCreated} />
+      )}
+    </SidePanel>
+  );
+}
+
+function StaffForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: (c: InviteTarget) => void }) {
   const roles = useRolesOfKind("staff");
   const form = useForm<StaffValues>({
     resolver: zodResolver(staffSchema),
-    defaultValues: { name: "", surname: "", email: "", roleId: "teacher" },
+    defaultValues: { name: "", surname: "", email: "", phone: "", roleId: "teacher" },
   });
   const save = useStaffMutation(
     async (v: StaffValues) => {
-      await adminApi("users", { method: "POST", body: { ...v, courseIds: [] } });
-      await authService.sendPasswordReset(v.email).catch(() => undefined);
+      const res = await adminApi<{ uid: string; invite: InviteInfo }>("users", {
+        method: "POST",
+        body: { ...v, courseIds: [] },
+      });
+      return { name: v.name, email: v.email, phone: v.phone || undefined, invite: res.invite };
     },
-    { success: "Account creato e invito inviato", invalidate: [["teachers"]], onSuccess: onDone },
+    { success: "Account creato", invalidate: [["teachers"]], onSuccess: onCreated },
   );
   const { errors } = form.formState;
   return (
@@ -152,9 +213,14 @@ function StaffForm({ onDone }: { onDone: () => void }) {
           {(p) => <Input {...p} {...form.register("surname")} />}
         </Field>
       </div>
-      <Field label="Email" error={errors.email?.message} required>
-        {(p) => <Input {...p} type="email" {...form.register("email")} />}
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Email" error={errors.email?.message} required>
+          {(p) => <Input {...p} type="email" inputMode="email" {...form.register("email")} />}
+        </Field>
+        <Field label="Telefono" error={errors.phone?.message} hint="Per inviare l'invito su WhatsApp.">
+          {(p) => <Input {...p} type="tel" {...form.register("phone")} />}
+        </Field>
+      </div>
       <Field label="Ruolo" error={errors.roleId?.message} required hint="I permessi di ogni ruolo si definiscono nella scheda Ruoli.">
         {(p) => (
           <NativeSelect {...p} {...form.register("roleId")} disabled={roles.isPending}>
@@ -167,7 +233,7 @@ function StaffForm({ onDone }: { onDone: () => void }) {
           </NativeSelect>
         )}
       </Field>
-      <FormActions onCancel={onDone} submitting={save.isPending} submitLabel="Crea account" />
+      <FormActions onCancel={onCancel} submitting={save.isPending} submitLabel="Crea account" />
     </form>
   );
 }

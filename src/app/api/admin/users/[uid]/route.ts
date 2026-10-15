@@ -71,7 +71,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[u
     const db = adminDb();
     const userSnap = await db.doc(`users/${uid}`).get();
     if (!userSnap.exists) throw new HttpError(404, "Utente non trovato.");
-    const current = userSnap.data() as { role: string; name: string; surname: string };
+    const current = userSnap.data() as { role: string; name: string; surname: string; email: string; phone?: string };
 
     // Gestire gli utenti dell'area personale è dello staff abilitato; toccare lo staff o cambiare ruoli è da admin.
     const newRoleId = input.roleId ?? input.role;
@@ -98,17 +98,39 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[u
       const def = await loadRole(newRoleId);
       if (!def) throw new HttpError(400, "Ruolo non trovato.");
       const role = technicalRole(newRoleId, def.kind);
-      // Area personale ↔ staff richiederebbe migrare profili e storico: non supportato.
-      if ((role === "student") !== (current.role === "student")) {
-        throw new HttpError(400, "Il passaggio tra un ruolo dell'area personale e uno dello staff non è supportato.");
+      // Staff → area personale richiederebbe ricostruire il profilo studente: non supportato.
+      if (role === "student" && current.role !== "student") {
+        throw new HttpError(400, "Un membro dello staff non può tornare a un ruolo dell'area personale.");
       }
+      // Promozione allo staff: il profilo studente resta archiviato (disattivato) con lo storico.
+      const promotion = role !== "student" && current.role === "student";
       await auth.setCustomUserClaims(uid, claimsFor(newRoleId, def));
       await auth.revokeRefreshTokens(uid); // i permessi nuovi valgono subito: serve un nuovo accesso
       userPatch.role = role;
       userPatch.roleId = newRoleId;
-      // `set` con merge: l'amministratore creato da bootstrap-admin può non avere il documento `teachers`.
-      if (role === "student") batch.update(db.doc(`students/${uid}`), { roleId: newRoleId, updatedAt: now });
-      else batch.set(db.doc(`teachers/${uid}`), { roleId: newRoleId, updatedAt: now }, { merge: true });
+      if (promotion) {
+        const student = (await db.doc(`students/${uid}`).get()).data() as
+          | { email?: string; phone?: string; inviteStatus?: string }
+          | undefined;
+        batch.update(db.doc(`students/${uid}`), { status: "inactive", promotedAt: now, updatedAt: now });
+        batch.set(db.doc(`teachers/${uid}`), {
+          userId: uid,
+          roleId: newRoleId,
+          name: current.name,
+          surname: current.surname,
+          email: student?.email ?? current.email,
+          phone: student?.phone ?? current.phone ?? "",
+          courseIds: [],
+          ...(student?.inviteStatus ? { inviteStatus: student.inviteStatus } : {}),
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else if (role === "student") {
+        batch.update(db.doc(`students/${uid}`), { roleId: newRoleId, updatedAt: now });
+      } else {
+        // `set` con merge: l'amministratore creato da bootstrap-admin può non avere il documento `teachers`.
+        batch.set(db.doc(`teachers/${uid}`), { roleId: newRoleId, updatedAt: now }, { merge: true });
+      }
     }
     if (input.email) {
       await auth.updateUser(uid, { email: input.email, emailVerified: false });
@@ -119,6 +141,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[u
           keywords: buildKeywords(current.name, current.surname, input.email),
           updatedAt: now,
         });
+      } else {
+        batch.set(db.doc(`teachers/${uid}`), { email: input.email, updatedAt: now }, { merge: true });
       }
     }
     batch.update(db.doc(`users/${uid}`), userPatch);

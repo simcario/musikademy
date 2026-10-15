@@ -36,6 +36,8 @@ export interface Student {
   status: StudentStatus;
   /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
   inviteStatus?: "pending" | "accepted";
+  /** Promosso a un ruolo dello staff: il profilo resta archiviato (disattivato) con lo storico. */
+  promotedAt?: Timestamp;
   phone?: string;
   /** Costo del corso: base per generare le quote mensili. */
   fee?: StudentFee;
@@ -64,6 +66,9 @@ export interface Teacher {
   email: string;
   /** Ruolo dell'organizzazione (Docente, Segreteria…; ADR D31); assente = Docente. */
   roleId?: string;
+  phone?: string;
+  /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
+  inviteStatus?: "pending" | "accepted";
   courseIds: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;

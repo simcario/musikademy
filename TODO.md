@@ -6,7 +6,7 @@ Legenda: ✅ fatto e verificato · 🟡 fatto, da verificare su Firebase reale/e
 
 - ✅ STEP 1 — ARCHITECTURE.md
 - ✅ STEP 2 — Next.js 16, TypeScript, Tailwind 4, shadcn/ui, Firebase SDK
-- 🟡 STEP 3 — Authentication (login, password dimenticata, logout, cambio email/password)
+- 🟡 STEP 3 — Authentication (solo Google tramite invito, logout; ADR D33)
 - ✅ Accesso studenti con Google tramite invito (ADR D20) — E2E su emulatori ✅ (invito, collegamento, login, rifiuto account estraneo, monouso)
 - ✅ STEP 4 — Layout e navigazione (bottom nav mobile + "Altro", sidebar desktop, ricerca Ctrl+K)
 - 🟡 STEP 5 — Area studente: dashboard, lezioni + dettaglio, materiali, ascolti, esercizi, presenze, pagamenti, comunicazioni, profilo
@@ -23,14 +23,13 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 
 ## Prossime azioni (richiedono il proprietario del progetto)
 
-- ⬜ Abilitare Email/Password in Firebase Auth (Google ✅ già attivo), creare Firestore (europe-west) e Storage
+- ⬜ Disattivare Email/Password in Firebase Auth (resta solo Google ✅, ADR D33), creare Firestore (europe-west) e Storage
 - ⬜ Auth → Authorized domains: aggiungere il dominio di produzione (per il login Google)
 - ⬜ Dare `roles/iam.serviceAccountTokenCreator` al service account di App Hosting (custom token inviti, vedi README)
 - ⬜ `npm run deploy:rules` (rules + indici)
 - ⬜ IAM: ruolo "Firebase Rules Firestore Service Agent" all'agente di Storage (`service-<numero progetto>@gcp-sa-firebasestorage.iam.gserviceaccount.com`), altrimenti gli studenti non scaricano i materiali (le Storage Rules leggono Firestore). Il deploy delle rules lo propone: rispondere sì
 - ⬜ `npm run bootstrap-admin` con service account → primo accesso admin
 - 🟡 Collaudo con emulatori + seed: login studente/docente e tutte le pagine ✅ · da provare a mano upload, registro presenze, pagamenti, creazione studente
-- ⬜ Personalizzare in italiano il template email "Reimposta password" (invito dei docenti)
 - ⬜ Collegare il repository a Firebase App Hosting
 
 ## Miglioramenti V1 (non bloccanti)

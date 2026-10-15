@@ -20,13 +20,18 @@ export async function POST(req: Request) {
     const user = await adminAuth().getUser(invite.uid);
     const google = user.providerData.find((p) => p.providerId === "google.com");
     if (!google) throw new HttpError(400, "Collega un account Google per completare l'invito.");
+    // Solo Google (ADR D33): gli account precedenti perdono la password.
+    if (user.providerData.some((p) => p.providerId === "password")) {
+      await adminAuth().updateUser(invite.uid, { providersToUnlink: ["password"] });
+    }
 
     const db = adminDb();
     const now = FieldValue.serverTimestamp();
     const batch = db.batch();
     batch.update(ref, { acceptedAt: now, googleEmail: google.email ?? null });
-    const student = db.doc(`students/${invite.uid}`);
-    if ((await student.get()).exists) batch.update(student, { inviteStatus: "accepted", updatedAt: now });
+    for (const profile of [db.doc(`students/${invite.uid}`), db.doc(`teachers/${invite.uid}`)]) {
+      if ((await profile.get()).exists) batch.update(profile, { inviteStatus: "accepted", updatedAt: now });
+    }
     await batch.commit();
     return Response.json({ ok: true });
   } catch (error) {

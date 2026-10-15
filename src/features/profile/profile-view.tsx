@@ -12,12 +12,6 @@ import { UserAvatar } from "@/components/shared/brand";
 import { Field } from "@/components/shared/form";
 import { PageContainer, PageHeader } from "@/components/shared/page";
 import { useSession } from "@/features/auth/auth-provider";
-import {
-  changeEmailSchema,
-  changePasswordSchema,
-  type ChangeEmailValues,
-  type ChangePasswordValues,
-} from "@/features/auth/schemas";
 import { profileSchema, type ProfileValues } from "@/features/students/schemas";
 import { useMyRoleName } from "@/features/roles/hooks";
 import { startInstall, useInstallMode } from "@/lib/pwa";
@@ -39,14 +33,7 @@ export function ProfileView() {
         {[fullName(profile), roleName].filter(Boolean).join(" · ")}
       </p>
       <PersonalForm uid={uid} defaults={{ name: profile?.name ?? "", surname: profile?.surname ?? "", phone: profile?.phone ?? "" }} onSaved={refreshProfile} />
-      {authService.hasPassword(user) ? (
-        <>
-          <EmailForm current={user.email ?? ""} />
-          <PasswordForm />
-        </>
-      ) : (
-        <GoogleAccessCard email={user.providerData.find((p) => p.providerId === "google.com")?.email ?? user.email ?? ""} />
-      )}
+      <GoogleAccessCard email={authService.googleEmail(user)} />
       <section className="card-surface space-y-2 p-4">
         <h2 className="flex items-center gap-2 font-semibold">
           <ShieldCheck className="size-5 text-brand-ink" aria-hidden /> Privacy e dati personali
@@ -163,87 +150,44 @@ function PersonalForm({ uid, defaults, onSaved }: { uid: string; defaults: Profi
   );
 }
 
-function GoogleAccessCard({ email }: { email: string }) {
+/** Accesso solo con Google (ADR D33). Gli account precedenti con password lo collegano da qui. */
+function GoogleAccessCard({ email }: { email: string | null }) {
+  const [linked, setLinked] = useState(email);
+  const [busy, setBusy] = useState(false);
   return (
-    <section className="card-surface space-y-1 p-4">
+    <section className="card-surface space-y-3 p-4">
       <h2 className="font-semibold">Accesso</h2>
-      <p className="text-sm text-muted-foreground">
-        Accedi con il tuo account Google <strong className="text-foreground">{email}</strong>. Password e sicurezza
-        dell&apos;account si gestiscono da Google.
-      </p>
+      {linked !== null ? (
+        <p className="text-sm text-muted-foreground">
+          Accedi con il tuo account Google <strong className="text-foreground">{linked}</strong>. Password e sicurezza
+          dell&apos;account si gestiscono da Google.
+        </p>
+      ) : (
+        <>
+          <p className="rounded-lg bg-warning-soft p-3 text-sm text-warning">
+            L&apos;accesso con email e password non è più disponibile. Collega ora il tuo account Google: senza, dopo
+            essere uscito non potrai più entrare.
+          </p>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await authService.linkGoogle();
+                const user = (await authService.currentUser())!;
+                setLinked(authService.googleEmail(user) ?? "");
+                toast.success("Account Google collegato");
+              } catch (e) {
+                toast.error(errorMessage(e, "Collegamento con Google non riuscito. Riprova."));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy && <Loader2 className="animate-spin" aria-hidden />} Collega account Google
+          </Button>
+        </>
+      )}
     </section>
-  );
-}
-
-function EmailForm({ current }: { current: string }) {
-  const form = useForm<ChangeEmailValues>({ resolver: zodResolver(changeEmailSchema), defaultValues: { email: "", password: "" } });
-  const { errors, isSubmitting } = form.formState;
-  return (
-    <form
-      className="card-surface space-y-4 p-4"
-      noValidate
-      onSubmit={form.handleSubmit(async (v) => {
-        try {
-          await authService.changeEmail(v.email, v.password);
-          form.reset();
-          toast.success("Ti abbiamo inviato un link di conferma al nuovo indirizzo.");
-        } catch (e) {
-          toast.error(errorMessage(e));
-        }
-      })}
-    >
-      <div>
-        <h2 className="font-semibold">Email di accesso</h2>
-        <p className="text-sm text-muted-foreground">Attuale: {current}</p>
-      </div>
-      <Field label="Nuova email" error={errors.email?.message}>
-        {(p) => <Input {...p} type="email" autoComplete="email" {...form.register("email")} />}
-      </Field>
-      <Field label="Password attuale" error={errors.password?.message} hint="Richiesta per sicurezza.">
-        {(p) => <Input {...p} type="password" autoComplete="current-password" {...form.register("password")} />}
-      </Field>
-      <Button type="submit" variant="secondary" disabled={isSubmitting}>
-        {isSubmitting && <Loader2 className="animate-spin" aria-hidden />} Cambia email
-      </Button>
-    </form>
-  );
-}
-
-function PasswordForm() {
-  const form = useForm<ChangePasswordValues>({
-    resolver: zodResolver(changePasswordSchema),
-    defaultValues: { current: "", next: "", confirm: "" },
-  });
-  const { errors, isSubmitting } = form.formState;
-  return (
-    <form
-      className="card-surface space-y-4 p-4"
-      noValidate
-      onSubmit={form.handleSubmit(async (v) => {
-        try {
-          await authService.changePassword(v.current, v.next);
-          form.reset();
-          toast.success("Password aggiornata");
-        } catch (e) {
-          toast.error(errorMessage(e));
-        }
-      })}
-    >
-      <h2 className="font-semibold">Password</h2>
-      <Field label="Password attuale" error={errors.current?.message}>
-        {(p) => <Input {...p} type="password" autoComplete="current-password" {...form.register("current")} />}
-      </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nuova password" error={errors.next?.message}>
-          {(p) => <Input {...p} type="password" autoComplete="new-password" {...form.register("next")} />}
-        </Field>
-        <Field label="Conferma" error={errors.confirm?.message}>
-          {(p) => <Input {...p} type="password" autoComplete="new-password" {...form.register("confirm")} />}
-        </Field>
-      </div>
-      <Button type="submit" variant="secondary" disabled={isSubmitting}>
-        {isSubmitting && <Loader2 className="animate-spin" aria-hidden />} Aggiorna password
-      </Button>
-    </form>
   );
 }

@@ -4,10 +4,12 @@
  *   npm run bootstrap-admin -- --email nome@dominio.it --name Mario --surname Rossi
  *
  * Richiede credenziali Admin (GOOGLE_APPLICATION_CREDENTIALS) oppure gli emulatori attivi.
- * Stampa un link per impostare la password.
+ * Stampa il link d'invito per collegare l'account Google (unico accesso, ADR D33): rieseguilo per
+ * ottenerne uno nuovo. Indirizzo dell'app nel link: APP_URL (es. APP_URL=https://musikademy.it).
  */
 import { FieldValue } from "firebase-admin/firestore";
 import { initAdmin, usingEmulators } from "./lib/admin-env";
+import { createInviteLink } from "./lib/invite";
 
 function arg(name: string) {
   const i = process.argv.indexOf(`--${name}`);
@@ -40,9 +42,9 @@ async function main() {
   );
   await batch.commit();
 
-  const link = await auth.generatePasswordResetLink(email);
+  const link = await createInviteLink(db, user.uid);
   console.log(`\n✓ ${email} è amministratore (uid ${user.uid}).`);
-  console.log(`Imposta la password da qui:\n${link}\n`);
+  console.log(`Apri questo link e collega il tuo account Google (vale 7 giorni, una sola volta):\n${link}\n`);
 }
 
 main().catch((e) => {
