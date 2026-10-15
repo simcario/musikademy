@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAttendanceMap, useDashboardStats, useLessonsInRange } from "@/features/admin/hooks";
 import { AttendanceDialog } from "@/features/attendance/attendance-picker";
 import { useSession } from "@/features/auth/auth-provider";
+import { can } from "@/lib/auth/roles";
 import { LessonFormDialog } from "@/features/lessons/lesson-form";
 import { MaterialFormDialog } from "@/features/materials/material-form";
 import { PaymentFormDialog } from "@/features/payments/payment-form";
@@ -29,9 +30,16 @@ import { formatCurrency, formatDate } from "@/utils/format";
 type Dialog = "student" | "lesson" | "material" | "payment" | null;
 
 export default function AdminDashboard() {
-  const { profile } = useSession();
+  const { profile, access } = useSession();
   const [dialog, setDialog] = useState<Dialog>(null);
-  const stats = useDashboardStats();
+  // Azioni e indicatori secondo i permessi del ruolo (ADR D31).
+  const may = {
+    students: can(access, "students:manage"),
+    lessons: can(access, "lessons:manage"),
+    materials: can(access, "materials:manage"),
+    payments: can(access, "payments:manage"),
+  };
+  const stats = useDashboardStats(may.payments);
 
   return (
     <PageContainer className="max-w-6xl">
@@ -42,10 +50,10 @@ export default function AdminDashboard() {
       />
 
       <section aria-label="Azioni rapide" className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
-        <QuickAction icon={UserPlus} label="Nuovo studente" onClick={() => setDialog("student")} />
-        <QuickAction icon={CalendarPlus} label="Nuova lezione" onClick={() => setDialog("lesson")} />
-        <QuickAction icon={FilePlus2} label="Nuovo materiale" onClick={() => setDialog("material")} />
-        <QuickAction icon={CreditCard} label="Registra pagamento" onClick={() => setDialog("payment")} />
+        {may.students && <QuickAction icon={UserPlus} label="Nuovo utente" onClick={() => setDialog("student")} />}
+        {may.lessons && <QuickAction icon={CalendarPlus} label="Nuova lezione" onClick={() => setDialog("lesson")} />}
+        {may.materials && <QuickAction icon={FilePlus2} label="Nuovo materiale" onClick={() => setDialog("material")} />}
+        {may.payments && <QuickAction icon={CreditCard} label="Registra pagamento" onClick={() => setDialog("payment")} />}
       </section>
 
       <section aria-label="Indicatori" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -66,6 +74,7 @@ export default function AdminDashboard() {
           icon={ClipboardCheck}
           tone="text-success"
         />
+        {may.payments && (
         <Stat
           label="Incassato"
           value={stats.payments.data ? formatCurrency(stats.payments.data.paid) : undefined}
@@ -79,6 +88,7 @@ export default function AdminDashboard() {
           href="/admin/payments"
           alert={!!stats.payments.data?.overdue}
         />
+        )}
       </section>
 
       <UpcomingLessons />

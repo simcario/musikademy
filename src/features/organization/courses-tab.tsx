@@ -17,8 +17,8 @@ import { NO_COURSE, TABLE_HEAD, rowClass, usePanel } from "./panel";
  * si apre nel pannello laterale. `creating` è pilotato dalla pagina, che ha il pulsante "Nuovo corso".
  */
 export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; onCreatingChange: (o: boolean) => void }) {
-  const { role } = useSession();
-  const editable = can(role, "settings:manage");
+  const { access } = useSession();
+  const editable = can(access, "settings:manage");
   const panel = usePanel();
   const courses = useCourses();
   const groups = useGroups();

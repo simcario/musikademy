@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, School, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { KeyRound, Plus, School, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -18,6 +18,8 @@ import { CoursesTab } from "@/features/organization/courses-tab";
 import { DetailPanel } from "@/features/organization/detail-panel";
 import { TABLE_HEAD, rowClass, usePanel } from "@/features/organization/panel";
 import { TeachersTab } from "@/features/organization/teachers-tab";
+import { useRoles } from "@/features/roles/hooks";
+import { RolesTab } from "@/features/roles/roles-tab";
 import { useCourses, useTeachers } from "@/features/student-area/hooks";
 import { StudentFormDialog } from "@/features/students/student-form";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -28,7 +30,7 @@ import { toCourseMap } from "@/services/userService";
 import type { StudentStatus } from "@/types";
 import { byName, sortName } from "@/utils/format";
 
-type Tab = "courses" | "users" | "teachers";
+type Tab = "courses" | "users" | "teachers" | "roles";
 
 export default function OrganizationPage() {
   return (
@@ -41,10 +43,13 @@ export default function OrganizationPage() {
 function Organization() {
   const router = useRouter();
   const tabParam = useSearchParams().get("tab");
-  const tab: Tab = tabParam === "users" || tabParam === "teachers" ? tabParam : "courses";
-  const { role } = useSession();
-  const isAdmin = can(role, "settings:manage");
+  const { access } = useSession();
+  const isAdmin = can(access, "settings:manage");
+  const canRoles = can(access, "roles:manage");
+  const tab: Tab =
+    tabParam === "users" || tabParam === "teachers" || (tabParam === "roles" && canRoles) ? tabParam : "courses";
   const [creating, setCreating] = useState(false);
+  const [creatingRole, setCreatingRole] = useState(false);
   const [creatingCourse, setCreatingCourse] = useState(false);
   const [creatingTeacher, setCreatingTeacher] = useState(false);
   const courses = useCourses();
@@ -60,14 +65,18 @@ function Organization() {
         actions={
           tab === "users" ? (
             <Button onClick={() => setCreating(true)}>
-              <UserPlus aria-hidden /> Nuovo studente
+              <UserPlus aria-hidden /> Nuovo utente
             </Button>
           ) : tab === "teachers" ? (
             isAdmin && (
               <Button onClick={() => setCreatingTeacher(true)}>
-                <UserPlus aria-hidden /> Nuovo docente
+                <UserPlus aria-hidden /> Nuovo membro dello staff
               </Button>
             )
+          ) : tab === "roles" ? (
+            <Button onClick={() => setCreatingRole(true)}>
+              <Plus aria-hidden /> Nuovo ruolo
+            </Button>
           ) : (
             isAdmin && (
               <Button onClick={() => setCreatingCourse(true)}>
@@ -84,11 +93,14 @@ function Organization() {
         options={[
           { value: "courses", label: "Corsi", icon: School, count: courses.data?.length },
           { value: "users", label: "Utenti", icon: Users },
-          { value: "teachers", label: "Docenti", icon: ShieldCheck, count: teachers.data?.length },
+          { value: "teachers", label: "Staff", icon: ShieldCheck, count: teachers.data?.length },
+          ...(canRoles ? [{ value: "roles" as const, label: "Ruoli", icon: KeyRound }] : []),
         ]}
       />
       {tab === "users" ? (
         <UsersTab creating={creating} onCreatingChange={setCreating} />
+      ) : tab === "roles" ? (
+        <RolesTab creating={creatingRole} onCreatingChange={setCreatingRole} />
       ) : tab === "teachers" ? (
         <TeachersTab editable={isAdmin} creating={creatingTeacher} onCreatingChange={setCreatingTeacher} />
       ) : (
@@ -99,7 +111,7 @@ function Organization() {
   );
 }
 
-/** Tutti gli studenti, trasversali ai corsi: uno studente può frequentarne più di uno. */
+/** Utenti dell'area personale (studenti, musicisti…), trasversali ai corsi: se ne possono frequentare più di uno. */
 function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatingChange: (o: boolean) => void }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StudentStatus | "all">("active");
@@ -110,6 +122,7 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
   const q = useStudentsPage({ search: debounced, status, courseId: courseId || undefined });
   const courses = toCourseMap(useCourses().data);
   const groups = toGroupMap(useGroups().data);
+  const roleNames = new Map((useRoles().data ?? []).map((r) => [r.id, r.name]));
   const students = (q.data?.pages.flatMap((p) => p.items) ?? []).sort(byName);
 
   return (
@@ -148,11 +161,11 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
       ) : students.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={debounced ? "Nessuno studente trovato" : "Nessuno studente"}
+          title={debounced ? "Nessun utente trovato" : "Nessun utente"}
           action={
             !debounced && (
               <Button onClick={() => setCreating(true)}>
-                <UserPlus aria-hidden /> Aggiungi il primo studente
+                <UserPlus aria-hidden /> Aggiungi il primo utente
               </Button>
             )
           }
@@ -163,6 +176,7 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
             <thead className={TABLE_HEAD}>
               <tr>
                 <th className="px-4 py-3">Nome</th>
+                <th className="hidden px-4 py-3 @lg:table-cell">Ruolo</th>
                 <th className="hidden px-4 py-3 @2xl:table-cell">Email</th>
                 <th className="hidden px-4 py-3 @md:table-cell">Corsi</th>
                 <th className="hidden px-4 py-3 @4xl:table-cell">Gruppi</th>
@@ -185,6 +199,7 @@ function UsersTab({ creating, onCreatingChange }: { creating: boolean; onCreatin
                         </div>
                       </div>
                     </td>
+                    <td className="hidden px-4 py-3 @lg:table-cell">{roleNames.get(s.roleId ?? "student") ?? "—"}</td>
                     <td className="hidden px-4 py-3 text-muted-foreground @2xl:table-cell">{s.email}</td>
                     <td className="hidden px-4 py-3 @md:table-cell">
                       <Tags tone="primary" names={s.courseIds.map((c) => courses.get(c)?.name)} />

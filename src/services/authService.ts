@@ -18,7 +18,7 @@ import {
   type User,
 } from "firebase/auth";
 import { firebaseAuth } from "@/lib/firebase/client";
-import { isRole } from "@/lib/auth/roles";
+import { isRole, type Access } from "@/lib/auth/roles";
 import type { Role } from "@/types";
 import { AppError } from "@/utils/errors";
 
@@ -129,9 +129,26 @@ export const authService = {
 
   /** Il ruolo proviene dal custom claim (ADR D1): non falsificabile dal client. */
   async roleOf(user: User, forceRefresh = false): Promise<Role | null> {
-    const token = await user.getIdTokenResult(forceRefresh);
-    const role = token.claims.role;
-    return isRole(role) ? role : null;
+    return (await this.accessOf(user, forceRefresh))?.role ?? null;
+  },
+
+  /**
+   * Ruolo tecnico, ruolo dell'organizzazione e permessi (ADR D31), dai custom claim.
+   * `forceRefresh` rilegge il token dal server: serve a vedere subito un ruolo cambiato dall'admin.
+   * Senza rete si ripiega sul token salvato.
+   */
+  async accessOf(user: User, forceRefresh = false): Promise<Access | null> {
+    const token = await user.getIdTokenResult(forceRefresh).catch((e) => {
+      if (!forceRefresh) throw e;
+      return user.getIdTokenResult();
+    });
+    const { role, roleId, perms } = token.claims;
+    if (!isRole(role)) return null;
+    return {
+      role,
+      roleId: typeof roleId === "string" ? roleId : role,
+      perms: Array.isArray(perms) ? perms.filter((x): x is string => typeof x === "string") : null,
+    };
   },
 
   async reauthenticate(password: string) {

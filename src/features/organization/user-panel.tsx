@@ -49,6 +49,7 @@ import type { InviteInfo } from "@/lib/auth/invite-token";
 import { studentService } from "@/services/studentService";
 import { toCourseMap } from "@/services/userService";
 import { formatDate, fullName } from "@/utils/format";
+import { useRoleName } from "@/features/roles/hooks";
 import { PanelBody, PanelHeader, usePanel } from "./panel";
 
 const TABS = [
@@ -61,6 +62,12 @@ const TABS = [
   { value: "payments", label: "Pagamenti", icon: Wallet },
   { value: "notes", label: "Note", icon: StickyNote },
 ] as const;
+
+/** Ruolo dell'organizzazione dell'utente (ADR D31). */
+function RoleBadge({ roleId }: { roleId?: string }) {
+  const name = useRoleName(roleId ?? "student");
+  return name ? <Pill tone="secondary">{name}</Pill> : null;
+}
 
 /** Livello "utente" del pannello: dati dello studente, corsi frequentati, materiali e storico. */
 export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab?: string }) {
@@ -122,6 +129,7 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
               {s.status === "active" ? "Attivo" : "Disattivato"}
             </Pill>
             {s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
+            <RoleBadge roleId={s.roleId} />
           </>
         }
         actions={

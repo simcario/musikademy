@@ -7,6 +7,10 @@ service firebase.storage {
     function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
     function isStaff() { return role() in ['admin', 'teacher']; }
     function isStudent() { return role() == 'student'; }
+    // Permessi del ruolo (ADR D31), come in firestore.rules.
+    function can(p) {
+      return role() == 'admin' || (role() == 'teacher' && (request.auth.token.get('perms', null) == null || p in request.auth.token.perms));
+    }
     function mb(n) { return n * 1024 * 1024; }
 
     function validMaterialUpload() {
@@ -35,14 +39,14 @@ service firebase.storage {
 
     match /materials/{materialId}/{fileName} {
       allow read: if isStaff() || (isStudent() && studentCanReadMaterial(materialId));
-      allow create, update: if isStaff() && validMaterialUpload();
-      allow delete: if isStaff();
+      allow create, update: if can('materials:manage') && validMaterialUpload();
+      allow delete: if can('materials:manage');
     }
 
     match /announcements/{announcementId}/{fileName} {
       allow read: if signedIn();
-      allow write: if isStaff() && request.resource.size <= mb(20);
-      allow delete: if isStaff();
+      allow write: if can('announcements:manage') && request.resource.size <= mb(20);
+      allow delete: if can('announcements:manage');
     }
 
     match /users/{userId}/avatar/{fileName} {

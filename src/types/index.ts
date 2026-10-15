@@ -11,6 +11,8 @@ export interface AppUser {
   surname: string;
   email: string;
   role: Role;
+  /** Ruolo dell'organizzazione (`roles/{id}`, ADR D31); assente = quello di sistema uguale a `role`. */
+  roleId?: string;
   photoURL?: string;
   phone?: string;
   active: boolean;
@@ -25,6 +27,8 @@ export interface Student {
   name: string;
   surname: string;
   email: string;
+  /** Ruolo dell'organizzazione (Studente, Musicista…; ADR D31); assente = Studente. */
+  roleId?: string;
   courseIds: string[];
   /** Gruppi di cui fa parte (ADR D26). Assente sui documenti precedenti. */
   groupIds?: string[];
@@ -58,6 +62,8 @@ export interface Teacher {
   name: string;
   surname: string;
   email: string;
+  /** Ruolo dell'organizzazione (Docente, Segreteria…; ADR D31); assente = Docente. */
+  roleId?: string;
   courseIds: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -173,8 +179,8 @@ export interface Material {
    */
   audience?: string[];
   /**
-   * Derivato (ADR D29): studenti e gruppi delle playlist che contengono il materiale. Entra in `audience`,
-   * così chi riceve una playlist può aprirne i materiali.
+   * Derivato (ADR D29): chi può aprire il materiale perché sta in un brano di una playlist condivisa
+   * (i gruppi indicati nel brano, oppure chi riceve la playlist). Entra in `audience`.
    */
   playlistAudience?: string[];
   keywords: string[];
@@ -182,24 +188,38 @@ export interface Material {
   updatedAt: Timestamp;
 }
 
-/** Brano di una playlist: un titolo con i suoi materiali (ascolto, base, spartito, testo, video…). */
-export interface PlaylistTrack {
-  /** Identificativo stabile dentro la playlist (non è un documento). */
-  id: string;
+/**
+ * Materiale di un brano (ADR D29): vale per i gruppi indicati (es. l'ascolto della parte dei Soprani)
+ * oppure, con `groupIds` vuoto, per tutti quelli che ricevono il brano.
+ */
+export interface SongItem {
+  materialId: string;
+  groupIds: string[];
+}
+
+/** Brano (ADR D29): un titolo con i suoi materiali (ascolti, basi, spartiti, testi, video…), anche diversi per gruppo. */
+export interface Song {
   title: string;
   /** Autore o interprete. */
   artist?: string;
   notes?: string;
+  items: SongItem[];
+  /** Derivato: i materiali di `items`, per trovare i brani che contengono un materiale. */
   materialIds: string[];
+  /** Derivato: chi riceve almeno una playlist con il brano (studenti e gruppi). */
+  audience: string[];
+  createdBy: string;
+  keywords: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 /** Playlist (ADR D29): elenco ordinato di brani, condiviso con studenti e gruppi. */
 export interface Playlist {
   title: string;
   description?: string;
-  tracks: PlaylistTrack[];
-  /** Derivato: i materiali di tutti i brani, per trovare le playlist che contengono un materiale. */
-  materialIds: string[];
+  /** Brani nell'ordine della playlist. */
+  songIds: string[];
   studentIds: string[];
   groupIds: string[];
   /** Derivato: `studentIds` + `groupIds`, il campo che rules e query dello studente interrogano. */
@@ -210,7 +230,8 @@ export interface Playlist {
   updatedAt: Timestamp;
 }
 
-export const MAX_PLAYLIST_TRACKS = 200;
+export const MAX_PLAYLIST_SONGS = 200;
+export const MAX_SONG_ITEMS = 50;
 
 /** Cartella di materiali (ADR D26), annidabile e condivisibile con singoli studenti e gruppi. */
 export interface MaterialFolder {

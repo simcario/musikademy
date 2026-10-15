@@ -1,7 +1,7 @@
 import "server-only";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { adminAuth } from "@/lib/firebase/admin";
-import { can, isRole, type Permission } from "@/lib/auth/roles";
+import { can, isRole, type Access, type Permission } from "@/lib/auth/roles";
 import type { Role } from "@/types";
 
 export class HttpError extends Error {
@@ -16,6 +16,8 @@ export class HttpError extends Error {
 export interface Caller {
   uid: string;
   role: Role;
+  /** Ruolo dell'organizzazione e permessi dai claim (ADR D31). */
+  access: Access;
   token: DecodedIdToken;
 }
 
@@ -33,13 +35,15 @@ export async function requireUser(req: Request): Promise<Caller> {
   }
   const role = token.role;
   if (!isRole(role)) throw new HttpError(403, "Non hai i permessi per questa operazione.");
-  return { uid: token.uid, role, token };
+  const perms = Array.isArray(token.perms) ? (token.perms as unknown[]).filter((p): p is string => typeof p === "string") : null;
+  const access: Access = { role, roleId: typeof token.roleId === "string" ? token.roleId : role, perms };
+  return { uid: token.uid, role, access, token };
 }
 
 /** Come requireUser, ma richiede anche il permesso indicato. */
 export async function requireCaller(req: Request, permission: Permission): Promise<Caller> {
   const caller = await requireUser(req);
-  if (!can(caller.role, permission)) throw new HttpError(403, "Non hai i permessi per questa operazione.");
+  if (!can(caller.access, permission)) throw new HttpError(403, "Non hai i permessi per questa operazione.");
   return caller;
 }
 

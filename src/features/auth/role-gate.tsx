@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FullPageLoader } from "@/components/shared/states";
+import { blockedSection, type NavItem } from "@/components/layout/nav-config";
 import { can, homeFor, type Permission } from "@/lib/auth/roles";
 import { useAuth } from "./auth-provider";
 
@@ -13,18 +14,18 @@ import { useAuth } from "./auth-provider";
  * è nelle Security Rules, che negano comunque le letture non autorizzate.
  */
 export function RoleGate({ permission, children }: { permission: Permission; children: React.ReactNode }) {
-  const { status, role, signOut } = useAuth();
+  const { status, role, access, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const allowed = status === "signed-in" && can(role, permission);
+  const allowed = status === "signed-in" && can(access, permission);
 
   useEffect(() => {
     if (status === "signed-out") {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-    } else if (status === "signed-in" && role && !can(role, permission)) {
+    } else if (status === "signed-in" && role && !can(access, permission)) {
       router.replace(homeFor(role));
     }
-  }, [status, role, permission, router, pathname]);
+  }, [status, role, access, permission, router, pathname]);
 
   if (status === "no-role") {
     return (
@@ -44,4 +45,19 @@ export function RoleGate({ permission, children }: { permission: Permission; chi
   }
   if (!allowed) return <FullPageLoader />;
   return <>{children}</>;
+}
+
+/**
+ * Sezioni consentite dal ruolo (ADR D31): chi apre l'indirizzo di una sezione non concessa torna alla home.
+ * Anche qui è solo UX: le Security Rules negano comunque i dati.
+ */
+export function SectionGate({ nav, home, children }: { nav: NavItem[]; home: string; children: React.ReactNode }) {
+  const { access } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const blocked = blockedSection(pathname, nav, access);
+  useEffect(() => {
+    if (blocked) router.replace(home);
+  }, [blocked, home, router]);
+  return blocked ? <FullPageLoader /> : <>{children}</>;
 }

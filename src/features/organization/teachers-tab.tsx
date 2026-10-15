@@ -6,25 +6,33 @@ import { ShieldCheck, UserPlus } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { UserAvatar } from "@/components/shared/brand";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
+import { Pill } from "@/components/shared/status-badge";
 import { useStaffMutation } from "@/features/admin/hooks";
+import { useSession } from "@/features/auth/auth-provider";
+import { useRolesOfKind } from "@/features/roles/hooks";
 import { useTeachers } from "@/features/student-area/hooks";
 import { emailField } from "@/lib/validation";
 import { adminApi, authService } from "@/services/authService";
+import type { Teacher, WithId } from "@/types";
 import { byName, sortName } from "@/utils/format";
 
-const teacherSchema = z.object({
+const staffSchema = z.object({
   name: z.string().trim().min(1, "Inserisci il nome").max(60),
   surname: z.string().trim().min(1, "Inserisci il cognome").max(60),
   email: emailField("Email non valida"),
-  role: z.enum(["teacher", "admin"]),
+  roleId: z.string().min(1, "Scegli il ruolo"),
 });
-type TeacherValues = z.infer<typeof teacherSchema>;
+type StaffValues = z.infer<typeof staffSchema>;
 
-/** Docenti e amministratori: solo l'admin ne crea di nuovi, gli altri docenti li consultano. */
+/**
+ * Staff (docenti, segreteria, amministratori…; ADR D31): solo l'admin crea account e cambia ruoli,
+ * gli altri li consultano.
+ */
 export function TeachersTab({
   editable,
   creating,
@@ -35,12 +43,13 @@ export function TeachersTab({
   onCreatingChange: (o: boolean) => void;
 }) {
   const q = useTeachers();
+  const roles = useRolesOfKind("staff");
   const teachers = [...(q.data ?? [])].sort(byName);
   return (
     <>
       {!editable && (
         <p className="rounded-lg bg-info-soft p-3 text-sm text-info">
-          I docenti sono gestiti dall&apos;amministratore. Qui puoi consultarli.
+          Lo staff è gestito dall&apos;amministratore. Qui puoi consultarlo.
         </p>
       )}
       {q.isPending ? (
@@ -50,11 +59,11 @@ export function TeachersTab({
       ) : teachers.length === 0 ? (
         <EmptyState
           icon={ShieldCheck}
-          title="Nessun docente"
+          title="Nessun membro dello staff"
           action={
             editable && (
               <Button onClick={() => onCreatingChange(true)}>
-                <UserPlus aria-hidden /> Aggiungi il primo docente
+                <UserPlus aria-hidden /> Aggiungi il primo
               </Button>
             )
           }
@@ -62,32 +71,71 @@ export function TeachersTab({
       ) : (
         <ul className="card-surface divide-y divide-border">
           {teachers.map((t) => (
-            <li key={t.id} className="flex items-center gap-3 px-4 py-3">
+            <li key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <UserAvatar person={t} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{sortName(t)}</p>
                 <p className="truncate text-xs text-muted-foreground">{t.email}</p>
               </div>
+              {editable ? (
+                <StaffRoleSelect teacher={t} />
+              ) : (
+                <Pill tone="secondary">{roles.data?.find((r) => r.id === (t.roleId ?? "teacher"))?.name ?? "Docente"}</Pill>
+              )}
             </li>
           ))}
         </ul>
       )}
       {editable && (
-        <SidePanel open={creating} onOpenChange={onCreatingChange} title="Nuovo docente" description="Riceverà un'email per impostare la password.">
-          {creating && <TeacherForm onDone={() => onCreatingChange(false)} />}
+        <SidePanel
+          open={creating}
+          onOpenChange={onCreatingChange}
+          title="Nuovo membro dello staff"
+          description="Riceverà un'email per impostare la password."
+        >
+          {creating && <StaffForm onDone={() => onCreatingChange(false)} />}
         </SidePanel>
       )}
     </>
   );
 }
 
-function TeacherForm({ onDone }: { onDone: () => void }) {
-  const form = useForm<TeacherValues>({
-    resolver: zodResolver(teacherSchema),
-    defaultValues: { name: "", surname: "", email: "", role: "teacher" },
+/** Cambio di ruolo (admin): i nuovi permessi valgono dal prossimo accesso dell'utente. */
+function StaffRoleSelect({ teacher }: { teacher: WithId<Teacher> }) {
+  const { uid } = useSession();
+  const roles = useRolesOfKind("staff");
+  const current = teacher.roleId ?? "teacher";
+  const change = useStaffMutation(
+    (roleId: string) => adminApi(`users/${teacher.id}`, { method: "PATCH", body: { roleId } }),
+    { success: "Ruolo aggiornato: varrà dal prossimo accesso", invalidate: [["teachers"]] },
+  );
+  return (
+    <NativeSelect
+      aria-label={`Ruolo di ${sortName(teacher)}`}
+      value={current}
+      onChange={(e) => change.mutate(e.target.value)}
+      // Nessuno cambia il proprio ruolo (rischio di togliersi l'accesso da admin).
+      disabled={teacher.id === uid || change.isPending || roles.isPending}
+      title={teacher.id === uid ? "Non puoi cambiare il tuo ruolo" : undefined}
+      className="w-44"
+    >
+      {(roles.data ?? []).map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.name}
+        </option>
+      ))}
+    </NativeSelect>
+  );
+}
+
+function StaffForm({ onDone }: { onDone: () => void }) {
+  const roles = useRolesOfKind("staff");
+  const form = useForm<StaffValues>({
+    resolver: zodResolver(staffSchema),
+    defaultValues: { name: "", surname: "", email: "", roleId: "teacher" },
   });
   const save = useStaffMutation(
-    async (v: TeacherValues) => {
+    async (v: StaffValues) => {
       await adminApi("users", { method: "POST", body: { ...v, courseIds: [] } });
       await authService.sendPasswordReset(v.email).catch(() => undefined);
     },
@@ -107,16 +155,18 @@ function TeacherForm({ onDone }: { onDone: () => void }) {
       <Field label="Email" error={errors.email?.message} required>
         {(p) => <Input {...p} type="email" {...form.register("email")} />}
       </Field>
-      <fieldset className="space-y-1">
-        <legend className="text-[13px] font-medium">Ruolo</legend>
-        <label className="flex min-h-11 items-center gap-3 text-sm">
-          <input type="radio" value="teacher" className="size-[18px] accent-primary" {...form.register("role")} /> Docente
-        </label>
-        <label className="flex min-h-11 items-center gap-3 text-sm">
-          <input type="radio" value="admin" className="size-[18px] accent-primary" {...form.register("role")} /> Amministratore
-          (accesso completo)
-        </label>
-      </fieldset>
+      <Field label="Ruolo" error={errors.roleId?.message} required hint="I permessi di ogni ruolo si definiscono nella scheda Ruoli.">
+        {(p) => (
+          <NativeSelect {...p} {...form.register("roleId")} disabled={roles.isPending}>
+            {(roles.data ?? []).map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+                {r.id === "admin" ? " (accesso completo)" : ""}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
+      </Field>
       <FormActions onCancel={onDone} submitting={save.isPending} submitLabel="Crea account" />
     </form>
   );

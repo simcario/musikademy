@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BrandLockup, UserAvatar } from "@/components/shared/brand";
 import { useSession } from "@/features/auth/auth-provider";
-import { ROLE_LABEL } from "@/lib/auth/roles";
+import { useMyRoleName } from "@/features/roles/hooks";
 import { startInstall, useInstallMode } from "@/lib/pwa";
 import { cn } from "@/lib/utils";
 import { fullName } from "@/utils/format";
@@ -110,7 +110,8 @@ function TopBar({
   onSearch?: () => void;
   brandSlot?: React.ReactNode;
 }) {
-  const { profile, role, signOut } = useSession();
+  const { profile, signOut } = useSession();
+  const roleName = useMyRoleName();
   const router = useRouter();
   const installMode = useInstallMode({ respectHidden: true });
   return (
@@ -160,7 +161,7 @@ function TopBar({
               <DropdownMenuGroup>
                 <DropdownMenuLabel>
                   <span className="block truncate font-semibold text-foreground">{fullName(profile)}</span>
-                  <span className="block text-xs font-normal">{role ? ROLE_LABEL[role] : ""}</span>
+                  <span className="block text-xs font-normal">{roleName}</span>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />

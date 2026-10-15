@@ -1,27 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { can, homeFor, isRole, isStaff, ROLE_PERMISSIONS } from "@/lib/auth/roles";
+import { MANAGE_PERMISSIONS, can, homeFor, isRole, isStaff, permissionsOf, type Access } from "@/lib/auth/roles";
 import { loginSchema, safeNext, changePasswordSchema } from "@/features/auth/schemas";
 import { errorMessage } from "@/utils/errors";
 
+const student: Access = { role: "student" };
+const teacher: Access = { role: "teacher" };
+const admin: Access = { role: "admin" };
+
 describe("ruoli e permessi", () => {
   it("lo studente accede solo alla propria area", () => {
-    expect(can("student", "student:area")).toBe(true);
+    expect(can(student, "student:area")).toBe(true);
+    expect(can(student, "area:payments")).toBe(true);
     for (const p of ["staff:area", "students:manage", "payments:manage", "attendance:manage", "roles:manage"] as const) {
-      expect(can("student", p)).toBe(false);
+      expect(can(student, p)).toBe(false);
     }
   });
 
   it("il docente gestisce la didattica ma non ruoli e impostazioni", () => {
-    expect(can("teacher", "lessons:manage")).toBe(true);
-    expect(can("teacher", "payments:manage")).toBe(true);
-    expect(can("teacher", "roles:manage")).toBe(false);
-    expect(can("teacher", "settings:manage")).toBe(false);
-    expect(can("teacher", "student:area")).toBe(false);
+    expect(can(teacher, "lessons:manage")).toBe(true);
+    expect(can(teacher, "payments:manage")).toBe(true);
+    expect(can(teacher, "roles:manage")).toBe(false);
+    expect(can(teacher, "settings:manage")).toBe(false);
+    expect(can(teacher, "student:area")).toBe(false);
   });
 
   it("l'admin ha tutti i permessi dello staff più ruoli e impostazioni", () => {
-    for (const p of ROLE_PERMISSIONS.teacher) expect(can("admin", p)).toBe(true);
-    expect(can("admin", "roles:manage")).toBe(true);
+    for (const p of MANAGE_PERMISSIONS) expect(can(admin, p.id)).toBe(true);
+    expect(can(admin, "roles:manage")).toBe(true);
+  });
+
+  it("i ruoli configurati concedono solo i permessi scelti e del proprio tipo (ADR D31)", () => {
+    const musician: Access = { role: "student", roleId: "musicista", perms: ["area:materials", "area:playlists", "payments:manage"] };
+    expect(can(musician, "area:playlists")).toBe(true);
+    expect(can(musician, "area:lessons")).toBe(false);
+    // Un permesso di gestione nel claim di un ruolo dell'area personale non vale.
+    expect(can(musician, "payments:manage")).toBe(false);
+    const office: Access = { role: "teacher", roleId: "segreteria", perms: ["payments:manage", "area:lessons"] };
+    expect(permissionsOf(office)).toEqual(["staff:area", "payments:manage"]);
+    expect(can(office, "lessons:manage")).toBe(false);
+    expect(can({ role: "teacher", perms: [] }, "staff:area")).toBe(true);
+    // L'admin ha tutto anche con un claim `perms` vuoto.
+    expect(can({ role: "admin", perms: [] }, "payments:manage")).toBe(true);
   });
 
   it("ruoli sconosciuti o assenti non hanno permessi", () => {
@@ -35,7 +54,7 @@ describe("ruoli e permessi", () => {
     expect(homeFor("student")).toBe("/dashboard");
     expect(homeFor("teacher")).toBe("/admin");
     expect(homeFor("admin")).toBe("/admin");
-    expect(isStaff("student")).toBe(false);
+    expect(isStaff(student)).toBe(false);
   });
 });
 

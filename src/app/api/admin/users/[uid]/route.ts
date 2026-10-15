@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { HttpError, errorResponse, requireCaller } from "@/lib/auth/server";
+import { claimsFor, loadRole } from "@/lib/auth/role-claims";
+import { technicalRole } from "@/lib/auth/roles";
 import { updateUserSchema } from "@/features/students/schemas";
 import { buildKeywords } from "@/utils/keywords";
 
@@ -58,7 +60,7 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/admin/users/[
   }
 }
 
-/** Attiva/disattiva (soft delete), cambia ruolo o email di un utente. */
+/** Attiva/disattiva (soft delete), cambia ruolo dell'organizzazione (ADR D31) o email di un utente. */
 export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[uid]">) {
   try {
     const { uid } = await ctx.params;
@@ -71,10 +73,11 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[u
     if (!userSnap.exists) throw new HttpError(404, "Utente non trovato.");
     const current = userSnap.data() as { role: string; name: string; surname: string };
 
-    // Gestire studenti è da docente; toccare docenti/admin o cambiare ruoli è da admin.
-    const needsAdmin = input.role !== undefined || current.role !== "student";
+    // Gestire gli utenti dell'area personale è dello staff abilitato; toccare lo staff o cambiare ruoli è da admin.
+    const newRoleId = input.roleId ?? input.role;
+    const needsAdmin = newRoleId !== undefined || current.role !== "student";
     const caller = await requireCaller(req, needsAdmin ? "roles:manage" : "students:manage");
-    if (caller.uid === uid && (input.active === false || input.role)) {
+    if (caller.uid === uid && (input.active === false || newRoleId)) {
       throw new HttpError(400, "Non puoi disattivare o cambiare ruolo al tuo account.");
     }
 
@@ -91,14 +94,21 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[u
         batch.update(db.doc(`students/${uid}`), { status: input.active ? "active" : "inactive", updatedAt: now });
       }
     }
-    if (input.role) {
-      // Studente ↔ staff richiederebbe migrare profili e storico: non supportato nella V1.
-      if ((input.role === "student") !== (current.role === "student")) {
-        throw new HttpError(400, "Il passaggio tra ruolo studente e staff non è supportato.");
+    if (newRoleId) {
+      const def = await loadRole(newRoleId);
+      if (!def) throw new HttpError(400, "Ruolo non trovato.");
+      const role = technicalRole(newRoleId, def.kind);
+      // Area personale ↔ staff richiederebbe migrare profili e storico: non supportato.
+      if ((role === "student") !== (current.role === "student")) {
+        throw new HttpError(400, "Il passaggio tra un ruolo dell'area personale e uno dello staff non è supportato.");
       }
-      await auth.setCustomUserClaims(uid, { role: input.role });
-      await auth.revokeRefreshTokens(uid); // forza il refresh del token con il nuovo claim
-      userPatch.role = input.role;
+      await auth.setCustomUserClaims(uid, claimsFor(newRoleId, def));
+      await auth.revokeRefreshTokens(uid); // i permessi nuovi valgono subito: serve un nuovo accesso
+      userPatch.role = role;
+      userPatch.roleId = newRoleId;
+      // `set` con merge: l'amministratore creato da bootstrap-admin può non avere il documento `teachers`.
+      if (role === "student") batch.update(db.doc(`students/${uid}`), { roleId: newRoleId, updatedAt: now });
+      else batch.set(db.doc(`teachers/${uid}`), { roleId: newRoleId, updatedAt: now }, { merge: true });
     }
     if (input.email) {
       await auth.updateUser(uid, { email: input.email, emailVerified: false });

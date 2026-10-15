@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { PageContainer, PageHeader } from "@/components/shared/page";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { useAudioDock } from "@/features/materials/audio-dock";
-import { PlaylistCover, PlaylistTracks, playlistSummary } from "@/features/playlists/playlist-tracks";
+import { PlaylistCover, PlaylistSongs, playlistSummary } from "@/features/playlists/playlist-songs";
+import { useStudentContext } from "@/features/student-area/context";
 import { useMyPlaylists } from "@/features/student-area/hooks";
 
 export default function PlaylistsPage() {
@@ -18,12 +19,14 @@ export default function PlaylistsPage() {
   );
 }
 
-/** Playlist ricevute (ADR D29): ogni brano con ascolto, base, spartito, testo, video… */
+/** Playlist ricevute (ADR D29): di ogni brano, i materiali per tutti e quelli del proprio gruppo. */
 function Playlists() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const q = useMyPlaylists();
+  // UID + gruppo attivo (o tutti i gruppi): decide quali materiali di ogni brano mostrare.
+  const { audienceIds } = useStudentContext().scope;
   const openId = params.get("id");
   const open = openId ? (q.data?.find((p) => p.id === openId) ?? null) : null;
   const playing = !!useAudioDock().track;
@@ -47,11 +50,11 @@ function Playlists() {
             </div>
           </div>
           {open.description && <p className="text-sm whitespace-pre-line text-muted-foreground">{open.description}</p>}
-          <PlaylistTracks playlist={open} />
+          <PlaylistSongs playlist={open} audienceIds={audienceIds} />
         </>
       ) : (
         <>
-          <PageHeader title="Playlist" description="I brani da studiare, ognuno con i suoi materiali." />
+          <PageHeader title="Playlist" description="I brani da studiare, ognuno con i materiali della tua parte." />
           {q.data.length === 0 ? (
             <EmptyState
               icon={ListMusic}

@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { Segmented } from "@/components/shared/segmented";
-import { useActiveStudents, useGroups, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useGroups, useSongs, useStaffMutation } from "@/features/admin/hooks";
+import { GroupChips } from "@/features/songs/song-dialog";
 import { CourseSelect } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
@@ -95,6 +96,10 @@ function MaterialForm({
   const [fileError, setFileError] = useState<string | null>(null);
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  // Brano a cui aggiungere il materiale (ADR D29) e gruppi per cui vale nel brano.
+  const songs = useSongs(!exercise);
+  const [songId, setSongId] = useState("");
+  const [songGroups, setSongGroups] = useState<string[]>([]);
   const video = link.trim() ? parseVideoUrl(link) : null;
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -139,9 +144,10 @@ function MaterialForm({
     if (s === "link") suggestCategory("video");
   }
 
-  const createLink = useStaffMutation((v: Values) => materialService.createLink(link, v, uid), {
+  const withSong = (v: Values) => ({ ...v, song: songId ? { id: songId, groupIds: songGroups } : undefined });
+  const createLink = useStaffMutation((v: Values) => materialService.createLink(link, withSong(v), uid), {
     success: "Link aggiunto",
-    invalidate: [["materials"]],
+    invalidate: [["materials"], ["songs"]],
     onSuccess: onDone,
   });
 
@@ -151,7 +157,7 @@ function MaterialForm({
       return createLink.mutate(v);
     }
     if (!file) return setFileError("Seleziona un file da caricare");
-    uploads.start(file, v, uid); // upload in background: il dialog si chiude subito
+    uploads.start(file, withSong(v), uid); // upload in background: il dialog si chiude subito
     onDone();
   }
 
@@ -257,6 +263,29 @@ function MaterialForm({
               {(p) => <CourseSelect {...p} {...form.register("courseId")} />}
             </Field>
           </div>
+          {!!songs.data?.length && (
+            <div className="space-y-2 rounded-lg border border-input p-3">
+              <Field label="Brano (opzionale)" hint="Il materiale entra nel brano e arriva a chi riceve una playlist che lo contiene.">
+                {(p) => (
+                  <NativeSelect {...p} value={songId} onChange={(e) => setSongId(e.target.value)}>
+                    <option value="">Nessun brano</option>
+                    {songs.data.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                        {s.artist ? ` — ${s.artist}` : ""}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                )}
+              </Field>
+              {songId && (
+                <div className="space-y-1">
+                  <p className="text-[13px] font-medium">Nel brano vale per</p>
+                  <GroupChips groups={groups.data ?? []} value={songGroups} onChange={setSongGroups} label="Gruppi per cui vale nel brano" />
+                </div>
+              )}
+            </div>
+          )}
           {!!groups.data?.length && (
             <CheckList
               label="Assegna a gruppi (opzionale)"

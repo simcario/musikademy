@@ -19,7 +19,7 @@ import {
   type ChangePasswordValues,
 } from "@/features/auth/schemas";
 import { profileSchema, type ProfileValues } from "@/features/students/schemas";
-import { ROLE_LABEL } from "@/lib/auth/roles";
+import { useMyRoleName } from "@/features/roles/hooks";
 import { startInstall, useInstallMode } from "@/lib/pwa";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
@@ -27,7 +27,8 @@ import { errorMessage } from "@/utils/errors";
 import { fullName } from "@/utils/format";
 
 export function ProfileView() {
-  const { uid, user, role, profile, refreshProfile, signOut } = useSession();
+  const { uid, user, profile, refreshProfile, signOut } = useSession();
+  const roleName = useMyRoleName();
   const router = useRouter();
   const installMode = useInstallMode();
   return (
@@ -35,7 +36,7 @@ export function ProfileView() {
       <PageHeader title="Profilo" />
       <AvatarSection uid={uid} profile={profile} onChange={refreshProfile} />
       <p className="-mt-3 text-center text-sm text-muted-foreground">
-        {fullName(profile)} · {role ? ROLE_LABEL[role] : ""}
+        {[fullName(profile), roleName].filter(Boolean).join(" · ")}
       </p>
       <PersonalForm uid={uid} defaults={{ name: profile?.name ?? "", surname: profile?.surname ?? "", phone: profile?.phone ?? "" }} onSaved={refreshProfile} />
       {authService.hasPassword(user) ? (

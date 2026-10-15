@@ -11,7 +11,7 @@ import { groupService } from "@/services/groupService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters } from "@/services/materialService";
 import { paymentService, type PaymentFilters } from "@/services/paymentService";
-import { playlistService } from "@/services/playlistService";
+import { playlistService, songService } from "@/services/playlistService";
 import { studentService, type StudentFilters } from "@/services/studentService";
 import type { AssignmentStatus, LessonStatus } from "@/types";
 import { errorMessage } from "@/utils/errors";
@@ -50,8 +50,8 @@ export function useActiveStudents() {
   return useQuery({ queryKey: qk.activeStudents(), queryFn: studentService.listActive, staleTime: 5 * 60_000 });
 }
 
-export function useGroups() {
-  return useQuery({ queryKey: qk.groups(), queryFn: groupService.list, staleTime: 5 * 60_000 });
+export function useGroups(enabled = true) {
+  return useQuery({ queryKey: qk.groups(), queryFn: groupService.list, staleTime: 5 * 60_000, enabled });
 }
 
 export function useFolders() {
@@ -60,6 +60,11 @@ export function useFolders() {
 
 export function usePlaylists() {
   return useQuery({ queryKey: qk.playlists("staff"), queryFn: playlistService.list });
+}
+
+/** Tutti i brani (ADR D29). */
+export function useSongs(enabled = true) {
+  return useQuery({ queryKey: qk.songs("staff"), queryFn: songService.list, enabled });
 }
 
 export function useStudent(uid: string) {
@@ -126,8 +131,9 @@ export function usePaymentsPage(filters: PaymentFilters) {
   });
 }
 
-export function usePaymentTotals(range?: { from: Date; to: Date }) {
+export function usePaymentTotals(range?: { from: Date; to: Date }, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: qk.payments({ totals: range ? [range.from.toISOString(), range.to.toISOString()] : "all" }),
     queryFn: () => paymentService.totals(range),
   });
@@ -142,7 +148,8 @@ export function useAnnouncementsPage() {
   });
 }
 
-export function useDashboardStats() {
+/** `payments`: il ruolo può vedere gli incassi (ADR D31); altrimenti le rules negherebbero la lettura. */
+export function useDashboardStats(payments = true) {
   const today = new Date();
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
@@ -150,7 +157,7 @@ export function useDashboardStats() {
     today: useQuery({ queryKey: qk.stats("lessons-today"), queryFn: () => lessonService.countInRange(today, 1) }),
     week: useQuery({ queryKey: qk.stats("lessons-week"), queryFn: () => lessonService.countInRange(monday, 7) }),
     attendance: useQuery({ queryKey: qk.stats("attendance-rate"), queryFn: attendanceService.overallRate }),
-    payments: usePaymentTotals(),
+    payments: usePaymentTotals(undefined, payments),
     students: useActiveStudents(),
   };
 }

@@ -50,6 +50,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
           patch(id, { status: "done", progress: 100 });
           toast.success(`“${meta.title}” caricato`);
           qc.invalidateQueries({ queryKey: ["materials"] });
+          qc.invalidateQueries({ queryKey: ["songs"] });
           setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4000);
         })
         .catch((e) => {

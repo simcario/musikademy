@@ -30,7 +30,7 @@ import { AppError } from "@/utils/errors";
 import { buildKeywords, searchToken } from "@/utils/keywords";
 import { COLLECTIONS, chunk, clean, col, getById, list, paginate, ref, touched } from "./base";
 import { folderService, materialAudience } from "./folderService";
-import { playlistService } from "./playlistService";
+import { songService } from "./playlistService";
 
 export interface MaterialMeta {
   title: string;
@@ -41,6 +41,8 @@ export interface MaterialMeta {
   studentIds: string[];
   groupIds?: string[];
   folderId?: string;
+  /** Brano a cui aggiungere il materiale appena creato, con i gruppi per cui vale (ADR D29). */
+  song?: { id: string; groupIds: string[] };
 }
 
 export type MaterialDetails = Pick<MaterialMeta, "title" | "description" | "category">;
@@ -189,15 +191,17 @@ export const materialService = {
     const done = new Promise<string>((resolve, reject) => {
       task.then(
         async () => {
+          let created = false;
           try {
             // Markdown: il testo va nel documento, così il viewer non dipende dal CORS del bucket.
             const content = check.type === "markdown" ? await file.text() : undefined;
             const folder = meta.folderId ? await folderService.get(meta.folderId) : null;
             const groupIds = meta.groupIds ?? [];
+            const { song, ...fields } = meta;
             await setDoc(
               ref(COLLECTIONS.materials, id),
               clean({
-                ...meta,
+                ...fields,
                 courseId: meta.courseId || undefined,
                 studentIds: meta.studentIds,
                 groupIds,
@@ -215,10 +219,16 @@ export const materialService = {
                 updatedAt: serverTimestamp(),
               }),
             );
+            created = true;
+            if (song) {
+              await songService.addItem(song.id, { materialId: id, groupIds: song.groupIds }).catch(() => {
+                throw new AppError("Materiale caricato, ma non aggiunto al brano: aggiungilo dalla sezione Brani.");
+              });
+            }
             resolve(id);
           } catch (e) {
             // Documento non creato: rimuovo il file orfano.
-            await deleteObject(sRef).catch(() => undefined);
+            if (!created) await deleteObject(sRef).catch(() => undefined);
             reject(e);
           }
         },
@@ -238,10 +248,11 @@ export const materialService = {
     const r = doc(col(COLLECTIONS.materials));
     const folder = meta.folderId ? await folderService.get(meta.folderId) : null;
     const groupIds = meta.groupIds ?? [];
+    const { song, ...fields } = meta;
     await setDoc(
       r,
       clean({
-        ...meta,
+        ...fields,
         courseId: meta.courseId || undefined,
         groupIds,
         folderId: folder?.id ?? "",
@@ -258,6 +269,7 @@ export const materialService = {
         updatedAt: serverTimestamp(),
       }),
     );
+    if (song) await songService.addItem(song.id, { materialId: r.id, groupIds: song.groupIds });
     return r.id;
   },
 
@@ -384,8 +396,8 @@ export const materialService = {
   async remove(material: WithId<Material>) {
     // Un testo eliminato sparisce anche dalle tracce a cui era associato.
     if (material.type === "markdown") await this.linkLyrics(material.id, "", []);
-    // …e un materiale eliminato dai brani delle playlist.
-    await playlistService.detachMaterial(material.id);
+    // …e un materiale eliminato dai brani (ADR D29).
+    await songService.detachMaterial(material.id);
     await deleteDoc(ref(COLLECTIONS.materials, material.id));
     // I video online non hanno file su Storage.
     if (!material.storagePath) return;

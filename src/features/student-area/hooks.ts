@@ -11,7 +11,7 @@ import { folderService } from "@/services/folderService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters, type StudentMaterialCursor } from "@/services/materialService";
 import { paymentService } from "@/services/paymentService";
-import { playlistService } from "@/services/playlistService";
+import { playlistService, songService } from "@/services/playlistService";
 import { studentService } from "@/services/studentService";
 import { courseService, teacherService } from "@/services/userService";
 import type { Assignment, AssignmentStatus, LessonStatus, WithId } from "@/types";
@@ -141,6 +141,11 @@ export function useMyPlaylists() {
     queryFn: () => playlistService.listShared(scope.audienceIds),
     enabled: ready,
   });
+}
+
+/** Brani di una playlist ricevuta (ADR D29). */
+export function useSongsByIds(ids: string[]) {
+  return useQuery({ queryKey: qk.songs({ ids }), queryFn: () => songService.getMany(ids), enabled: ids.length > 0 });
 }
 
 export function useMaterialsByIds(ids: string[]) {

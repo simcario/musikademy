@@ -145,16 +145,20 @@ describe("pagamenti", () => {
 
 describe("studenti", () => {
   it("valida l'anagrafica", () => {
-    const v = { name: "Elena", surname: "Russo", email: "ELENA@Scuola.it ", courseIds: [], enrollmentDate: "2026-09-01" };
+    const v = { name: "Elena", surname: "Russo", email: "ELENA@Scuola.it ", roleId: "student", courseIds: [], enrollmentDate: "2026-09-01" };
     const r = studentFormSchema.safeParse(v);
     expect(r.success && r.data.email).toBe("elena@scuola.it");
     expect(studentFormSchema.safeParse({ ...v, phone: "abc" }).success).toBe(false);
+    expect(studentFormSchema.safeParse({ ...v, roleId: "" }).success).toBe(false);
   });
 
   it("l'API rifiuta ruoli non previsti", () => {
     const base = { name: "A", surname: "B", email: "a@b.it" };
     expect(createUserSchema.safeParse({ ...base, role: "student" }).success).toBe(true);
     expect(createUserSchema.safeParse({ ...base, role: "superadmin" }).success).toBe(false);
+    // Ruoli dell'organizzazione (ADR D31): basta `roleId`, ma un ruolo ci vuole.
+    expect(createUserSchema.safeParse({ ...base, roleId: "musicista" }).success).toBe(true);
+    expect(createUserSchema.safeParse(base).success).toBe(false);
   });
 });
 

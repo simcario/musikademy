@@ -14,10 +14,11 @@ import { ConfirmDialog } from "@/components/shared/dialogs";
 import { PageContainer, PageHeader } from "@/components/shared/page";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { usePlaylists, useStaffMutation } from "@/features/admin/hooks";
-import { PlaylistDetailsDialog, PlaylistShareDialog, TrackDialog } from "@/features/playlists/playlist-dialogs";
-import { PlaylistCover, PlaylistTracks, playlistSummary } from "@/features/playlists/playlist-tracks";
+import { AddSongsDialog, PlaylistDetailsDialog, PlaylistShareDialog } from "@/features/playlists/playlist-dialogs";
+import { PlaylistCover, PlaylistSongs, playlistSummary } from "@/features/playlists/playlist-songs";
+import { SongDialog } from "@/features/songs/song-dialog";
 import { playlistService } from "@/services/playlistService";
-import type { Playlist, PlaylistTrack, WithId } from "@/types";
+import type { Playlist, Song, WithId } from "@/types";
 
 export default function AdminPlaylistsPage() {
   return (
@@ -43,7 +44,7 @@ function Playlists() {
 
   const remove = useStaffMutation((p: WithId<Playlist>) => playlistService.remove(p.id), {
     success: "Playlist eliminata",
-    invalidate: [["playlists"], ["materials"]],
+    invalidate: [["playlists"], ["songs"], ["materials"]],
     onSuccess: () => {
       setToDelete(null);
       if (openId) show(null);
@@ -81,7 +82,7 @@ function Playlists() {
         <>
           <PageHeader
             title="Playlist"
-            description="Brani con tutti i loro materiali: ascolti, basi, spartiti, testi e video."
+            description="Raccolte di brani da condividere con studenti e gruppi."
             actions={
               <Button onClick={() => setDetails({ playlist: null })}>
                 <Plus aria-hidden /> Nuova playlist
@@ -92,7 +93,7 @@ function Playlists() {
             <EmptyState
               icon={ListMusic}
               title={openId ? "Playlist non trovata" : "Nessuna playlist"}
-              description="Crea una playlist, aggiungi i brani e per ognuno scegli i materiali; poi condividila con studenti o gruppi."
+              description="Crea una playlist, aggiungi i brani (sezione Brani) e condividila con studenti o gruppi."
               action={
                 <Button onClick={() => setDetails({ playlist: null })}>
                   <Plus aria-hidden /> Crea la prima playlist
@@ -133,7 +134,7 @@ function Playlists() {
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
         title="Eliminare la playlist?"
-        description="I materiali non vengono eliminati: restano nella libreria e visibili a chi li riceve in altro modo."
+        description="Brani e materiali non vengono eliminati: restano disponibili per le altre playlist."
         confirmLabel="Elimina"
         destructive
         loading={remove.isPending}
@@ -154,21 +155,23 @@ function PlaylistDetail({
   onBack: () => void;
   onShare: () => void;
 }) {
-  const [editing, setEditing] = useState<{ track: PlaylistTrack | null } | null>(null);
-  const [toRemove, setToRemove] = useState<PlaylistTrack | null>(null);
-  const setTracks = useStaffMutation((tracks: PlaylistTrack[]) => playlistService.setTracks(playlist.id, tracks), {
-    invalidate: [["playlists"], ["materials"]],
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<WithId<Song> | null>(null);
+  const [toRemove, setToRemove] = useState<WithId<Song> | null>(null);
+  const songIds = playlist.songIds ?? [];
+  const setSongs = useStaffMutation((ids: string[]) => playlistService.setSongs(playlist.id, ids), {
+    invalidate: [["playlists"], ["songs"], ["materials"]],
     onSuccess: () => setToRemove(null),
   });
 
   function move(index: number, delta: number) {
-    const tracks = [...playlist.tracks];
-    const [t] = tracks.splice(index, 1);
-    tracks.splice(index + delta, 0, t);
-    setTracks.mutate(tracks);
+    const ids = [...songIds];
+    const [s] = ids.splice(index, 1);
+    ids.splice(index + delta, 0, s);
+    setSongs.mutate(ids);
   }
 
-  const last = playlist.tracks.length - 1;
+  const last = songIds.length - 1;
 
   return (
     <>
@@ -184,54 +187,50 @@ function PlaylistDetail({
         <Button variant="outline" className="hidden sm:inline-flex" onClick={onShare}>
           <Share2 aria-hidden /> Condividi
         </Button>
-        <Button onClick={() => setEditing({ track: null })}>
-          <ListPlus aria-hidden /> Aggiungi brano
+        <Button onClick={() => setAdding(true)}>
+          <ListPlus aria-hidden /> Aggiungi brani
         </Button>
         {menu}
       </div>
       {playlist.description && <p className="text-sm whitespace-pre-line text-muted-foreground">{playlist.description}</p>}
 
-      <PlaylistTracks
+      <PlaylistSongs
         playlist={playlist}
-        emptyText="Nessun brano: aggiungi il primo con “Aggiungi brano”."
-        trackActions={(t, i) => (
+        emptyText="Nessun brano: aggiungili con “Aggiungi brani”."
+        songActions={(s, i) => (
           <DropdownMenu>
-            <DropdownMenuTrigger aria-label={`Azioni brano ${t.title}`} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted">
+            <DropdownMenuTrigger aria-label={`Azioni brano ${s.title}`} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted">
               <MoreVertical className="size-5" aria-hidden />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem className="min-h-10" onClick={() => setEditing({ track: t })}>
-                <Pencil aria-hidden /> Modifica / materiali
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem className="min-h-10" onClick={() => setEditing(s)}>
+                <Pencil aria-hidden /> Modifica brano
               </DropdownMenuItem>
-              <DropdownMenuItem className="min-h-10" disabled={i === 0 || setTracks.isPending} onClick={() => move(i, -1)}>
+              <DropdownMenuItem className="min-h-10" disabled={i === 0 || setSongs.isPending} onClick={() => move(i, -1)}>
                 <ArrowUp aria-hidden /> Sposta su
               </DropdownMenuItem>
-              <DropdownMenuItem className="min-h-10" disabled={i === last || setTracks.isPending} onClick={() => move(i, 1)}>
+              <DropdownMenuItem className="min-h-10" disabled={i === last || setSongs.isPending} onClick={() => move(i, 1)}>
                 <ArrowDown aria-hidden /> Sposta giù
               </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToRemove(t)}>
-                <Trash2 aria-hidden /> Rimuovi brano
+              <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToRemove(s)}>
+                <Trash2 aria-hidden /> Togli dalla playlist
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
       />
 
-      <TrackDialog
-        open={!!editing}
-        onOpenChange={(o) => !o && setEditing(null)}
-        playlist={playlist}
-        track={editing?.track ?? null}
-      />
+      <AddSongsDialog open={adding} onOpenChange={setAdding} playlist={playlist} />
+      <SongDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} song={editing} />
       <ConfirmDialog
         open={!!toRemove}
         onOpenChange={(o) => !o && setToRemove(null)}
-        title="Rimuovere il brano?"
-        description="Il brano esce dalla playlist; i suoi materiali restano nella libreria."
-        confirmLabel="Rimuovi"
+        title="Togliere il brano dalla playlist?"
+        description="Il brano resta nella sezione Brani, con i suoi materiali."
+        confirmLabel="Togli"
         destructive
-        loading={setTracks.isPending}
-        onConfirm={() => toRemove && setTracks.mutate(playlist.tracks.filter((t) => t.id !== toRemove.id))}
+        loading={setSongs.isPending}
+        onConfirm={() => toRemove && setSongs.mutate(songIds.filter((id) => id !== toRemove.id))}
       />
     </>
   );

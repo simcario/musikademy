@@ -3,12 +3,14 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { HttpError, errorResponse, requireCaller } from "@/lib/auth/server";
 import { createUserSchema } from "@/features/students/schemas";
 import { createInvite } from "@/lib/auth/invites";
+import { claimsFor, loadRole } from "@/lib/auth/role-claims";
+import { technicalRole } from "@/lib/auth/roles";
 import { buildKeywords } from "@/utils/keywords";
 
 /**
- * Crea un account (studente, docente o admin).
- * - studente: richiede `students:manage` (docente o admin)
- * - docente/admin: richiede `roles:manage` (solo admin)
+ * Crea un account con un ruolo dell'organizzazione (ADR D31: Studente, Musicista, Docente, Segreteria…).
+ * - ruoli dell'area personale: richiede `students:manage`
+ * - ruoli dello staff e amministratore: richiede `roles:manage` (solo admin)
  * Lo studente riceve un link d'invito per collegare il proprio account Google (ADR D20);
  * lo staff imposta la password tramite il link di reset (nessuna password custom, §56).
  */
@@ -17,7 +19,11 @@ export async function POST(req: Request) {
     const parsed = createUserSchema.safeParse(await req.json());
     if (!parsed.success) throw new HttpError(400, "Dati non validi.");
     const input = parsed.data;
-    const caller = await requireCaller(req, input.role === "student" ? "students:manage" : "roles:manage");
+    const roleId = input.roleId ?? input.role!;
+    const def = await loadRole(roleId);
+    if (!def) throw new HttpError(400, "Ruolo non trovato.");
+    const role = technicalRole(roleId, def.kind);
+    const caller = await requireCaller(req, role === "student" ? "students:manage" : "roles:manage");
 
     const auth = adminAuth();
     const user = await auth.createUser({
@@ -28,7 +34,7 @@ export async function POST(req: Request) {
     });
 
     try {
-      await auth.setCustomUserClaims(user.uid, { role: input.role });
+      await auth.setCustomUserClaims(user.uid, claimsFor(roleId, def));
       const db = adminDb();
       const now = FieldValue.serverTimestamp();
       const batch = db.batch();
@@ -38,14 +44,16 @@ export async function POST(req: Request) {
         surname: input.surname,
         email: input.email,
         phone: input.phone ?? "",
-        role: input.role,
+        role,
+        roleId,
         active: true,
         createdAt: now,
         updatedAt: now,
       });
-      if (input.role === "student") {
+      if (role === "student") {
         batch.set(db.doc(`students/${user.uid}`), {
           userId: user.uid,
+          roleId,
           name: input.name,
           surname: input.surname,
           email: input.email,
@@ -62,6 +70,7 @@ export async function POST(req: Request) {
       } else {
         batch.set(db.doc(`teachers/${user.uid}`), {
           userId: user.uid,
+          roleId,
           name: input.name,
           surname: input.surname,
           email: input.email,
@@ -77,7 +86,7 @@ export async function POST(req: Request) {
       throw e;
     }
 
-    if (input.role === "student") {
+    if (role === "student") {
       const invite = await createInvite(user.uid, caller.uid);
       return Response.json({ uid: user.uid, invite }, { status: 201 });
     }

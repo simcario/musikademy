@@ -10,6 +10,10 @@ import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useStaffMutation } from "@/features/admin/hooks";
 import { useCourses } from "@/features/student-area/hooks";
+import { useSession } from "@/features/auth/auth-provider";
+import { useRolesOfKind } from "@/features/roles/hooks";
+import { NativeSelect } from "@/components/ui/native-select";
+import { can } from "@/lib/auth/roles";
 import type { InviteInfo } from "@/lib/auth/invite-token";
 import { studentService } from "@/services/studentService";
 import type { Student, WithId } from "@/types";
@@ -39,9 +43,9 @@ export function StudentFormDialog({
     <SidePanel
       open={open}
       onOpenChange={close}
-      title={created ? "Studente creato" : student ? "Modifica studente" : "Nuovo studente"}
+      title={created ? "Utente creato" : student ? "Modifica utente" : "Nuovo utente"}
       description={
-        created || student ? undefined : "Riceverai un link d'invito da inviare allo studente per accedere con Google."
+        created || student ? undefined : "Riceverai un link d'invito da inviare all'utente per accedere con Google."
       }
     >
       {created ? (
@@ -79,6 +83,10 @@ function StudentForm({
   onSaved: () => void;
 }) {
   const courses = useCourses();
+  const roles = useRolesOfKind("member");
+  // Il ruolo si sceglie alla creazione; cambiarlo dopo cambia i permessi, quindi spetta all'amministratore.
+  const { access } = useSession();
+  const roleEditable = !student || can(access, "roles:manage");
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
     defaultValues: {
@@ -86,6 +94,7 @@ function StudentForm({
       surname: student?.surname ?? "",
       email: student?.email ?? "",
       phone: student?.phone ?? "",
+      roleId: student?.roleId ?? "student",
       courseIds: student?.courseIds ?? [],
       enrollmentDate: toInputDate(student?.enrollmentDate ?? new Date()),
       notes: notes ?? "",
@@ -101,12 +110,14 @@ function StudentForm({
         surname: v.surname,
         email: v.email,
         phone: v.phone || "",
+        roleId: v.roleId,
         courseIds: v.courseIds,
         enrollmentDate: fromInputDate(v.enrollmentDate),
         notes: v.notes || "",
       };
       if (student) {
         await studentService.update(student.id, input);
+        if (v.roleId !== (student.roleId ?? "student")) await studentService.setRole(student.id, v.roleId);
         if ((v.notes ?? "") !== (notes ?? "")) await studentService.setNotes(student.id, v.notes ?? "");
         if (v.email !== student.email) await studentService.changeEmail(student.id, v.email);
         return null;
@@ -115,7 +126,7 @@ function StudentForm({
       return { name: v.name, email: v.email, phone: v.phone || undefined, invite: res.invite };
     },
     {
-      success: () => (student ? "Studente aggiornato" : "Studente creato"),
+      success: () => (student ? "Utente aggiornato" : "Utente creato"),
       invalidate: [["students"], ["studentNotes"]],
       onSuccess: (r) => (r ? onCreated(r) : onSaved()),
     },
@@ -139,9 +150,27 @@ function StudentForm({
           {(p) => <Input {...p} type="tel" {...form.register("phone")} />}
         </Field>
       </div>
-      <Field label="Data iscrizione" error={errors.enrollmentDate?.message} required>
-        {(p) => <Input {...p} type="date" {...form.register("enrollmentDate")} />}
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Ruolo"
+          error={errors.roleId?.message}
+          required
+          hint={roleEditable ? (student ? "Cambiandolo, l'utente dovrà accedere di nuovo." : undefined) : "Lo cambia l'amministratore."}
+        >
+          {(p) => (
+            <NativeSelect {...p} {...form.register("roleId")} disabled={!roleEditable || roles.isPending}>
+              {(roles.data ?? [{ id: "student", name: "Studente" }]).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+        <Field label="Data iscrizione" error={errors.enrollmentDate?.message} required>
+          {(p) => <Input {...p} type="date" {...form.register("enrollmentDate")} />}
+        </Field>
+      </div>
       <CheckList
         label="Corsi"
         items={(courses.data ?? []).filter((c) => c.active).map((c) => ({ id: c.id, label: c.name }))}
@@ -153,7 +182,7 @@ function StudentForm({
       <Field label="Note private (visibili solo ai docenti)" error={errors.notes?.message}>
         {(p) => <Textarea {...p} rows={3} {...form.register("notes")} />}
       </Field>
-      <FormActions onCancel={onCancel} submitting={save.isPending} submitLabel={student ? "Salva" : "Crea studente"} />
+      <FormActions onCancel={onCancel} submitting={save.isPending} submitLabel={student ? "Salva" : "Crea utente"} />
     </form>
   );
 }

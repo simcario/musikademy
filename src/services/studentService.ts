@@ -27,6 +27,8 @@ export interface StudentInput {
   surname: string;
   email: string;
   phone?: string;
+  /** Ruolo dell'organizzazione (ADR D31); usato solo alla creazione. */
+  roleId?: string;
   courseIds: string[];
   enrollmentDate: Date;
   notes?: string;
@@ -61,8 +63,12 @@ export const studentService = {
   create: (input: StudentInput) =>
     adminApi<{ uid: string; invite: InviteInfo }>("users", {
       method: "POST",
-      body: { ...input, enrollmentDate: input.enrollmentDate.toISOString(), role: "student" },
+      body: { ...input, enrollmentDate: input.enrollmentDate.toISOString(), roleId: input.roleId || "student" },
     }),
+
+  /** Cambia il ruolo dell'organizzazione (solo admin, ADR D31): l'utente dovrà accedere di nuovo. */
+  setRole: (uid: string, roleId: string) =>
+    adminApi<{ ok: true }>(`users/${uid}`, { method: "PATCH", body: { roleId } }),
 
   /** Aggiorna anagrafica; l'email si cambia solo via API (deve restare allineata con Auth). */
   async update(uid: string, input: Omit<StudentInput, "email"> & { email: string }) {

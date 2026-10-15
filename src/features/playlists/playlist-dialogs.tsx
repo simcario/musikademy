@@ -1,20 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { LoadMore } from "@/components/shared/states";
-import { useActiveStudents, useGroups, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useGroups, useSongs, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
-import { useMaterialsByIds } from "@/features/student-area/hooks";
-import { useDebounce } from "@/hooks/use-debounce";
-import { newTrackId, playlistService } from "@/services/playlistService";
-import { EXERCISE_CATEGORY, type Playlist, type PlaylistTrack, type WithId } from "@/types";
+import { SongDialog } from "@/features/songs/song-dialog";
+import { playlistService } from "@/services/playlistService";
+import type { Playlist, WithId } from "@/types";
 import { fullName } from "@/utils/format";
-import { CATEGORY_META } from "@/utils/status";
+import { searchToken } from "@/utils/keywords";
 
 type DialogProps = { open: boolean; onOpenChange: (o: boolean) => void };
 
@@ -82,7 +81,7 @@ function DetailsForm({
   );
 }
 
-/** Condivisione: chi riceve la playlist vede tutti i brani e i loro materiali. */
+/** Condivisione: chi riceve la playlist vede i brani e, di ognuno, i materiali per tutti o per il proprio gruppo. */
 export function PlaylistShareDialog({ open, onOpenChange, playlist }: DialogProps & { playlist: WithId<Playlist> | null }) {
   return (
     <SidePanel open={open} onOpenChange={onOpenChange} title="Condividi playlist" description={playlist?.title}>
@@ -98,7 +97,7 @@ function ShareForm({ playlist, onDone }: { playlist: WithId<Playlist>; onDone: (
   const [groupIds, setGroupIds] = useState(playlist.groupIds ?? []);
   const share = useStaffMutation(() => playlistService.share(playlist.id, { studentIds, groupIds }), {
     success: "Condivisione aggiornata",
-    invalidate: [["playlists"], ["materials"]],
+    invalidate: [["playlists"], ["songs"], ["materials"]],
     onSuccess: onDone,
   });
 
@@ -111,7 +110,8 @@ function ShareForm({ playlist, onDone }: { playlist: WithId<Playlist>; onDone: (
       }}
     >
       <p className="text-sm text-muted-foreground">
-        Chi scegli qui vede la playlist e tutti i materiali dei suoi brani, anche quelli che aggiungerai in seguito.
+        Chi scegli qui vede la playlist e i suoi brani. Di ogni brano vede i materiali per tutti e quelli destinati ai gruppi
+        di cui fa parte.
       </p>
       <CheckList
         label={`Gruppi (${groupIds.length} selezionati)`}
@@ -122,11 +122,11 @@ function ShareForm({ playlist, onDone }: { playlist: WithId<Playlist>; onDone: (
         maxHeight="max-h-44"
       />
       <CheckList
-        label={`Studenti (${studentIds.length} selezionati)`}
+        label={`Utenti (${studentIds.length} selezionati)`}
         items={(students.data ?? []).map((s) => ({ id: s.id, label: fullName(s), sub: s.email }))}
         selected={studentIds}
         onChange={setStudentIds}
-        emptyText={students.isPending ? "Caricamento…" : "Nessuno studente attivo."}
+        emptyText={students.isPending ? "Caricamento…" : "Nessun utente attivo."}
         maxHeight="max-h-60"
       />
       <FormActions onCancel={onDone} submitting={share.isPending} submitLabel="Condividi" />
@@ -134,96 +134,64 @@ function ShareForm({ playlist, onDone }: { playlist: WithId<Playlist>; onDone: (
   );
 }
 
-/** Nuovo brano in fondo alla playlist, oppure modifica di `track`: titolo, autore, note e materiali. */
-export function TrackDialog({
-  open,
-  onOpenChange,
-  playlist,
-  track,
-}: DialogProps & { playlist: WithId<Playlist>; track: PlaylistTrack | null }) {
+/** Aggiunge brani in fondo alla playlist (o ne crea uno nuovo al volo). */
+export function AddSongsDialog({ open, onOpenChange, playlist }: DialogProps & { playlist: WithId<Playlist> }) {
   return (
-    <SidePanel open={open} onOpenChange={onOpenChange} title={track ? "Modifica brano" : "Nuovo brano"} description={playlist.title} wide>
-      {open && <TrackForm key={track?.id ?? "new"} playlist={playlist} track={track} onDone={() => onOpenChange(false)} />}
+    <SidePanel open={open} onOpenChange={onOpenChange} title="Aggiungi brani" description={playlist.title}>
+      {open && <AddSongsForm playlist={playlist} onDone={() => onOpenChange(false)} />}
     </SidePanel>
   );
 }
 
-function TrackForm({ playlist, track, onDone }: { playlist: WithId<Playlist>; track: PlaylistTrack | null; onDone: () => void }) {
-  const [title, setTitle] = useState(track?.title ?? "");
-  const [artist, setArtist] = useState(track?.artist ?? "");
-  const [notes, setNotes] = useState(track?.notes ?? "");
-  const [materialIds, setMaterialIds] = useState<string[]>(track?.materialIds ?? []);
-  const [touched, setTouched] = useState(false);
+function AddSongsForm({ playlist, onDone }: { playlist: WithId<Playlist>; onDone: () => void }) {
+  const songs = useSongs();
+  const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-  const debounced = useDebounce(search);
-  const page = useMaterialsPage({ search: debounced, sort: "title" });
-  // I materiali già scelti restano in cima anche se la ricerca non li trova.
-  const chosen = useMaterialsByIds(track?.materialIds ?? []);
-  const trimmed = title.trim();
-
-  const pageItems = page.data?.pages.flatMap((p) => p.items) ?? [];
-  const known = new Map([...(chosen.data ?? []), ...pageItems].map((m) => [m.id, m]));
-  const items = [
-    ...materialIds.flatMap((id) => (known.has(id) ? [known.get(id)!] : [])),
-    ...pageItems.filter((m) => !materialIds.includes(m.id) && m.category !== EXERCISE_CATEGORY),
-  ];
-
-  const save = useStaffMutation(
-    () => {
-      const next: PlaylistTrack = { id: track?.id ?? newTrackId(), title: trimmed, artist, notes, materialIds };
-      const tracks = track ? playlist.tracks.map((t) => (t.id === track.id ? next : t)) : [...playlist.tracks, next];
-      return playlistService.setTracks(playlist.id, tracks);
-    },
-    { success: track ? "Brano aggiornato" : "Brano aggiunto", invalidate: [["playlists"], ["materials"]], onSuccess: onDone },
+  const [creating, setCreating] = useState(false);
+  const token = search ? searchToken(search) : null;
+  const available = (songs.data ?? []).filter(
+    (s) => !(playlist.songIds ?? []).includes(s.id) && (!token || s.keywords?.includes(token)),
   );
+  const add = useStaffMutation(() => playlistService.setSongs(playlist.id, [...(playlist.songIds ?? []), ...selected]), {
+    success: selected.length === 1 ? "Brano aggiunto" : "Brani aggiunti",
+    invalidate: [["playlists"], ["songs"], ["materials"]],
+    onSuccess: onDone,
+  });
 
   return (
+    <>
     <form
-      className="space-y-4"
-      noValidate
+      className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        setTouched(true);
-        if (trimmed) save.mutate(undefined);
+        if (selected.length) add.mutate(undefined);
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Titolo del brano" required error={touched && !trimmed ? "Inserisci il titolo" : undefined}>
-          {(p) => <Input {...p} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} autoFocus />}
-        </Field>
-        <Field label="Autore / interprete">
-          {(p) => <Input {...p} value={artist} onChange={(e) => setArtist(e.target.value)} maxLength={140} />}
-        </Field>
-      </div>
-      <Field label="Note per lo studente">
-        {(p) => <Textarea {...p} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />}
-      </Field>
-      <div className="space-y-2">
-        <div className="relative">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cerca ascolti, basi, spartiti, testi, video…"
-            aria-label="Cerca materiali"
-            className="pl-9"
-          />
+          <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca brano" aria-label="Cerca brano" className="pl-9" />
         </div>
-        <CheckList
-          label={`Materiali del brano (${materialIds.length} selezionati)`}
-          items={items.map((m) => ({ id: m.id, label: m.title, sub: CATEGORY_META[m.category].label }))}
-          selected={materialIds}
-          onChange={setMaterialIds}
-          emptyText={page.isPending ? "Caricamento…" : debounced ? "Nessun risultato." : "Nessun materiale caricato."}
-          maxHeight="max-h-80"
-        />
-        <LoadMore hasMore={!!page.hasNextPage} loading={page.isFetchingNextPage} onClick={() => page.fetchNextPage()} />
-        <p className="text-xs text-muted-foreground">
-          Chi riceve la playlist vede questi materiali anche se non gli sono assegnati in altro modo.
-        </p>
+        <Button type="button" variant="outline" onClick={() => setCreating(true)}>
+          <Plus aria-hidden /> Nuovo brano
+        </Button>
       </div>
-      <FormActions onCancel={onDone} submitting={save.isPending} submitLabel={track ? "Salva" : "Aggiungi brano"} />
+      <CheckList
+        label={`Brani (${selected.length} selezionati)`}
+        items={available.map((s) => ({
+          id: s.id,
+          label: s.title,
+          sub: [s.artist, `${s.items?.length ?? 0} materiali`].filter(Boolean).join(" · "),
+        }))}
+        selected={selected}
+        onChange={setSelected}
+        emptyText={songs.isPending ? "Caricamento…" : "Nessun brano da aggiungere: creane uno con “Nuovo brano”."}
+        maxHeight="max-h-96"
+      />
+      <FormActions onCancel={onDone} submitting={add.isPending} submitLabel="Aggiungi" />
     </form>
+    {/* Fuori dal form: gli eventi React attraversano i portali e il submit del brano arriverebbe qui. */}
+    <SongDialog open={creating} onOpenChange={setCreating} song={null} onCreated={(id) => setSelected((xs) => [...xs, id])} />
+    </>
   );
 }
