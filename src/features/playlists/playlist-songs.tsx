@@ -1,10 +1,31 @@
 "use client";
 
-import { ListMusic, Music } from "lucide-react";
+import { useState } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChevronDown, GripVertical, ListMusic, Music } from "lucide-react";
+import { Marquee } from "@/components/shared/marquee";
 import { Pill } from "@/components/shared/status-badge";
 import { useGroups, useSongs } from "@/features/admin/hooks";
 import { MaterialRow } from "@/features/materials/material-card";
 import { useMaterialsByIds, useSongsByIds } from "@/features/student-area/hooks";
+import { cn } from "@/lib/utils";
 import type { Material, Playlist, Song, WithId } from "@/types";
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -31,8 +52,9 @@ export function PlaylistCover({ className = "size-12", song }: { className?: str
 }
 
 /**
- * Un brano con i suoi materiali. Con `audienceIds` (studente: UID + gruppi) mostra solo i materiali per
- * tutti e quelli dei suoi gruppi; senza (docente) li mostra tutti, con i gruppi a cui sono destinati.
+ * Un brano come riga espandibile: chiusa mostra titolo, autore e quanti materiali ha; aperta i materiali.
+ * Con `audienceIds` (studente: UID + gruppi) mostra solo i materiali per tutti e quelli dei suoi gruppi;
+ * senza (docente) li mostra tutti, con i gruppi a cui sono destinati.
  */
 export function SongBlock({
   song,
@@ -41,6 +63,9 @@ export function SongBlock({
   audienceIds,
   groupNames,
   actions,
+  handle,
+  footer,
+  dragging,
 }: {
   song: WithId<Song>;
   index?: number;
@@ -48,51 +73,75 @@ export function SongBlock({
   audienceIds?: string[];
   groupNames?: Map<string, string>;
   actions?: React.ReactNode;
+  /** Maniglia di trascinamento (playlist del docente). */
+  handle?: React.ReactNode;
+  /** Riga di dettaglio sotto il titolo (es. "In playlist: …"). */
+  footer?: React.ReactNode;
+  dragging?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const items = (song.items ?? []).filter(
     (i) => !audienceIds || i.groupIds.length === 0 || i.groupIds.some((g) => audienceIds.includes(g)),
   );
   const shown = items.flatMap((i) => (materials.has(i.materialId) ? [{ item: i, material: materials.get(i.materialId)! }] : []));
+  const panelId = `song-${song.id}`;
+  const summary = [song.artist, count(items.length, "materiale", "materiali")].filter(Boolean).join(" · ");
+
   return (
-    <article className="card-surface space-y-3 p-4">
-      <div className="flex items-start gap-3">
-        {index !== undefined ? (
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-mid text-sm font-bold tabular-nums">
-            {index + 1}
+    <article className={cn("card-surface overflow-hidden", dragging && "shadow-dialog ring-2 ring-primary")}>
+      <div className="flex items-center gap-1 pr-1">
+        {handle}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className={cn("flex min-h-16 min-w-0 flex-1 items-center gap-3 py-2 pr-2 text-left hover:bg-muted/40", handle ? "pl-1" : "pl-4")}
+        >
+          {index !== undefined ? (
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-mid text-sm font-bold tabular-nums">
+              {index + 1}
+            </span>
+          ) : (
+            <PlaylistCover className="size-9" song />
+          )}
+          <span className="min-w-0 flex-1">
+            <Marquee className="font-semibold">{song.title}</Marquee>
+            <span className="block truncate text-xs text-muted-foreground">{summary}</span>
+            {footer && <span className="block truncate text-xs text-muted-foreground">{footer}</span>}
           </span>
-        ) : (
-          <PlaylistCover className="size-9" song />
-        )}
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">{song.title}</h3>
-          {song.artist && <p className="text-sm text-muted-foreground">{song.artist}</p>}
-          {song.notes && <p className="mt-1 text-sm whitespace-pre-line">{song.notes}</p>}
-        </div>
+          <ChevronDown className={cn("size-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
+        </button>
         {actions}
       </div>
-      {shown.length > 0 ? (
-        <ul className="space-y-2">
-          {shown.map(({ item, material }) => (
-            <li key={material.id} className="space-y-1">
-              <MaterialRow material={material} />
-              {groupNames && (
-                <div className="flex flex-wrap gap-1 pl-1">
-                  {item.groupIds.length === 0 ? (
-                    <Pill tone="neutral">Tutti</Pill>
-                  ) : (
-                    item.groupIds.map((g) => (
-                      <Pill key={g} tone="secondary">
-                        {groupNames.get(g) ?? "Gruppo eliminato"}
-                      </Pill>
-                    ))
+      {open && (
+        <div id={panelId} className="space-y-3 border-t border-border px-4 py-3">
+          {song.notes && <p className="text-sm whitespace-pre-line">{song.notes}</p>}
+          {shown.length > 0 ? (
+            <ul className="space-y-2">
+              {shown.map(({ item, material }) => (
+                <li key={material.id} className="space-y-1">
+                  <MaterialRow material={material} />
+                  {groupNames && (
+                    <div className="flex flex-wrap gap-1 pl-1">
+                      {item.groupIds.length === 0 ? (
+                        <Pill tone="neutral">Tutti</Pill>
+                      ) : (
+                        item.groupIds.map((g) => (
+                          <Pill key={g} tone="secondary">
+                            {groupNames.get(g) ?? "Gruppo eliminato"}
+                          </Pill>
+                        ))
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Pill tone="neutral">Nessun materiale{audienceIds ? " per te" : ""}</Pill>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Pill tone="neutral">Nessun materiale{audienceIds ? " per te" : ""}</Pill>
+          )}
+        </div>
       )}
     </article>
   );
@@ -105,17 +154,55 @@ export function useSongMaterials(songs: WithId<Song>[]) {
   return { ...q, map: new Map((q.data ?? []).map((m) => [m.id, m])) };
 }
 
-/** Brani della playlist, nell'ordine scelto. Docente: tutti i materiali con i gruppi; studente: i suoi. */
+/** Riga trascinabile: la maniglia avvia il trascinamento (mouse, dito o tastiera: spazio, frecce, spazio). */
+function SortableSong(props: Omit<React.ComponentProps<typeof SongBlock>, "handle" | "dragging">) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.song.id,
+  });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn("relative", isDragging && "z-10")}
+    >
+      <SongBlock
+        {...props}
+        dragging={isDragging}
+        handle={
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={`Sposta ${props.song.title}`}
+            title="Trascina per riordinare"
+            className="flex h-16 w-9 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="size-5" aria-hidden />
+          </button>
+        }
+      />
+    </li>
+  );
+}
+
+/**
+ * Brani della playlist, nell'ordine scelto. Docente: tutti i materiali con i gruppi e, con `onReorder`,
+ * ordinamento a trascinamento; studente: i materiali per tutti e del proprio gruppo.
+ */
 export function PlaylistSongs({
   playlist,
   audienceIds,
   songActions,
+  onReorder,
   emptyText = "Nessun brano in questa playlist.",
 }: {
   playlist: WithId<Playlist>;
   /** Studente: UID + gruppi attivi. Assente = vista docente. */
   audienceIds?: string[];
   songActions?: (song: WithId<Song>, index: number) => React.ReactNode;
+  /** Salva il nuovo ordine dei brani dopo un trascinamento; se fallisce torna l'ordine salvato. */
+  onReorder?: (songIds: string[]) => Promise<unknown>;
   emptyText?: string;
 }) {
   const staff = !audienceIds;
@@ -123,28 +210,78 @@ export function PlaylistSongs({
   const mine = useSongsByIds(staff ? [] : (playlist.songIds ?? []));
   const source = staff ? all : mine;
   const byId = new Map((source.data ?? []).map((s) => [s.id, s]));
-  const songs = (playlist.songIds ?? []).flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+  // Ordine mostrato subito dopo il rilascio, finché la playlist salvata non lo conferma.
+  const [pending, setPending] = useState<{ base: string[]; order: string[] } | null>(null);
+  const saved = playlist.songIds ?? [];
+  const order = pending && pending.base === saved ? pending.order : saved;
+  const songs = order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
   const materials = useSongMaterials(songs);
   const groups = useGroups(staff);
   const groupNames = staff ? new Map((groups.data ?? []).map((g) => [g.id, g.name])) : undefined;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
-  if (source.isPending && (playlist.songIds ?? []).length) return <p className="text-sm text-muted-foreground">Caricamento…</p>;
+  if (source.isPending && saved.length) return <p className="text-sm text-muted-foreground">Caricamento…</p>;
   if (songs.length === 0) return <p className="card-surface p-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
 
+  const common = (s: WithId<Song>, i: number) => ({
+    song: s,
+    index: i,
+    materials: materials.map,
+    audienceIds,
+    groupNames,
+    actions: songActions?.(s, i),
+  });
+
+  if (!onReorder) {
+    return (
+      <ol className="space-y-2">
+        {songs.map((s, i) => (
+          <li key={s.id}>
+            <SongBlock {...common(s, i)} />
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  // Solo i brani esistenti: quelli eliminati nel frattempo escono dalla playlist al primo riordino.
+  const ids = songs.map((s) => s.id);
+
+  function onDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    const next = arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)));
+    setPending({ base: saved, order: next });
+    onReorder!(next).catch(() => setPending(null));
+  }
+
   return (
-    <ol className="space-y-3">
-      {songs.map((s, i) => (
-        <li key={s.id}>
-          <SongBlock
-            song={s}
-            index={i}
-            materials={materials.map}
-            audienceIds={audienceIds}
-            groupNames={groupNames}
-            actions={songActions?.(s, i)}
-          />
-        </li>
-      ))}
-    </ol>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={onDragEnd}
+      accessibility={{
+        screenReaderInstructions: {
+          draggable: "Premi spazio per prendere il brano, usa le frecce per spostarlo e spazio per rilasciarlo; Esc annulla.",
+        },
+        announcements: {
+          onDragStart: ({ active }) => `Hai preso ${byId.get(String(active.id))?.title ?? "il brano"}.`,
+          onDragOver: ({ over }) => (over ? `Sopra la posizione ${ids.indexOf(String(over.id)) + 1}.` : ""),
+          onDragEnd: ({ over }) => (over ? `Brano spostato in posizione ${ids.indexOf(String(over.id)) + 1}.` : "Brano rilasciato."),
+          onDragCancel: () => "Spostamento annullato.",
+        },
+      }}
+    >
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        <ol className="space-y-2">
+          {songs.map((s, i) => (
+            <SortableSong key={s.id} {...common(s, i)} />
+          ))}
+        </ol>
+      </SortableContext>
+    </DndContext>
   );
 }

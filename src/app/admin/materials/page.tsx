@@ -40,7 +40,8 @@ import {
   MoveFolderDialog,
   MoveToFolderDialog,
 } from "@/features/materials/folder-dialogs";
-import { CATEGORY_ICON, LyricsButton, MaterialActions, MaterialIcon, materialSizeLabel } from "@/features/materials/material-card";
+import { Marquee } from "@/components/shared/marquee";
+import { CATEGORY_ICON, MaterialActions, MaterialIcon, materialSizeLabel } from "@/features/materials/material-card";
 import { MaterialAssignDialog } from "@/features/materials/material-assign-dialog";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
@@ -298,25 +299,27 @@ function Materials() {
             const audience = audienceLabel(m);
             const folderName = !openFolder && m.folderId ? folderPathName(m.folderId, folderMap) : undefined;
             return (
-              <li key={m.id} className="card-surface flex flex-wrap items-center gap-3 p-3">
+              <li key={m.id} className="card-surface flex items-center gap-3 p-3">
                 <MaterialIcon type={m.type} className="size-11" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{m.title}</p>
+                  <p className="font-semibold">
+                    <Marquee>{m.title}</Marquee>
+                  </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {[CATEGORY_META[m.category].label, materialSizeLabel(m), formatShortDate(m.createdAt), folderName]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
+                  <div className="mt-1">
+                    {audience ? <Pill tone="secondary">{audience}</Pill> : <Pill tone="warning">Non assegnato</Pill>}
+                  </div>
                 </div>
-                {audience ? <Pill tone="secondary">{audience}</Pill> : <Pill tone="warning">Non assegnato</Pill>}
-                <div className="flex items-center gap-1">
-                  <LyricsButton material={m} />
-                  <MaterialActions material={m} compact />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger aria-label={`Azioni ${m.title}`} className="flex size-11 items-center justify-center rounded-full hover:bg-muted">
-                      <MoreVertical className="size-5" aria-hidden />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
+                {/* Un solo menu: azioni del materiale e, dopo, quelle di gestione. */}
+                <MaterialActions
+                  material={m}
+                  compact
+                  menuItems={
+                    <>
                       <DropdownMenuItem className="min-h-10" onClick={() => setEditing(m)}>
                         <Pencil aria-hidden /> Modifica
                       </DropdownMenuItem>
@@ -329,9 +332,9 @@ function Materials() {
                       <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToDelete(m)}>
                         <Trash2 aria-hidden /> Elimina
                       </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                    </>
+                  }
+                />
               </li>
             );
           })}

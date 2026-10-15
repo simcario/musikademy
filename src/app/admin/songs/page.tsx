@@ -74,15 +74,16 @@ export default function AdminSongsPage() {
           }
         />
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {songs.map((s) => {
             const lists = inPlaylists(s.id);
             return (
-              <li key={s.id} className="space-y-1">
+              <li key={s.id}>
                 <SongBlock
                   song={s}
                   materials={materials.map}
                   groupNames={groupNames}
+                  footer={lists.length ? `In playlist: ${lists.join(", ")}` : "Non è in nessuna playlist"}
                   actions={
                     <DropdownMenu>
                       <DropdownMenuTrigger aria-label={`Azioni brano ${s.title}`} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted">
@@ -99,9 +100,6 @@ export default function AdminSongsPage() {
                     </DropdownMenu>
                   }
                 />
-                <p className="px-1 text-xs text-muted-foreground">
-                  {lists.length ? `In playlist: ${lists.join(", ")}` : "Non è in nessuna playlist"}
-                </p>
               </li>
             );
           })}

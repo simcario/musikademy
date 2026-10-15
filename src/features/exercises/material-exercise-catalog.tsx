@@ -1,17 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, FilePlus2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { BookOpen, FilePlus2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
+import { Marquee } from "@/components/shared/marquee";
 import { MaterialActions, MaterialIcon, materialSizeLabel } from "@/features/materials/material-card";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
@@ -60,32 +56,34 @@ export function MaterialExerciseCatalog() {
       ) : (
         <ul className="space-y-2">
           {items.map((m) => (
-            <li key={m.id} className="card-surface flex flex-wrap items-center gap-3 p-3">
+            <li key={m.id} className="card-surface flex items-center gap-3 p-3">
               <MaterialIcon type={m.type} className="size-11" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{m.title}</p>
+                <p className="font-semibold">
+                  <Marquee>{m.title}</Marquee>
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {[m.description, materialSizeLabel(m), formatShortDate(m.createdAt)].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <div className="flex items-center gap-1">
-                <MaterialActions material={m} compact />
-                <Button onClick={() => setAssigning(m)}>
-                  <Plus aria-hidden /> Assegna
+                <Button onClick={() => setAssigning(m)} aria-label={`Assegna ${m.title}`} className="max-sm:size-10 max-sm:px-0">
+                  <Plus aria-hidden /> <span className="hidden sm:inline">Assegna</span>
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger aria-label={`Azioni ${m.title}`} className="flex size-11 items-center justify-center rounded-full hover:bg-muted">
-                    <MoreVertical className="size-5" aria-hidden />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem className="min-h-10" onClick={() => setEditing(m)}>
-                      <Pencil aria-hidden /> Modifica
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToDelete(m)}>
-                      <Trash2 aria-hidden /> Elimina
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <MaterialActions
+                  material={m}
+                  compact
+                  menuItems={
+                    <>
+                      <DropdownMenuItem className="min-h-10" onClick={() => setEditing(m)}>
+                        <Pencil aria-hidden /> Modifica
+                      </DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToDelete(m)}>
+                        <Trash2 aria-hidden /> Elimina
+                      </DropdownMenuItem>
+                    </>
+                  }
+                />
               </div>
             </li>
           ))}

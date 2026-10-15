@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, ListMusic, ListPlus, MoreVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { ArrowLeft, ListMusic, ListPlus, MoreVertical, Pencil, Plus, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -164,15 +164,6 @@ function PlaylistDetail({
     onSuccess: () => setToRemove(null),
   });
 
-  function move(index: number, delta: number) {
-    const ids = [...songIds];
-    const [s] = ids.splice(index, 1);
-    ids.splice(index + delta, 0, s);
-    setSongs.mutate(ids);
-  }
-
-  const last = songIds.length - 1;
-
   return (
     <>
       <div className="card-surface flex flex-wrap items-center gap-2 p-2 pl-1">
@@ -193,11 +184,15 @@ function PlaylistDetail({
         {menu}
       </div>
       {playlist.description && <p className="text-sm whitespace-pre-line text-muted-foreground">{playlist.description}</p>}
+      {songIds.length > 1 && (
+        <p className="text-xs text-muted-foreground">Trascina un brano dalla maniglia a sinistra per cambiarne l&apos;ordine.</p>
+      )}
 
       <PlaylistSongs
         playlist={playlist}
         emptyText="Nessun brano: aggiungili con “Aggiungi brani”."
-        songActions={(s, i) => (
+        onReorder={(ids) => setSongs.mutateAsync(ids)}
+        songActions={(s) => (
           <DropdownMenu>
             <DropdownMenuTrigger aria-label={`Azioni brano ${s.title}`} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted">
               <MoreVertical className="size-5" aria-hidden />
@@ -205,12 +200,6 @@ function PlaylistDetail({
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem className="min-h-10" onClick={() => setEditing(s)}>
                 <Pencil aria-hidden /> Modifica brano
-              </DropdownMenuItem>
-              <DropdownMenuItem className="min-h-10" disabled={i === 0 || setSongs.isPending} onClick={() => move(i, -1)}>
-                <ArrowUp aria-hidden /> Sposta su
-              </DropdownMenuItem>
-              <DropdownMenuItem className="min-h-10" disabled={i === last || setSongs.isPending} onClick={() => move(i, 1)}>
-                <ArrowDown aria-hidden /> Sposta giù
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setToRemove(s)}>
                 <Trash2 aria-hidden /> Togli dalla playlist
