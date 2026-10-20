@@ -4,6 +4,7 @@ import { lessonFormSchema, oneHourAfter, parseTopics } from "@/features/lessons/
 import { createUserSchema, studentFormSchema } from "@/features/students/schemas";
 import { assetImageName, checkFile, dirOf, isAssetImage, safeFileName } from "@/lib/files";
 import { cycleDueDate, cycleEnd, cycleFee, cycleKey, cycleLabel, cycleStartAt, shiftCycle } from "@/utils/cycles";
+import { feeId, feeLabel, subjectsFor } from "@/utils/fees";
 import { buildKeywords, searchToken } from "@/utils/keywords";
 import {
   effectivePaymentStatus,
@@ -107,14 +108,31 @@ describe("pagamenti", () => {
   });
 
   it("costo del corso a cicli di 4 settimane", () => {
-    const fee = { lessonPrice: "30", lessonsPerCycle: "4", cycleAmount: "120", startDate: "2026-10-15", dueAt: "start" };
+    const fee = { courseId: "pop", subjectId: "", lessonPrice: "30", lessonsPerCycle: "4", cycleAmount: "120", startDate: "2026-10-15", dueAt: "start" };
     expect(feeFormSchema.safeParse(fee).success).toBe(true);
+    expect(feeFormSchema.safeParse({ ...fee, courseId: "" }).success).toBe(false);
     expect(feeFormSchema.safeParse({ ...fee, lessonPrice: "", lessonsPerCycle: "" }).success).toBe(true);
     expect(feeFormSchema.safeParse({ ...fee, lessonsPerCycle: "29" }).success).toBe(false);
     expect(feeFormSchema.safeParse({ ...fee, cycleAmount: "" }).success).toBe(false);
     expect(feeFormSchema.safeParse({ ...fee, startDate: "" }).success).toBe(false);
     expect(amountToInput(80.5)).toBe("80,50");
     expect(amountToInput(120)).toBe("120");
+  });
+
+  it("un costo per docente, studente e materia (ADR D29)", () => {
+    expect(feeId("t1", "s1", "pop", "piano")).toBe("t1_s1_pop_piano");
+    expect(feeId("t1", "s1", "pop")).toBe("t1_s1_pop_corso");
+    expect(feeLabel({ courseName: "Pop", subjectName: "Pianoforte" })).toBe("Pianoforte · Pop");
+    expect(feeLabel({ courseName: "Pop" })).toBe("Pop");
+    const course = {
+      subjects: [
+        { id: "canto", name: "Canto", teacherIds: ["t1"] },
+        { id: "piano", name: "Pianoforte", teacherIds: ["t2"] },
+      ],
+    };
+    expect(subjectsFor(course, "t2").map((s) => s.id)).toEqual(["piano"]);
+    expect(subjectsFor(course).length).toBe(2);
+    expect(subjectsFor({}, "t1")).toEqual([]);
   });
 
   it("riconosce il costo salvato nel vecchio formato mensile", () => {

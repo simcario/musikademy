@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { useActiveStudents, useFolders, useGroups, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useFolders, useGroups, useScopeGetter, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
 import { folderService, foldersByPath, subtreeIds } from "@/services/folderService";
 import { materialService } from "@/services/materialService";
@@ -102,7 +102,8 @@ function FolderShareForm({ folder, onDone }: { folder: WithId<MaterialFolder>; o
   const inherited = (folder.audience ?? []).some(
     (id) => !(folder.studentIds ?? []).includes(id) && !(folder.groupIds ?? []).includes(id),
   );
-  const share = useStaffMutation(() => folderService.share(folder.id, { studentIds, groupIds }), {
+  const getScope = useScopeGetter();
+  const share = useStaffMutation(() => folderService.share(folder.id, { studentIds, groupIds }, getScope()), {
     success: "Condivisione aggiornata",
     invalidate: [["folders"], ["materials"]],
     onSuccess: onDone,
@@ -187,7 +188,8 @@ export function MoveFolderDialog({ open, onOpenChange, folder }: DialogProps & {
 function MoveFolderForm({ folder, onDone }: { folder: WithId<MaterialFolder>; onDone: () => void }) {
   const folders = useFolders();
   const [parentId, setParentId] = useState(folder.parentId ?? "");
-  const move = useStaffMutation(() => folderService.move(folder.id, parentId || null), {
+  const getScope = useScopeGetter();
+  const move = useStaffMutation(() => folderService.move(folder.id, parentId || null, getScope()), {
     success: "Cartella spostata",
     invalidate: [["folders"], ["materials"]],
     onSuccess: onDone,

@@ -16,6 +16,8 @@ const optionalAmount = amountField.optional().or(z.literal(""));
 export const paymentFormSchema = z
   .object({
     studentId: z.string().min(1, "Seleziona uno studente"),
+    /** Costo (materia) della quota; vuoto = quota libera. */
+    feeId: z.string().optional(),
     description: z.string().trim().min(1, "Es. Quota ottobre").max(140),
     amount: amountField,
     dueDate: date,
@@ -43,8 +45,10 @@ export const installmentSchema = (max: number) =>
   });
 export type InstallmentFormValues = z.infer<ReturnType<typeof installmentSchema>>;
 
-/** Costo del corso: con costo a lezione e lezioni per ciclo la quota si calcola da sola. */
+/** Costo per materia: con costo a lezione e lezioni per ciclo la quota si calcola da sola. */
 export const feeFormSchema = z.object({
+  courseId: z.string().min(1, "Scegli il corso"),
+  subjectId: z.string().optional(),
   lessonPrice: optionalAmount,
   lessonsPerCycle: z
     .string()

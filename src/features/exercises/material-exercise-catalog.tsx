@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
-import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
+import { useMaterialsPage, useScopeGetter, useStaffMutation } from "@/features/admin/hooks";
 import { MaterialActions, MaterialIcon } from "@/features/materials/material-card";
 import { MaterialEditorDialog } from "@/features/materials/material-editor";
 import { MaterialFormDialog } from "@/features/materials/material-form";
@@ -29,7 +29,8 @@ export function MaterialExerciseCatalog() {
   const q = useMaterialsPage({ category: EXERCISE_CATEGORY, sort: "recent" });
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
 
-  const remove = useStaffMutation((m: WithId<Material>) => materialService.remove(m), {
+  const getScope = useScopeGetter();
+  const remove = useStaffMutation((m: WithId<Material>) => materialService.remove(m, getScope()), {
     success: "Esercizio eliminato dal catalogo",
     invalidate: [["materials"]],
     onSuccess: () => setToDelete(null),

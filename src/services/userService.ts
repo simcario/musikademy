@@ -2,7 +2,7 @@ import { arrayRemove, arrayUnion, orderBy, updateDoc, where, writeBatch } from "
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firestore, firebaseStorage } from "@/lib/firebase/client";
 import { AVATAR_MAX_SIZE, safeFileName } from "@/lib/files";
-import type { AppUser, Course, Student, Teacher, WithId } from "@/types";
+import type { AppUser, Course, CourseSubject, Student, Teacher, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { buildKeywords } from "@/utils/keywords";
 import { COLLECTIONS, chunk, clean, getById, list, ref, timestamps, touched } from "./base";
@@ -45,22 +45,36 @@ export interface CourseInput {
   description?: string;
   active: boolean;
   teacherIds: string[];
+  subjects: CourseSubject[];
 }
 
 export const courseService = {
   list: () => list<Course>(COLLECTIONS.courses, orderBy("name")),
   listActive: () => list<Course>(COLLECTIONS.courses, where("active", "==", true), orderBy("name")),
 
-  async create(input: CourseInput) {
+  /**
+   * Crea o aggiorna il corso e allinea `teachers/{uid}.courseIds`, che le rules usano per
+   * l'isolamento dei docenti (ADR D29). Le materie tengono solo docenti abilitati al corso.
+   */
+  async save(course: WithId<Course> | null, input: CourseInput) {
     const batch = writeBatch(firestore());
-    const r = ref(COLLECTIONS.courses, crypto.randomUUID());
-    batch.set(r, clean({ ...input, ...timestamps() }));
+    const r = ref(COLLECTIONS.courses, course?.id ?? crypto.randomUUID());
+    const subjects = input.subjects.map((s) => ({
+      id: s.id,
+      name: s.name.trim(),
+      teacherIds: s.teacherIds.filter((t) => input.teacherIds.includes(t)),
+    }));
+    const data = clean({ ...input, subjects });
+    if (course) batch.update(r, { ...data, ...touched() });
+    else batch.set(r, { ...data, ...timestamps() });
+    // Anche i docenti già presenti: riallinea eventuali copie non aggiornate.
+    input.teacherIds.forEach((t) => batch.update(ref(COLLECTIONS.teachers, t), { courseIds: arrayUnion(r.id), ...touched() }));
+    (course?.teacherIds ?? [])
+      .filter((t) => !input.teacherIds.includes(t))
+      .forEach((t) => batch.update(ref(COLLECTIONS.teachers, t), { courseIds: arrayRemove(r.id), ...touched() }));
     await batch.commit();
     return r.id;
   },
-
-  update: (id: string, input: Partial<CourseInput>) =>
-    updateDoc(ref(COLLECTIONS.courses, id), clean({ ...input, ...touched() })),
 
   /**
    * Iscrive e toglie studenti dal corso (`students.courseIds`). Chi esce dal corso esce anche

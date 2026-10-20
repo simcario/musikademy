@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { useStaffMutation } from "@/features/admin/hooks";
-import { useCourses } from "@/features/student-area/hooks";
+import { useStaffMutation, useStaffScope } from "@/features/admin/hooks";
+import { useSelectableCourses } from "@/features/admin/pickers";
 import type { InviteInfo } from "@/lib/auth/invite-token";
 import { studentService } from "@/services/studentService";
 import type { Student, WithId } from "@/types";
+import { AppError } from "@/utils/errors";
 import { fromInputDate, toInputDate } from "@/utils/format";
 import { InviteShare } from "./invite-share";
 import { studentFormSchema, type StudentFormValues } from "./schemas";
@@ -78,7 +79,10 @@ function StudentForm({
   onCreated: (s: CreatedStudent) => void;
   onSaved: () => void;
 }) {
-  const courses = useCourses();
+  const courses = useSelectableCourses();
+  const scope = useStaffScope();
+  // I corsi che chi modifica non gestisce (di altri docenti) non sono in elenco: restano in `courseIds` come erano.
+  const kept = (student?.courseIds ?? []).filter((id) => !courses.data.some((c) => c.id === id));
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
     defaultValues: {
@@ -96,6 +100,10 @@ function StudentForm({
 
   const save = useStaffMutation(
     async (v: StudentFormValues) => {
+      // Il docente vede solo gli studenti dei suoi corsi (ADR D29): senza, lo perderebbe di vista.
+      if (!scope?.admin && !v.courseIds.some((id) => scope?.courseIds.includes(id))) {
+        throw new AppError("Iscrivilo ad almeno uno dei tuoi corsi.");
+      }
       const input = {
         name: v.name,
         surname: v.surname,
@@ -143,13 +151,22 @@ function StudentForm({
         {(p) => <Input {...p} type="date" {...form.register("enrollmentDate")} />}
       </Field>
       <CheckList
-        label="Corsi"
-        items={(courses.data ?? []).filter((c) => c.active).map((c) => ({ id: c.id, label: c.name }))}
+        label={scope?.admin ? "Corsi" : "I tuoi corsi"}
+        items={courses.data.map((c) => ({ id: c.id, label: c.name }))}
         selected={watch_courseIds}
         onChange={(ids) => form.setValue("courseIds", ids, { shouldDirty: true })}
-        emptyText="Nessun corso: creane uno in Organizzazione."
+        emptyText={
+          scope?.admin
+            ? "Nessun corso: creane uno in Organizzazione."
+            : "Non sei abilitato a nessun corso: chiedi all'amministratore."
+        }
         maxHeight="max-h-40"
       />
+      {kept.length > 0 && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Frequenta anche {kept.length === 1 ? "un altro corso" : `altri ${kept.length} corsi`} di altri docenti.
+        </p>
+      )}
       <Field label="Note private (visibili solo ai docenti)" error={errors.notes?.message}>
         {(p) => <Textarea {...p} rows={3} {...form.register("notes")} />}
       </Field>

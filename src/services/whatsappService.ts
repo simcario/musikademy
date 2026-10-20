@@ -24,7 +24,7 @@ import type {
   WithId,
 } from "@/types";
 import { adminApi } from "./authService";
-import { COLLECTIONS, chunk, clean, col, ref, timestamps, touched } from "./base";
+import { COLLECTIONS, chunk, clean, col, ownedBy, ref, timestamps, touched, type StaffScope } from "./base";
 
 const waDoc = (id: (typeof WA_DOC)[keyof typeof WA_DOC]) => doc(firestore(), COLLECTIONS.whatsapp, id);
 
@@ -76,9 +76,10 @@ export const whatsappService = {
   saveSettings: (s: EditableWhatsAppSettings) => setDoc(waDoc(WA_DOC.settings), { ...s, ...touched() }, { merge: true }),
 
   /** Ultimi messaggi in tempo reale (registro invii). */
-  watchRecent(max: number, onChange: (m: WithId<WhatsAppMessage>[]) => void, onError: (e: Error) => void) {
+  /** Registro invii: l'admin vede tutto, il docente i messaggi che ha messo in coda (ADR D29). */
+  watchRecent(max: number, scope: StaffScope, onChange: (m: WithId<WhatsAppMessage>[]) => void, onError: (e: Error) => void) {
     return onSnapshot(
-      query(col(COLLECTIONS.whatsappMessages), orderBy("createdAt", "desc"), limit(max)),
+      query(col(COLLECTIONS.whatsappMessages), ...ownedBy(scope, "createdBy"), orderBy("createdAt", "desc"), limit(max)),
       (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as WhatsAppMessage) }))),
       onError,
     );

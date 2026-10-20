@@ -1,6 +1,6 @@
 import "server-only";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { adminAuth } from "@/lib/firebase/admin";
+import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { can, isRole, type Permission } from "@/lib/auth/roles";
 import type { Role } from "@/types";
 
@@ -41,6 +41,33 @@ export async function requireCaller(req: Request, permission: Permission): Promi
   const caller = await requireUser(req);
   if (!can(caller.role, permission)) throw new HttpError(403, "Non hai i permessi per questa operazione.");
   return caller;
+}
+
+/** Corsi a cui è abilitato il docente (`teachers/{uid}.courseIds`, ADR D29). */
+export async function teacherCourses(uid: string): Promise<string[]> {
+  const snap = await adminDb().doc(`teachers/${uid}`).get();
+  return (snap.data()?.courseIds as string[] | undefined) ?? [];
+}
+
+/**
+ * Il docente gestisce uno studente solo se ne segue almeno un corso (ADR D29); l'admin sempre.
+ * Con `all` deve seguirli tutti: eliminare lo studente cancella anche lo storico degli altri docenti.
+ */
+export async function assertManagesStudent(caller: Caller, studentId: string, opts: { all?: boolean } = {}) {
+  if (caller.role === "admin") return;
+  const [mine, snap] = await Promise.all([teacherCourses(caller.uid), adminDb().doc(`students/${studentId}`).get()]);
+  const courses = (snap.data()?.courseIds as string[] | undefined) ?? [];
+  const ok = opts.all
+    ? courses.length > 0 && courses.every((c) => mine.includes(c))
+    : courses.some((c) => mine.includes(c));
+  if (!ok) {
+    throw new HttpError(
+      403,
+      opts.all
+        ? "Lo studente frequenta anche corsi di altri docenti: può eliminarlo solo l'amministratore."
+        : "Lo studente non frequenta i tuoi corsi.",
+    );
+  }
 }
 
 export function errorResponse(error: unknown) {

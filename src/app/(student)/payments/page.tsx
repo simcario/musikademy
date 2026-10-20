@@ -5,7 +5,8 @@ import { PageContainer, PageHeader } from "@/components/shared/page";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { PaymentBadge } from "@/components/shared/status-badge";
 import { PaymentProgress } from "@/features/payments/payment-progress";
-import { useMyPayments, useMyStudentProfile } from "@/features/student-area/hooks";
+import { useMyCosts, useMyPayments } from "@/features/student-area/hooks";
+import { feeLabel } from "@/services/paymentService";
 import { cycleFee, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf } from "@/utils/status";
@@ -13,22 +14,25 @@ import { PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf
 /** Sola lettura: lo studente non può modificare i pagamenti (UI + Security Rules). */
 export default function PaymentsPage() {
   const q = useMyPayments();
-  const fee = cycleFee(useMyStudentProfile().data?.fee);
+  // Un costo per docente e materia: chi studia due materie paga due quote.
+  const fees = (useMyCosts().data ?? []).filter((f) => cycleFee(f));
   const rows = (q.data ?? []).map((p) => ({ ...p, effective: effectivePaymentStatus(p) }));
   const due = rows.reduce((s, p) => s + remainingOf(p), 0);
 
   return (
     <PageContainer className="max-w-3xl">
-      <PageHeader title="Pagamenti" description="Quote e versamenti. Per qualsiasi dubbio contatta la segreteria." />
-      {!q.isPending && !q.isError && (rows.length > 0 || fee) && (
+      <PageHeader title="Pagamenti" description="Quote e versamenti, per docente e materia. Per qualsiasi dubbio contatta il tuo docente." />
+      {!q.isPending && !q.isError && (rows.length > 0 || fees.length > 0) && (
         <div className="card-surface grid gap-3 p-4 sm:grid-cols-2">
           <div>
             <p className="text-sm text-muted-foreground">Da saldare</p>
             <p className={`text-2xl font-bold tabular-nums ${due > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(due)}</p>
           </div>
-          {fee && (
-            <div>
-              <p className="text-sm text-muted-foreground">Costo del corso</p>
+          {fees.map((fee) => (
+            <div key={fee.id}>
+              <p className="text-sm text-muted-foreground">
+                {feeLabel(fee)} · {fee.teacherName}
+              </p>
               <p className="text-lg font-bold tabular-nums">{formatCurrency(fee.cycleAmount)} ogni 4 settimane</p>
               {fee.lessonPrice && (
                 <p className="text-xs text-muted-foreground">
@@ -37,7 +41,7 @@ export default function PaymentsPage() {
               )}
               <p className="text-xs text-muted-foreground">Ciclo in corso: {cycleLabel(cycleStartAt(fee.startDate.toDate(), new Date()))}</p>
             </div>
-          )}
+          ))}
         </div>
       )}
       {q.isPending ? (
@@ -55,7 +59,10 @@ export default function PaymentsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold">{p.description}</p>
-                    <p className="text-xs text-muted-foreground">Scadenza {formatDate(p.dueDate)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[p.subjectName, p.teacherName].filter(Boolean).join(" · ")}
+                      {(p.subjectName || p.teacherName) && " · "}Scadenza {formatDate(p.dueDate)}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-lg font-bold tabular-nums">{formatCurrency(p.amount)}</p>

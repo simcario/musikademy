@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSession } from "@/features/auth/auth-provider";
 import { qk } from "@/hooks/query-keys";
 import { WA_OFFLINE_AFTER_MS } from "@/lib/whatsapp/shared";
 import { whatsappService } from "@/services/whatsappService";
@@ -46,7 +47,13 @@ export function useWhatsAppSession() {
 }
 
 export function useWhatsAppMessages(max = 30) {
-  return useLive<WithId<WhatsAppMessage>[]>((on, err) => whatsappService.watchRecent(max, on, err), `recent-${max}`);
+  // Il registro dipende solo da chi lo guarda (non dai corsi): basta la sessione.
+  const { uid, role } = useSession();
+  const scope = { uid, admin: role === "admin", courseIds: [] };
+  return useLive<WithId<WhatsAppMessage>[]>(
+    (on, err) => whatsappService.watchRecent(max, scope, on, err),
+    `recent-${max}-${uid}`,
+  );
 }
 
 export function useWhatsAppSettings() {

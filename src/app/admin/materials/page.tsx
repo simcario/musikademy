@@ -33,7 +33,7 @@ import { PageContainer, PageHeader } from "@/components/shared/page";
 import { TabBar } from "@/components/shared/segmented";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
-import { useFolders, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
+import { useFolders, useMaterialsPage, useScopeGetter, useStaffMutation } from "@/features/admin/hooks";
 import {
   FolderNameDialog,
   FolderShareDialog,
@@ -120,12 +120,13 @@ function Materials() {
   // Gli esercizi hanno il loro catalogo nella sezione Esercizi.
   const items = (q.data?.pages.flatMap((p) => p.items) ?? []).filter((m) => m.category !== EXERCISE_CATEGORY);
 
-  const remove = useStaffMutation((m: WithId<Material>) => materialService.remove(m), {
+  const getScope = useScopeGetter();
+  const remove = useStaffMutation((m: WithId<Material>) => materialService.remove(m, getScope()), {
     success: "Materiale eliminato",
     invalidate: [["materials"]],
     onSuccess: () => setToDelete(null),
   });
-  const removeFolder = useStaffMutation((f: WithId<MaterialFolder>) => folderService.remove(f.id), {
+  const removeFolder = useStaffMutation((f: WithId<MaterialFolder>) => folderService.remove(f.id, getScope()), {
     success: "Cartella eliminata",
     invalidate: [["folders"], ["materials"]],
     onSuccess: (_r, f) => {

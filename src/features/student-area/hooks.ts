@@ -10,7 +10,7 @@ import { attendanceService } from "@/services/attendanceService";
 import { folderService } from "@/services/folderService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters, type StudentMaterialCursor } from "@/services/materialService";
-import { paymentService } from "@/services/paymentService";
+import { feeService, paymentService } from "@/services/paymentService";
 import { studentService } from "@/services/studentService";
 import { courseService, teacherService } from "@/services/userService";
 import type { Assignment, AssignmentStatus, LessonStatus, WithId } from "@/types";
@@ -142,6 +142,12 @@ export function useMaterialsByIds(ids: string[]) {
 export function useMyPayments() {
   const { uid } = useSession();
   return useQuery({ queryKey: qk.payments({ mine: uid }), queryFn: () => paymentService.listForStudent(uid) });
+}
+
+/** I costi dei miei docenti, uno per materia (ADR D29). */
+export function useMyCosts() {
+  const { uid } = useSession();
+  return useQuery({ queryKey: qk.fees({ mine: uid }), queryFn: () => feeService.listForStudent(uid) });
 }
 
 export function useMyAnnouncements(max = 30) {

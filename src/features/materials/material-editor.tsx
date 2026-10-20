@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import type { MarkdownEditorApi } from "@/components/shared/markdown-editor";
-import { useStaffMutation } from "@/features/admin/hooks";
+import { useScopeGetter, useStaffMutation, useStaffScope } from "@/features/admin/hooks";
 import { qk } from "@/hooks/query-keys";
 import { dirOf } from "@/lib/files";
 import { materialService } from "@/services/materialService";
@@ -77,11 +77,17 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
 
   // Testi (ADR D27): tracce audio a cui il testo è associato.
   const isLyrics = useWatch({ control: form.control, name: "category" }) === LYRICS_CATEGORY && isMarkdown;
-  const tracks = useQuery({ queryKey: qk.materials("audio"), queryFn: () => materialService.listAudio(), enabled: isLyrics });
+  const scope = useStaffScope();
+  const getScope = useScopeGetter();
+  const tracks = useQuery({
+    queryKey: qk.materials("audio"),
+    queryFn: () => materialService.listAudio(scope!),
+    enabled: isLyrics && !!scope,
+  });
   const linked = useQuery({
     queryKey: qk.materials({ lyricsOf: material.id }),
-    queryFn: () => materialService.listLyricsTracks(material.id),
-    enabled: isMarkdown,
+    queryFn: () => materialService.listLyricsTracks(material.id, scope!),
+    enabled: isMarkdown && !!scope,
     staleTime: 0,
   });
   // `null` finché il docente non tocca la lista: vale l'associazione salvata.
@@ -95,7 +101,7 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
       // Le tracce associate ricevono il testo aggiornato; cambiando categoria l'associazione decade.
       const lyrics = v.category === LYRICS_CATEGORY;
       if (isMarkdown && (lyrics || linked.data?.length)) {
-        await materialService.linkLyrics(material.id, content ?? original ?? "", lyrics ? trackIds : []);
+        await materialService.linkLyrics(material.id, content ?? original ?? "", lyrics ? trackIds : [], getScope());
       }
     },
     {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
-import { CourseSelect, StudentSelect } from "@/features/admin/pickers";
+import { CourseSelect, subjectsFor } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
-import { useTeachers } from "@/features/student-area/hooks";
+import { useCourses, useTeachers } from "@/features/student-area/hooks";
 import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
 import { EXERCISE_CATEGORY, type Lesson, type WithId } from "@/types";
@@ -76,9 +76,12 @@ function LessonForm({
   onCopy?: () => void;
   onDone: () => void;
 }) {
-  const { uid } = useSession();
+  const { uid, role } = useSession();
+  // L'admin programma lezioni anche per gli altri docenti; il docente solo a proprio nome (ADR D29).
+  const isAdmin = role === "admin";
   const students = useActiveStudents();
   const teachers = useTeachers();
+  const courses = useCourses();
   const materials = useMaterialsPage({ sort: "recent" });
   const materialItems = materials.data?.pages.flatMap((p) => p.items) ?? [];
   // In copia si parte dai contenuti della lezione sorgente; studente, giorno e orario si scelgono di nuovo.
@@ -90,6 +93,7 @@ function LessonForm({
       studentId: copyFrom ? "" : (lesson?.studentId ?? defaults?.studentId ?? ""),
       teacherId: base?.teacherId ?? uid,
       courseId: base?.courseId ?? "",
+      subjectId: base?.subjectId ?? "",
       date: toInputDate(copyFrom ? new Date() : (lesson?.date ?? defaults?.date ?? new Date())),
       startTime: copyFrom ? "" : (lesson?.startTime ?? ""),
       endTime: copyFrom ? "" : (lesson?.endTime ?? ""),
@@ -102,6 +106,12 @@ function LessonForm({
   });
   const { errors } = form.formState;
   const startField = form.register("startTime");
+  const [teacherId, courseId, studentId] = useWatch({ control: form.control, name: ["teacherId", "courseId", "studentId"] });
+  const course = courses.data?.find((c) => c.id === courseId);
+  // Materie del corso insegnate dal docente della lezione; senza materie si scrive a mano.
+  const subjects = subjectsFor(course, teacherId);
+  // Scelto il corso, si propongono i suoi iscritti (più lo studente già scelto).
+  const studentOptions = (students.data ?? []).filter((s) => !courseId || s.courseIds.includes(courseId) || s.id === studentId);
 
   // Fine lezione automatica: un'ora dopo l'inizio, finché non la si imposta a mano.
   const onStartChange = (start: string) => {
@@ -115,6 +125,7 @@ function LessonForm({
     async (v: LessonFormValues) => {
       const student = students.data?.find((s) => s.id === v.studentId);
       const teacher = teachers.data?.find((t) => t.id === v.teacherId);
+      const subject = subjects.find((s) => s.id === v.subjectId);
       const input = {
         studentId: v.studentId,
         studentName: student ? fullName(student) : (lesson?.studentName ?? ""),
@@ -125,7 +136,8 @@ function LessonForm({
         startTime: v.startTime || undefined,
         endTime: v.endTime || undefined,
         title: v.title,
-        subject: v.subject || undefined,
+        subjectId: subject?.id,
+        subject: subject?.name ?? (subjects.length ? undefined : v.subject || undefined),
         topics: parseTopics(v.topics),
         notes: v.notes || undefined,
         materialIds,
@@ -146,21 +158,55 @@ function LessonForm({
   return (
     <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4" noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Studente" error={errors.studentId?.message} required>
-          {(p) => <StudentSelect {...p} {...form.register("studentId")} />}
+        <Field label="Corso" hint={isAdmin ? undefined : "Tra quelli a cui sei abilitato"}>
+          {(p) => <CourseSelect {...p} teacherId={teacherId || undefined} {...form.register("courseId")} />}
         </Field>
-        <Field label="Docente" error={errors.teacherId?.message} required>
+        {subjects.length > 0 ? (
+          <Field label="Materia" error={errors.subjectId?.message}>
+            {(p) => (
+              <NativeSelect {...p} {...form.register("subjectId")}>
+                <option value="">Nessuna materia</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            )}
+          </Field>
+        ) : (
+          <Field label="Materia" error={errors.subject?.message}>
+            {(p) => <Input {...p} placeholder="Canto moderno" {...form.register("subject")} />}
+          </Field>
+        )}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Studente" error={errors.studentId?.message} required>
           {(p) => (
-            <NativeSelect {...p} {...form.register("teacherId")}>
-              <option value="">Seleziona docente</option>
-              {teachers.data?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {fullName(t)}
+            <NativeSelect {...p} {...form.register("studentId")} disabled={students.isPending}>
+              <option value="">{students.isPending ? "Caricamento…" : "Seleziona studente"}</option>
+              {studentOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {fullName(s)}
                 </option>
               ))}
             </NativeSelect>
           )}
         </Field>
+        {isAdmin && (
+          <Field label="Docente" error={errors.teacherId?.message} required>
+            {(p) => (
+              <NativeSelect {...p} {...form.register("teacherId")}>
+                <option value="">Seleziona docente</option>
+                {teachers.data?.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {fullName(t)}
+                  </option>
+                ))}
+              </NativeSelect>
+            )}
+          </Field>
+        )}
       </div>
       <Field label="Titolo" error={errors.title?.message} required>
         {(p) => <Input {...p} placeholder="Es. Tecnica vocale" {...form.register("title")} />}
@@ -187,11 +233,7 @@ function LessonForm({
           {(p) => <Input {...p} type="time" step={300} {...form.register("endTime")} />}
         </Field>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Materia" error={errors.subject?.message}>
-          {(p) => <Input {...p} placeholder="Canto moderno" {...form.register("subject")} />}
-        </Field>
-        <Field label="Corso">{(p) => <CourseSelect {...p} {...form.register("courseId")} />}</Field>
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Stato">
           {(p) => (
             <NativeSelect {...p} {...form.register("status")}>

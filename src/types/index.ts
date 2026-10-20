@@ -33,14 +33,17 @@ export interface Student {
   /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
   inviteStatus?: "pending" | "accepted";
   phone?: string;
-  /** Costo del corso: base per generare le quote mensili. */
+  /**
+   * Vecchio costo unico dello studente, sostituito dai costi per docente e materia (`fees`, ADR D29):
+   * lo script `migrate-teachers` lo converte e lo rimuove.
+   */
   fee?: StudentFee;
   keywords: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
-/** Costo del corso a cicli di 4 settimane dalla prima lezione (ADR D21, utils/cycles). */
+/** Condizioni di un costo a cicli di 4 settimane dalla prima lezione (ADR D21, utils/cycles). */
 export interface StudentFee {
   /** Quota dovuta per ogni ciclo di 4 settimane (es. 4 lezioni × 30 € = 120 €). */
   cycleAmount: number;
@@ -53,11 +56,30 @@ export interface StudentFee {
   dueAt: "start" | "end";
 }
 
+/**
+ * Costo personale del docente (ADR D29): uno per docente, studente e materia (o corso, se non ha materie).
+ * ID deterministico (`feeId`); lo vedono solo il docente e lo studente.
+ */
+export interface Fee extends StudentFee {
+  teacherId: string;
+  teacherName: string;
+  studentId: string;
+  studentName: string;
+  courseId: string;
+  courseName: string;
+  /** Materia del corso; assente se il corso non ha materie. */
+  subjectId?: string;
+  subjectName?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface Teacher {
   userId: string;
   name: string;
   surname: string;
   email: string;
+  /** Corsi a cui è abilitato: copia di `courses.teacherIds`, letta dalle Security Rules (ADR D29). */
   courseIds: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -77,11 +99,21 @@ export interface StudentGroup {
 /** Uno studente può stare al massimo in tanti gruppi (limite di `array-contains-any`: 30 valori, uno è il suo UID). */
 export const MAX_GROUPS_PER_STUDENT = 29;
 
+/** Materia di un corso (ADR D29), insegnata dai docenti in `teacherIds` (tra quelli del corso). */
+export interface CourseSubject {
+  id: string;
+  name: string;
+  teacherIds: string[];
+}
+
 export interface Course {
   name: string;
   description?: string;
   active: boolean;
+  /** Docenti abilitati al corso. */
   teacherIds: string[];
+  /** Materie del corso; assente o vuoto = corso senza materie. */
+  subjects?: CourseSubject[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -98,6 +130,8 @@ export interface Lesson {
   startTime?: string;
   endTime?: string;
   title: string;
+  /** Materia del corso e il suo nome (copiato: lo studente non legge le materie del corso). */
+  subjectId?: string;
   subject?: string;
   /** Argomenti trattati, mostrati come elenco puntato nel dettaglio lezione. */
   topics?: string[];
@@ -293,6 +327,8 @@ export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 export interface Attendance {
   lessonId: string;
   studentId: string;
+  /** Docente della lezione (ADR D29): ogni docente vede solo le sue presenze. */
+  teacherId: string;
   lessonDate: Timestamp;
   status: AttendanceStatus;
   notes?: string;
@@ -318,6 +354,13 @@ export interface Installment {
 export interface Payment {
   studentId: string;
   studentName: string;
+  /** Docente a cui spetta la quota (ADR D29): solo lui la vede e la gestisce. */
+  teacherId: string;
+  teacherName?: string;
+  /** Costo da cui deriva la quota, con corso e materia. */
+  feeId?: string;
+  courseId?: string;
+  subjectName?: string;
   description: string;
   /** Importo dovuto. */
   amount: number;

@@ -10,14 +10,15 @@ import {
   setDoc,
   sum,
   where,
+  writeBatch,
   limit,
   type QueryConstraint,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
-import type { Installment, Payment, PaymentMethod, PaymentStatus, Student, WithId } from "@/types";
+import type { Fee, Installment, Payment, PaymentMethod, PaymentStatus, StudentFee, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
-import { fullName } from "@/utils/format";
 import { cycleDueDate, cycleFee, cycleKey, cycleLabel, cycleStartAt } from "@/utils/cycles";
+import { feeId, feeLabel } from "@/utils/fees";
 import { paidAmountOf, remainingOf, storedPaymentStatus } from "@/utils/status";
 import { COLLECTIONS, clean, col, list, paginate, ref, timestamps, touched } from "./base";
 
@@ -30,6 +31,25 @@ export interface PaymentInput {
   dueDate: Date;
   cancelled?: boolean;
   notes?: string;
+  /** Costo (materia) a cui si riferisce la quota; facoltativo. */
+  fee?: WithId<Fee> | null;
+}
+
+/** Il docente che registra quote e costi: sono suoi, e solo lui li vede (ADR D29). */
+export interface MoneyOwner {
+  uid: string;
+  name: string;
+}
+
+/** Costo per docente, studente e materia (o corso, se senza materie). */
+export interface FeeInput extends Omit<StudentFee, "startDate"> {
+  studentId: string;
+  studentName: string;
+  courseId: string;
+  courseName: string;
+  subjectId?: string;
+  subjectName?: string;
+  startDate: Date;
 }
 
 export interface InstallmentInput {
@@ -41,6 +61,8 @@ export interface InstallmentInput {
 
 export interface PaymentFilters {
   studentId?: string;
+  /** Solo le quote di questo costo (materia). */
+  feeId?: string;
   status?: PaymentStatus | "all";
   from?: Date;
   to?: Date;
@@ -97,16 +119,75 @@ function mutate(id: string, fn: (p: Payment) => Record<string, unknown>) {
   });
 }
 
-export const cyclePaymentId = (studentId: string, cycleStart: Date) => `cycle_${studentId}_${cycleKey(cycleStart)}`;
+export { feeId, feeLabel };
+
+/** Quota del ciclo di un costo: ID deterministico, "Genera quote" non crea doppioni. */
+export const cyclePaymentId = (fee: string, cycleStart: Date) => `cycle_${fee}_${cycleKey(cycleStart)}`;
+
+/** Campi della quota che la legano al costo (materia) da cui deriva. */
+function feeRef(fee: WithId<Fee> | null | undefined) {
+  return fee ? { feeId: fee.id, courseId: fee.courseId, subjectName: fee.subjectName ?? fee.courseName } : {};
+}
+
+export const feeService = {
+  /** I costi del docente (tutti i suoi studenti). */
+  listMine: async (uid: string) => {
+    const rows = await list<Fee>(COLLECTIONS.fees, where("teacherId", "==", uid));
+    return rows.sort((a, b) => a.studentName.localeCompare(b.studentName, "it") || feeLabel(a).localeCompare(feeLabel(b), "it"));
+  },
+
+  /** Costi di uno studente: del docente (`teacherId`) o, per lo studente stesso, di tutti i suoi docenti. */
+  listForStudent: (studentId: string, teacherId?: string) =>
+    list<Fee>(
+      COLLECTIONS.fees,
+      where("studentId", "==", studentId),
+      ...(teacherId ? [where("teacherId", "==", teacherId)] : []),
+    ),
+
+  /**
+   * Salva il costo. Se cambia materia o corso cambia anche l'ID: il vecchio documento viene
+   * eliminato (le quote già generate restano, con il loro riferimento).
+   */
+  async save(input: FeeInput, owner: MoneyOwner, existing?: WithId<Fee> | null) {
+    const id = feeId(owner.uid, input.studentId, input.courseId, input.subjectId);
+    const batch = writeBatch(firestore());
+    batch.set(
+      ref(COLLECTIONS.fees, id),
+      clean({
+        ...input,
+        subjectId: input.subjectId || undefined,
+        subjectName: input.subjectId ? input.subjectName : undefined,
+        startDate: Timestamp.fromDate(input.startDate),
+        teacherId: owner.uid,
+        teacherName: owner.name,
+        createdAt: existing?.id === id ? existing.createdAt : serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    if (existing && existing.id !== id) batch.delete(ref(COLLECTIONS.fees, existing.id));
+    await batch.commit();
+    return id;
+  },
+
+  remove: (id: string) => deleteDoc(ref(COLLECTIONS.fees, id)),
+};
 
 export const paymentService = {
-  /** Studente: solo lettura dei propri pagamenti. */
-  listForStudent: (studentId: string) =>
-    list<Payment>(COLLECTIONS.payments, where("studentId", "==", studentId), orderBy("dueDate", "desc"), limit(200)),
+  /** Quote di uno studente: lo studente le legge tutte; il docente (`teacherId`) solo le proprie. */
+  listForStudent: (studentId: string, teacherId?: string) =>
+    list<Payment>(
+      COLLECTIONS.payments,
+      where("studentId", "==", studentId),
+      ...(teacherId ? [where("teacherId", "==", teacherId)] : []),
+      orderBy("dueDate", "desc"),
+      limit(200),
+    ),
 
-  page: (f: PaymentFilters, cursor: unknown | null) => {
-    const c: QueryConstraint[] = [];
+  /** Quote del docente `uid`: ognuno, admin compreso, vede solo le proprie (ADR D29). */
+  page: (f: PaymentFilters, cursor: unknown | null, uid: string) => {
+    const c: QueryConstraint[] = [where("teacherId", "==", uid)];
     if (f.studentId) c.push(where("studentId", "==", f.studentId));
+    if (f.feeId) c.push(where("feeId", "==", f.feeId));
     if (f.status === "overdue") {
       // "Scaduto" include le quote non saldate oltre la scadenza (ADR D6).
       c.push(where("status", "in", OPEN_STATUSES), where("dueDate", "<", Timestamp.fromDate(new Date())));
@@ -120,8 +201,8 @@ export const paymentService = {
   },
 
   /** Totali via aggregazione server (nessun download dei documenti). Filtrati per scadenza della quota. */
-  async totals(range?: { from: Date; to: Date }): Promise<PaymentTotals> {
-    const base = col(COLLECTIONS.payments);
+  async totals(uid: string, range?: { from: Date; to: Date }): Promise<PaymentTotals> {
+    const base = query(col(COLLECTIONS.payments), where("teacherId", "==", uid));
     const agg = (...c: QueryConstraint[]) =>
       getAggregateFromServer(query(base, ...c), { due: sum("amount"), paid: sum("paidAmount") }).then((s) => ({
         due: s.data().due ?? 0,
@@ -144,7 +225,7 @@ export const paymentService = {
   },
 
   /** Nuova quota; `payNow` registra subito un versamento (es. lezione pagata sul momento). */
-  async create(input: PaymentInput, createdBy: string, payNow?: InstallmentInput) {
+  async create(input: PaymentInput, owner: MoneyOwner, payNow?: InstallmentInput) {
     const amount = cents(input.amount);
     if (payNow && cents(payNow.amount) > amount) throw new AppError("Il versamento supera l'importo della quota.");
     const r = doc(col(COLLECTIONS.payments));
@@ -153,12 +234,15 @@ export const paymentService = {
       clean({
         studentId: input.studentId,
         studentName: input.studentName,
+        teacherId: owner.uid,
+        teacherName: owner.name,
+        ...feeRef(input.fee),
         description: input.description,
         amount,
         dueDate: Timestamp.fromDate(input.dueDate),
         notes: input.notes || undefined,
         ...settle(amount, payNow ? [toInstallment(payNow)] : [], false),
-        createdBy,
+        createdBy: owner.uid,
         ...timestamps(),
       }),
     );
@@ -166,7 +250,7 @@ export const paymentService = {
   },
 
   /** Modifica il dovuto; stato e incassato si ricalcolano dai versamenti. */
-  update: (id: string, input: Omit<PaymentInput, "studentId" | "studentName">) =>
+  update: (id: string, input: Omit<PaymentInput, "studentId" | "studentName" | "fee">) =>
     mutate(id, (p) => {
       const amount = cents(input.amount);
       const installments = installmentsOf(p);
@@ -203,26 +287,28 @@ export const paymentService = {
     }),
 
   /**
-   * Genera, per ogni studente attivo con un costo impostato, la quota del ciclo di 4 settimane
-   * che contiene la data `at` (i cicli partono dalla prima lezione dello studente).
+   * Genera, per ogni costo, la quota del ciclo di 4 settimane che contiene la data `at` (i cicli
+   * partono dalla prima lezione). Il chiamante passa solo i costi degli studenti attivi.
    * ID deterministico: rilanciarla non crea doppioni né tocca le quote esistenti.
    */
-  async generateCycles(students: WithId<Student>[], at: Date, createdBy: string) {
-    const eligible = students.filter((s) => s.status === "active" && cycleFee(s.fee));
+  async generateCycles(fees: WithId<Fee>[], at: Date, owner: MoneyOwner) {
+    const eligible = fees.filter((f) => f.teacherId === owner.uid && cycleFee(f));
     let created = 0;
     await runTransaction(firestore(), async (tx) => {
       created = 0;
-      const starts = eligible.map((s) => cycleStartAt(s.fee!.startDate.toDate(), at));
-      const refs = eligible.map((s, i) => ref(COLLECTIONS.payments, cyclePaymentId(s.id, starts[i])));
+      const starts = eligible.map((f) => cycleStartAt(f.startDate.toDate(), at));
+      const refs = eligible.map((f, i) => ref(COLLECTIONS.payments, cyclePaymentId(f.id, starts[i])));
       const snaps = await Promise.all(refs.map((r) => tx.get(r)));
-      eligible.forEach((s, i) => {
+      eligible.forEach((fee, i) => {
         if (snaps[i].exists()) return;
-        const fee = s.fee!;
         const detail = fee.lessonsPerCycle ? ` (${fee.lessonsPerCycle} lezioni)` : "";
         tx.set(refs[i], {
-          studentId: s.id,
-          studentName: fullName(s),
-          description: `Quota ${cycleLabel(starts[i])}${detail}`,
+          studentId: fee.studentId,
+          studentName: fee.studentName,
+          teacherId: owner.uid,
+          teacherName: owner.name,
+          ...feeRef(fee),
+          description: `Quota ${fee.subjectName ?? fee.courseName} ${cycleLabel(starts[i])}${detail}`,
           amount: cents(fee.cycleAmount),
           paidAmount: 0,
           installments: [],
@@ -230,14 +316,14 @@ export const paymentService = {
           dueDate: Timestamp.fromDate(cycleDueDate(starts[i], fee.dueAt)),
           status: "pending",
           notes: "",
-          createdBy,
+          createdBy: owner.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
         created++;
       });
     });
-    return { created, existing: eligible.length - created, withoutFee: students.length - eligible.length };
+    return { created, existing: eligible.length - created };
   },
 
   remove: (id: string) => deleteDoc(ref(COLLECTIONS.payments, id)),

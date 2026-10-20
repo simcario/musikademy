@@ -27,7 +27,7 @@ import { MARKDOWN_MAX_SIZE, assetImageName, checkFile, dirOf, isAssetImage, safe
 import { LYRICS_CATEGORY, type Material, type MaterialCategory, type Page, type Visibility, type WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { buildKeywords, searchToken } from "@/utils/keywords";
-import { COLLECTIONS, chunk, clean, getById, list, paginate, ref, touched } from "./base";
+import { COLLECTIONS, chunk, clean, getById, list, ownedBy, paginate, ref, touched, type StaffScope } from "./base";
 import { folderService, materialAudience } from "./folderService";
 
 export interface MaterialMeta {
@@ -102,15 +102,15 @@ export const materialService = {
     );
   },
 
-  // ── Docente ──
-  page: (filters: MaterialFilters, cursor: unknown | null) =>
-    paginate<Material>(COLLECTIONS.materials, filterConstraints(filters), cursor, 20),
+  // ── Docente: la sua libreria (l'admin vede tutti i materiali, ADR D29) ──
+  page: (filters: MaterialFilters, cursor: unknown | null, scope: StaffScope) =>
+    paginate<Material>(COLLECTIONS.materials, [...ownedBy(scope, "createdBy"), ...filterConstraints(filters)], cursor, 20),
 
   /** Docente: materiali assegnati personalmente a uno studente. */
-  pageAssignedTo: (studentId: string, cursor: unknown | null) =>
+  pageAssignedTo: (studentId: string, cursor: unknown | null, scope: StaffScope) =>
     paginate<Material>(
       COLLECTIONS.materials,
-      [where("studentIds", "array-contains", studentId), orderBy("createdAt", "desc")],
+      [...ownedBy(scope, "createdBy"), where("studentIds", "array-contains", studentId), orderBy("createdAt", "desc")],
       cursor,
       20,
     ),
@@ -235,20 +235,21 @@ export const materialService = {
   },
 
   /** Docente: tutte le tracce audio, per associarle a un testo. */
-  async listAudio(): Promise<WithId<Material>[]> {
-    const tracks = await list<Material>(COLLECTIONS.materials, where("type", "==", "audio"));
+  async listAudio(scope: StaffScope): Promise<WithId<Material>[]> {
+    const tracks = await list<Material>(COLLECTIONS.materials, ...ownedBy(scope, "createdBy"), where("type", "==", "audio"));
     return tracks.sort((a, b) => a.title.localeCompare(b.title, "it"));
   },
 
   /** Docente: tracce a cui è associato il testo. */
-  listLyricsTracks: (textId: string) => list<Material>(COLLECTIONS.materials, where("lyricsId", "==", textId)),
+  listLyricsTracks: (textId: string, scope: StaffScope) =>
+    list<Material>(COLLECTIONS.materials, ...ownedBy(scope, "createdBy"), where("lyricsId", "==", textId)),
 
   /**
    * Associa il testo alle tracce `trackIds` (e lo toglie dalle altre). Ogni traccia riceve una copia del
    * contenuto: lo studente che può ascoltarla legge il testo anche se il testo non gli è assegnato.
    */
-  async linkLyrics(textId: string, content: string, trackIds: string[]) {
-    const linked = await this.listLyricsTracks(textId);
+  async linkLyrics(textId: string, content: string, trackIds: string[], scope: StaffScope) {
+    const linked = await this.listLyricsTracks(textId, scope);
     const batch = writeBatch(firestore());
     trackIds.forEach((id) => batch.update(ref(COLLECTIONS.materials, id), { lyricsId: textId, lyrics: content, ...touched() }));
     linked
@@ -337,9 +338,9 @@ export const materialService = {
     );
   },
 
-  async remove(material: WithId<Material>) {
+  async remove(material: WithId<Material>, scope: StaffScope) {
     // Un testo eliminato sparisce anche dalle tracce a cui era associato.
-    if (material.type === "markdown") await this.linkLyrics(material.id, "", []);
+    if (material.type === "markdown") await this.linkLyrics(material.id, "", [], scope);
     await deleteDoc(ref(COLLECTIONS.materials, material.id));
     await deleteObject(storageRef(firebaseStorage(), material.storagePath)).catch(() => undefined);
     await this.pruneImages(material, "").catch(() => undefined);

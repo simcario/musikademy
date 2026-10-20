@@ -7,8 +7,11 @@ import {
   query,
   serverTimestamp,
   startAfter,
+  where,
   type DocumentData,
+  type QueryCompositeFilterConstraint,
   type QueryConstraint,
+  type QueryNonFilterConstraint,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
@@ -26,6 +29,7 @@ export const COLLECTIONS = {
   assignments: "assignments",
   attendance: "attendance",
   payments: "payments",
+  fees: "fees",
   announcements: "announcements",
   notifications: "notifications",
   whatsapp: "whatsapp",
@@ -59,11 +63,16 @@ export async function paginate<T>(
   constraints: QueryConstraint[],
   cursor: unknown | null = null,
   pageSize = DEFAULT_PAGE_SIZE,
+  /** Filtro composto (`or(...)`): in quel caso `constraints` contiene solo ordinamenti. */
+  filter?: QueryCompositeFilterConstraint,
 ): Promise<Page<T>> {
   const parts = [...constraints];
   if (cursor) parts.push(startAfter(cursor as QueryDocumentSnapshot));
   parts.push(fbLimit(pageSize + 1));
-  const snap = await getDocs(query(col(name), ...parts));
+  const q = filter
+    ? query(col(name), filter, ...(parts as QueryNonFilterConstraint[]))
+    : query(col(name), ...parts);
+  const snap = await getDocs(q);
   const docs = snap.docs.slice(0, pageSize);
   return {
     items: docs.map((d) => withId<T>(d)),
@@ -78,6 +87,25 @@ export const touched = () => ({ updatedAt: serverTimestamp() });
 export function clean<T extends Record<string, unknown>>(data: T): T {
   return Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)) as T;
 }
+
+/**
+ * Chi interroga, nell'area docente (ADR D29). L'admin vede tutto; il docente gli studenti e i gruppi
+ * dei suoi corsi (`courseIds`, copia di `teachers/{uid}.courseIds`) e solo le attività che ha creato.
+ * Ogni query del docente deve contenere questi vincoli, altrimenti le rules la rifiutano.
+ */
+export interface StaffScope {
+  uid: string;
+  admin: boolean;
+  courseIds: string[];
+}
+
+/** Vincolo "solo i propri" per il docente (`field == uid`); nessuno per l'admin. */
+export function ownedBy(scope: StaffScope, field: string): QueryConstraint[] {
+  return scope.admin ? [] : [where(field, "==", scope.uid)];
+}
+
+/** Corsi del docente utilizzabili in `in` / `array-contains-any` (massimo 30 valori). */
+export const scopeCourses = (scope: StaffScope) => scope.courseIds.slice(0, 30);
 
 /** Suddivide un array in blocchi (limite di 30 valori per `in` / `array-contains-any`). */
 export function chunk<T>(items: T[], size = 30): T[][] {

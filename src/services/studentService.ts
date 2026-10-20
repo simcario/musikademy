@@ -1,22 +1,20 @@
 import {
   Timestamp,
-  deleteField,
   doc,
   getDoc,
   orderBy,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
   writeBatch,
   type QueryConstraint,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import type { InviteInfo } from "@/lib/auth/invite-token";
-import type { Student, StudentFee, StudentStatus } from "@/types";
+import type { Page, Student, StudentStatus } from "@/types";
 import { searchToken } from "@/utils/keywords";
 import { adminApi } from "./authService";
-import { COLLECTIONS, clean, getById, list, paginate, ref, touched } from "./base";
+import { COLLECTIONS, clean, getById, list, paginate, ref, scopeCourses, touched, type StaffScope } from "./base";
 import { studentKeywords } from "./userService";
 
 /** Note private del docente: collezione separata, mai leggibile dallo studente (ADR D16). */
@@ -49,13 +47,37 @@ function filterConstraints(f: StudentFilters): QueryConstraint[] {
   return c;
 }
 
+/**
+ * Studenti dei corsi del docente (ADR D29): `array-contains-any` sui suoi corsi, il vincolo che
+ * le rules richiedono. Non si combina con la ricerca per keyword, che qui si fa sul risultato
+ * (un docente segue al massimo qualche decina di studenti).
+ */
+async function teacherStudents(scope: StaffScope, f: StudentFilters) {
+  const courses = scopeCourses(scope).filter((c) => !f.courseId || c === f.courseId);
+  if (!courses.length) return [];
+  const rows = await list<Student>(
+    COLLECTIONS.students,
+    ...(f.status && f.status !== "all" ? [where("status", "==", f.status)] : []),
+    where("courseIds", "array-contains-any", courses),
+    orderBy("surname"),
+    orderBy("name"),
+  );
+  const token = f.search ? searchToken(f.search) : null;
+  return token ? rows.filter((s) => s.keywords?.includes(token)) : rows;
+}
+
 export const studentService = {
   get: (uid: string) => getById<Student>(COLLECTIONS.students, uid),
 
-  page: (filters: StudentFilters, cursor: unknown | null) =>
-    paginate<Student>(COLLECTIONS.students, filterConstraints(filters), cursor, 25),
+  async page(filters: StudentFilters, cursor: unknown | null, scope: StaffScope): Promise<Page<Student>> {
+    if (!scope.admin) return { items: await teacherStudents(scope, filters), cursor: null };
+    return paginate<Student>(COLLECTIONS.students, filterConstraints(filters), cursor, 25);
+  },
 
-  listActive: () => list<Student>(COLLECTIONS.students, where("status", "==", "active"), orderBy("surname"), orderBy("name")),
+  listActive: (scope: StaffScope) =>
+    scope.admin
+      ? list<Student>(COLLECTIONS.students, where("status", "==", "active"), orderBy("surname"), orderBy("name"))
+      : teacherStudents(scope, { status: "active" }),
 
   /** Creazione account: richiede Admin SDK → route handler (ADR D3). */
   create: (input: StudentInput) =>
@@ -81,13 +103,6 @@ export const studentService = {
     batch.update(ref(COLLECTIONS.users, uid), { ...common, ...touched() });
     await batch.commit();
   },
-
-  /** Costo del corso (cicli di 4 settimane dalla prima lezione); `null` lo rimuove. */
-  setFee: (uid: string, fee: (Omit<StudentFee, "startDate"> & { startDate: Date }) | null) =>
-    updateDoc(ref(COLLECTIONS.students, uid), {
-      fee: fee ? clean({ ...fee, startDate: Timestamp.fromDate(fee.startDate) }) : deleteField(),
-      ...touched(),
-    }),
 
   async getNotes(uid: string): Promise<string> {
     const snap = await getDoc(notesRef(uid));

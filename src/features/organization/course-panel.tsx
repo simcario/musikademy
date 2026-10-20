@@ -189,6 +189,26 @@ function CourseDetails({ course }: { course: WithId<Course> }) {
         <dd>{names.length ? names.join(", ") : "—"}</dd>
       </div>
       <div>
+        <dt className="text-xs font-semibold text-muted-foreground">Materie</dt>
+        <dd>
+          {course.subjects?.length ? (
+            <ul className="space-y-0.5">
+              {course.subjects.map((s) => {
+                const by = (teachers.data ?? []).filter((t) => s.teacherIds.includes(t.id)).map(fullName);
+                return (
+                  <li key={s.id}>
+                    <span className="font-medium">{s.name}</span>
+                    {by.length > 0 && <span className="text-muted-foreground"> · {by.join(", ")}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            "—"
+          )}
+        </dd>
+      </div>
+      <div>
         <dt className="text-xs font-semibold text-muted-foreground">Stato</dt>
         <dd>{course.active ? "Attivo" : "Non attivo"}</dd>
       </div>

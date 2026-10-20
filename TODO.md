@@ -38,6 +38,7 @@ smoke test server (pagine 200, 404, manifest, SW, API admin → 401 senza token)
 - 🟡 Materiali caricati senza visibilità ("Solo studenti assegnati" senza studenti = "Non assegnato"), assegnati o nascosti poi dalla scheda studente — tsc/eslint/vitest ✅, da provare a mano; nessuna modifica alle rules
 - ⬜ Allegati alle comunicazioni (modello e Storage rules già pronti, manca l'upload in UI)
 - ✅ Pagamenti: costo del corso per studente a cicli di 4 settimane dalla prima lezione, "Genera quote", versamenti parziali (ADR D21) — rules + unit test verdi; `deploy:rules` necessario (nuove regole su `students.fee` e `payments`)
+- 🟡 Materie per corso, docenti abilitati a corsi e materie, isolamento del docente ed economia personale (ADR D29) — tsc/eslint ✅, unit ✅, rules 50/50 ✅, seed + `migrate-teachers` provati sugli emulatori ✅ · da provare a mano nell'app (admin e `sara@musikademy.test`) · in produzione: `deploy:rules` (rules + molti indici nuovi) e poi `npm run migrate-teachers -- --apply`
 - ⬜ Generazione automatica delle quote dei cicli (oggi manuale con un clic; automatica = Cloud Function schedulata)
 - ⬜ Cicli: valutare se saltare le settimane di chiusura (festività) o le lezioni annullate — oggi il ciclo è sempre di 28 giorni
 - ⬜ Test E2E (Playwright) dei flussi principali

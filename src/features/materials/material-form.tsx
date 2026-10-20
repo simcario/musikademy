@@ -63,7 +63,7 @@ export function MaterialFormDialog({
 }
 
 function MaterialForm({ exercise, folderId, onDone }: { exercise?: boolean; folderId?: string; onDone: () => void }) {
-  const { uid } = useSession();
+  const { uid, role } = useSession();
   const students = useActiveStudents();
   const groups = useGroups();
   const uploads = useUploadQueue();
@@ -158,7 +158,8 @@ function MaterialForm({ exercise, folderId, onDone }: { exercise?: boolean; fold
                 <NativeSelect {...p} {...form.register("visibility")}>
                   <option value="student">Solo studenti assegnati</option>
                   <option value="course">Un corso</option>
-                  <option value="all">Tutti gli studenti</option>
+                  {/* A tutta la scuola solo l'admin (ADR D29). */}
+                  {role === "admin" && <option value="all">Tutti gli studenti</option>}
                 </NativeSelect>
               )}
             </Field>

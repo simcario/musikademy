@@ -15,6 +15,7 @@ export const lessonFormSchema = z
     startTime: time,
     endTime: time,
     title: z.string().trim().min(1, "Inserisci un titolo").max(140),
+    subjectId: z.string().optional(),
     subject: z.string().trim().max(100).optional(),
     topics: z.string().max(2000).optional(),
     notes: z.string().max(5000).optional(),

@@ -13,7 +13,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog, FormActions } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
-import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useScopeGetter, useStaffMutation, useStaffScope } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
 import { useCourses } from "@/features/student-area/hooks";
 import { groupService } from "@/services/groupService";
@@ -29,11 +29,16 @@ export function GroupList({ groups, onOpen }: { groups: WithId<StudentGroup>[]; 
   const students = useActiveStudents();
   const [toDelete, setToDelete] = useState<WithId<StudentGroup> | null>(null);
 
-  const remove = useStaffMutation((g: WithId<StudentGroup>) => groupService.remove(g.id), {
-    success: "Gruppo eliminato",
-    invalidate: [["groups"], ["students"], ["materials"], ["folders"]],
-    onSuccess: () => setToDelete(null),
-  });
+  const getScope = useScopeGetter();
+  const remove = useStaffMutation(
+    (g: WithId<StudentGroup>) =>
+      groupService.remove(g.id, membersOf(g.id, students.data).map((s) => s.id), getScope()),
+    {
+      success: "Gruppo eliminato",
+      invalidate: [["groups"], ["students"], ["materials"], ["folders"]],
+      onSuccess: () => setToDelete(null),
+    },
+  );
 
   return (
     <>
@@ -106,6 +111,9 @@ export function GroupForm({
   const { uid } = useSession();
   const students = useActiveStudents();
   const courses = useCourses();
+  const scope = useStaffScope();
+  // Il docente crea gruppi solo nei suoi corsi (ADR D29); i gruppi senza corso sono dell'admin.
+  const courseOptions = (courses.data ?? []).filter((c) => scope?.admin || scope?.courseIds.includes(c.id));
   const current = group ? membersOf(group.id, students.data).map((s) => s.id) : [];
   const [name, setName] = useState(group?.name ?? "");
   const [description, setDescription] = useState(group?.description ?? "");
@@ -138,7 +146,7 @@ export function GroupForm({
       onSubmit={(e) => {
         e.preventDefault();
         setTouched(true);
-        if (trimmed && !students.isPending) save.mutate(undefined);
+        if (trimmed && (courseId || scope?.admin) && !students.isPending) save.mutate(undefined);
       }}
     >
       <Field label="Nome" required error={touched && !trimmed ? "Inserisci un nome" : undefined}>
@@ -147,11 +155,16 @@ export function GroupForm({
       <Field label="Descrizione">
         {(p) => <Textarea {...p} rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />}
       </Field>
-      <Field label="Corso" hint={courseId ? "Sono elencati gli studenti iscritti al corso." : undefined}>
+      <Field
+        label="Corso"
+        required={!scope?.admin}
+        error={touched && !courseId && !scope?.admin ? "Scegli il corso del gruppo" : undefined}
+        hint={courseId ? "Sono elencati gli studenti iscritti al corso." : undefined}
+      >
         {(p) => (
           <NativeSelect {...p} value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={courses.isPending}>
-            <option value="">Nessun corso</option>
-            {courses.data?.map((c) => (
+            <option value="">{scope?.admin ? "Nessun corso" : "Seleziona corso"}</option>
+            {courseOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
                 {c.active ? "" : " (non attivo)"}

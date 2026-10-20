@@ -15,13 +15,12 @@ import { ConfirmDialog, FormActions, SidePanel } from "@/components/shared/dialo
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { PaymentBadge } from "@/components/shared/status-badge";
-import { useActiveStudents, usePaymentsPage, useStaffMutation } from "@/features/admin/hooks";
+import { useActiveStudents, useMoneyOwner, useMyFees, usePaymentsPage, useStaffMutation } from "@/features/admin/hooks";
 import { StudentSelect } from "@/features/admin/pickers";
-import { useSession } from "@/features/auth/auth-provider";
-import { paymentService } from "@/services/paymentService";
+import { feeLabel, paymentService } from "@/services/paymentService";
 import type { Payment, PaymentStatus, WithId } from "@/types";
 import { cycleFee, cycleLabel, cycleStartAt } from "@/utils/cycles";
-import { formatCurrency, formatDate, fromInputDate, fullName, toInputDate } from "@/utils/format";
+import { formatCurrency, formatDate, fromInputDate, toInputDate } from "@/utils/format";
 import { PAYMENT_META, PAYMENT_METHOD_LABEL, effectivePaymentStatus, paidAmountOf, remainingOf } from "@/utils/status";
 import { InstallmentDialog, PaymentFormDialog } from "./payment-form";
 
@@ -102,6 +101,7 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
                 <button type="button" onClick={() => setPayingId(p.id)} className="min-w-0 flex-1 text-left">
                   <p className="truncate font-semibold">{studentId ? p.description : p.studentName}</p>
                   <p className="truncate text-xs text-muted-foreground">
+                    {p.subjectName && `${p.subjectName} · `}
                     {!studentId && `${p.description} · `}Scad. {formatDate(p.dueDate, "d MMM yyyy")}
                     {eff === "paid" && p.method && ` · ${PAYMENT_METHOD_LABEL[p.method]}`}
                   </p>
@@ -168,20 +168,19 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
 }
 
 /**
- * Crea le quote del ciclo di 4 settimane in corso alla data scelta, per tutti gli studenti attivi
- * con un costo impostato. Ogni studente ha i suoi cicli (partono dalla sua prima lezione).
+ * Crea le quote del ciclo di 4 settimane in corso alla data scelta, per ogni costo del docente
+ * (uno per studente e materia) degli studenti attivi. Ogni costo ha i suoi cicli (dalla sua prima lezione).
  */
 function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { uid } = useSession();
+  const owner = useMoneyOwner();
   const students = useActiveStudents();
+  const fees = useMyFees();
   const [date, setDate] = useState(() => toInputDate(new Date()));
-  const withFee = (students.data ?? []).flatMap((s) => {
-    const fee = cycleFee(s.fee);
-    return fee ? [{ student: s, fee }] : [];
-  });
-  const total = withFee.reduce((sum, r) => sum + r.fee.cycleAmount, 0);
+  const active = new Set((students.data ?? []).map((s) => s.id));
+  const withFee = (fees.data ?? []).filter((f) => active.has(f.studentId) && cycleFee(f));
+  const total = withFee.reduce((sum, f) => sum + f.cycleAmount, 0);
 
-  const generate = useStaffMutation(() => paymentService.generateCycles(students.data ?? [], fromInputDate(date), uid), {
+  const generate = useStaffMutation(() => paymentService.generateCycles(withFee, fromInputDate(date), owner), {
     success: (r) =>
       r.created
         ? `${r.created} ${r.created === 1 ? "quota creata" : "quote create"}${r.existing ? ` (${r.existing} già presenti)` : ""}`
@@ -195,7 +194,7 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       open={open}
       onOpenChange={onOpenChange}
       title="Genera quote"
-      description="Per ogni studente attivo con il costo impostato crea la quota del suo ciclo di 4 settimane in corso alla data scelta. Le quote già create non vengono toccate: puoi lanciarla quando vuoi, ad esempio ogni lunedì."
+      description="Per ogni tuo costo (studente attivo e materia) crea la quota del ciclo di 4 settimane in corso alla data scelta. Le quote già create non vengono toccate: puoi lanciarla quando vuoi, ad esempio ogni lunedì."
     >
       <form
         className="space-y-4"
@@ -207,18 +206,18 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         <Field label="Cicli in corso al" required>
           {(p) => <Input {...p} type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />}
         </Field>
-        {students.isPending ? (
-          <p className="text-sm text-muted-foreground">Caricamento studenti…</p>
+        {students.isPending || fees.isPending ? (
+          <p className="text-sm text-muted-foreground">Caricamento costi…</p>
         ) : (
           <>
             {withFee.length > 0 && (
               <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-xl border border-border text-sm">
-                {withFee.map(({ student: s, fee }) => (
-                  <li key={s.id} className="flex justify-between gap-3 px-3 py-2">
+                {withFee.map((fee) => (
+                  <li key={fee.id} className="flex justify-between gap-3 px-3 py-2">
                     <span className="min-w-0 truncate">
-                      {fullName(s)}
+                      {fee.studentName}
                       <span className="block text-xs text-muted-foreground">
-                        {cycleLabel(cycleStartAt(fee.startDate.toDate(), fromInputDate(date)))}
+                        {feeLabel(fee)} · {cycleLabel(cycleStartAt(fee.startDate.toDate(), fromInputDate(date)))}
                       </span>
                     </span>
                     <span className="font-semibold tabular-nums">{formatCurrency(fee.cycleAmount)}</span>
@@ -227,9 +226,8 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
               </ul>
             )}
             <p className="text-sm text-muted-foreground">
-              {withFee.length} studenti con costo impostato, totale {formatCurrency(total)}.
-              {(students.data?.length ?? 0) > withFee.length &&
-                ` ${(students.data?.length ?? 0) - withFee.length} senza costo: impostalo dalla scheda studente, sezione Pagamenti.`}
+              {withFee.length} {withFee.length === 1 ? "costo" : "costi"}, totale {formatCurrency(total)}. I costi si
+              impostano dalla scheda studente, sezione Pagamenti.
             </p>
           </>
         )}

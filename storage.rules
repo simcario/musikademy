@@ -33,8 +33,16 @@ service firebase.storage {
         || m.get('audience', []).hasAny(me().get('groupIds', []));
     }
 
+    // Il docente legge i file dei propri materiali (ADR D29); quelli di un materiale non ancora
+    // salvato (subito dopo il caricamento) li legge chi li ha caricati, cioè lo staff.
+    function staffCanReadMaterial(materialId) {
+      let path = /databases/(default)/documents/materials/$(materialId);
+      return role() == 'admin' || !firestore.exists(path)
+        || firestore.get(path).data.get('createdBy', '') == request.auth.uid;
+    }
+
     match /materials/{materialId}/{fileName} {
-      allow read: if isStaff() || (isStudent() && studentCanReadMaterial(materialId));
+      allow read: if (isStaff() && staffCanReadMaterial(materialId)) || (isStudent() && studentCanReadMaterial(materialId));
       allow create, update: if isStaff() && validMaterialUpload();
       allow delete: if isStaff();
     }

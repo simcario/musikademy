@@ -1,7 +1,7 @@
-import { addDoc, deleteDoc, orderBy, serverTimestamp, updateDoc, where, limit } from "firebase/firestore";
+import { addDoc, deleteDoc, or, orderBy, serverTimestamp, updateDoc, where, limit } from "firebase/firestore";
 import type { Announcement, AnnouncementTarget, WithId } from "@/types";
 import { buildKeywords } from "@/utils/keywords";
-import { COLLECTIONS, chunk, clean, col, list, paginate, ref, touched } from "./base";
+import { COLLECTIONS, chunk, clean, col, list, paginate, ref, touched, type StaffScope } from "./base";
 
 export interface AnnouncementInput {
   title: string;
@@ -39,8 +39,17 @@ export const announcementService = {
       .slice(0, max);
   },
 
-  page: (cursor: unknown | null) =>
-    paginate<Announcement>(COLLECTIONS.announcements, [orderBy("publishedAt", "desc")], cursor, 20),
+  /** L'admin le vede tutte; il docente le sue e quelle a tutta la scuola (ADR D29). */
+  page: (cursor: unknown | null, scope: StaffScope) =>
+    scope.admin
+      ? paginate<Announcement>(COLLECTIONS.announcements, [orderBy("publishedAt", "desc")], cursor, 20)
+      : paginate<Announcement>(
+          COLLECTIONS.announcements,
+          [orderBy("publishedAt", "desc")],
+          cursor,
+          20,
+          or(where("createdBy", "==", scope.uid), where("targetType", "==", "all")),
+        ),
 
   async create(input: AnnouncementInput, author: { uid: string; name: string }) {
     const r = await addDoc(

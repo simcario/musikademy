@@ -8,6 +8,7 @@ import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useGroups, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect } from "@/features/admin/pickers";
+import { useSession } from "@/features/auth/auth-provider";
 import { materialService } from "@/services/materialService";
 import type { Material, WithId } from "@/types";
 import { fullName } from "@/utils/format";
@@ -41,6 +42,7 @@ export function MaterialAssignDialog({
 }
 
 function AssignForm({ material, onDone }: { material: WithId<Material>; onDone: () => void }) {
+  const { role } = useSession();
   const students = useActiveStudents();
   const groups = useGroups();
   const form = useForm<Values>({
@@ -74,7 +76,8 @@ function AssignForm({ material, onDone }: { material: WithId<Material>; onDone: 
             <NativeSelect {...p} {...form.register("visibility")}>
               <option value="student">Solo studenti assegnati</option>
               <option value="course">Un corso</option>
-              <option value="all">Tutti gli studenti</option>
+              {/* A tutta la scuola solo l'admin (ADR D29); un materiale già "per tutti" resta tale. */}
+              {(role === "admin" || material.visibility === "all") && <option value="all">Tutti gli studenti</option>}
             </NativeSelect>
           )}
         </Field>

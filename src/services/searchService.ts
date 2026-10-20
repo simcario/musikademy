@@ -2,7 +2,8 @@ import { limit, where } from "firebase/firestore";
 import type { Announcement, Assignment, Lesson, Material, Student } from "@/types";
 import { fullName } from "@/utils/format";
 import { searchToken } from "@/utils/keywords";
-import { COLLECTIONS, list } from "./base";
+import { COLLECTIONS, list, ownedBy, type StaffScope } from "./base";
+import { studentService } from "./studentService";
 
 export interface SearchHit {
   id: string;
@@ -15,19 +16,24 @@ export interface SearchHit {
 /**
  * Ricerca globale docente (ADR D7): `array-contains` sulle keyword di ogni collezione.
  * Un motore esterno (Algolia/Typesense) può sostituire questa funzione mantenendo la firma.
+ * Il docente cerca solo tra ciò che vede (ADR D29): i suoi studenti e le sue attività.
  */
-export async function globalSearch(q: string, perKind = 5): Promise<SearchHit[]> {
+export async function globalSearch(q: string, scope: StaffScope, perKind = 5): Promise<SearchHit[]> {
   const token = searchToken(q);
   if (!token) return [];
   const by = where("keywords", "array-contains", token);
   const settle = <T>(p: Promise<T[]>) => p.catch(() => [] as T[]);
+  // Gli studenti del docente si filtrano sul risultato (vedi studentService.page).
+  const studentQuery = scope.admin
+    ? list<Student>(COLLECTIONS.students, by, limit(perKind))
+    : studentService.page({ search: q }, null, scope).then((p) => p.items.slice(0, perKind));
 
   const [students, lessons, materials, assignments, announcements] = await Promise.all([
-    settle(list<Student>(COLLECTIONS.students, by, limit(perKind))),
-    settle(list<Lesson>(COLLECTIONS.lessons, by, limit(perKind))),
-    settle(list<Material>(COLLECTIONS.materials, by, limit(perKind))),
-    settle(list<Assignment>(COLLECTIONS.assignments, by, limit(perKind))),
-    settle(list<Announcement>(COLLECTIONS.announcements, by, limit(perKind))),
+    settle(studentQuery),
+    settle(list<Lesson>(COLLECTIONS.lessons, ...ownedBy(scope, "teacherId"), by, limit(perKind))),
+    settle(list<Material>(COLLECTIONS.materials, ...ownedBy(scope, "createdBy"), by, limit(perKind))),
+    settle(list<Assignment>(COLLECTIONS.assignments, ...ownedBy(scope, "createdBy"), by, limit(perKind))),
+    settle(list<Announcement>(COLLECTIONS.announcements, ...ownedBy(scope, "createdBy"), by, limit(perKind))),
   ]);
 
   return [

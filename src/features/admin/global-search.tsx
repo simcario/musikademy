@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, CalendarDays, Library, Loader2, Megaphone, Search, UserRound } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useStaffScope } from "@/features/admin/hooks";
 import { qk } from "@/hooks/query-keys";
 import { useDebounce } from "@/hooks/use-debounce";
 import { globalSearch, type SearchHit } from "@/services/searchService";
@@ -24,10 +25,11 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
   const debounced = useDebounce(q, 250);
   const token = searchToken(debounced);
   const router = useRouter();
+  const scope = useStaffScope();
   const results = useQuery({
     queryKey: qk.search(token ?? ""),
-    queryFn: () => globalSearch(debounced),
-    enabled: !!token && open,
+    queryFn: () => globalSearch(debounced, scope!),
+    enabled: !!token && open && !!scope,
     staleTime: 30_000,
   });
 

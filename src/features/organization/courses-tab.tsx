@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SidePanel } from "@/components/shared/dialogs";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
-import { useActiveStudents, useGroups } from "@/features/admin/hooks";
+import { useActiveStudents, useGroups, useStaffScope } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
 import { useCourses } from "@/features/student-area/hooks";
 import { can } from "@/lib/auth/roles";
@@ -23,10 +23,13 @@ export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; 
   const courses = useCourses();
   const groups = useGroups();
   const students = useActiveStudents();
+  const scope = useStaffScope();
 
-  if (courses.isPending) return <ListSkeleton rows={3} />;
+  if (courses.isPending || !scope) return <ListSkeleton rows={3} />;
   if (courses.isError) return <ErrorState error={courses.error} onRetry={() => courses.refetch()} />;
 
+  // Il docente vede i corsi a cui è abilitato (ADR D29); "Senza corso" è solo dell'admin.
+  const visible = scope.admin ? courses.data : courses.data.filter((c) => scope.courseIds.includes(c.id));
   const courseIds = new Set(courses.data.map((c) => c.id));
   const allGroups = groups.data ?? [];
   const allStudents = students.data ?? [];
@@ -35,7 +38,7 @@ export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; 
   const looseStudents = allStudents.filter((s) => !s.courseIds.some((c) => courseIds.has(c))).length;
   const loading = groups.isPending || students.isPending;
   const rows = [
-    ...[...courses.data]
+    ...[...visible]
       .sort((a, b) => Number(b.active) - Number(a.active))
       .map((c) => ({
         id: c.id,
@@ -45,7 +48,7 @@ export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; 
         groups: allGroups.filter((g) => g.courseId === c.id).length,
         students: allStudents.filter((s) => s.courseIds.includes(c.id)).length,
       })),
-    ...(looseGroups || looseStudents
+    ...(scope.admin && (looseGroups || looseStudents)
       ? [{ id: NO_COURSE, name: "Senza corso", description: undefined, inactive: false, groups: looseGroups, students: looseStudents }]
       : []),
   ];

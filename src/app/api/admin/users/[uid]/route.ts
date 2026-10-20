@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { HttpError, errorResponse, requireCaller } from "@/lib/auth/server";
+import { HttpError, assertManagesStudent, errorResponse, requireCaller } from "@/lib/auth/server";
 import { updateUserSchema } from "@/features/students/schemas";
 import { buildKeywords } from "@/utils/keywords";
 
@@ -17,10 +17,11 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/admin/users/[
     if ((userSnap.data() as { role: string }).role !== "student") {
       throw new HttpError(400, "Solo gli studenti possono essere eliminati.");
     }
-    await requireCaller(req, "students:manage");
+    const caller = await requireCaller(req, "students:manage");
+    await assertManagesStudent(caller, uid, { all: true });
 
     const writer = db.bulkWriter();
-    for (const name of ["lessons", "attendance", "payments", "assignments"]) {
+    for (const name of ["lessons", "attendance", "payments", "fees", "assignments"]) {
       const snap = await db.collection(name).where("studentId", "==", uid).get();
       snap.docs.forEach((d) => writer.delete(d.ref));
     }
@@ -74,6 +75,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/admin/users/[u
     // Gestire studenti è da docente; toccare docenti/admin o cambiare ruoli è da admin.
     const needsAdmin = input.role !== undefined || current.role !== "student";
     const caller = await requireCaller(req, needsAdmin ? "roles:manage" : "students:manage");
+    if (current.role === "student") await assertManagesStudent(caller, uid);
     if (caller.uid === uid && (input.active === false || input.role)) {
       throw new HttpError(400, "Non puoi disattivare o cambiare ruolo al tuo account.");
     }

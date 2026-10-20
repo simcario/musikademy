@@ -297,6 +297,8 @@ const KIND_LABEL: Record<WhatsAppMessageKind, string> = {
 };
 
 export function WhatsAppMessageLog() {
+  // Il docente vede i propri messaggi; le prove verso un numero libero sono dell'admin (ADR D29).
+  const isAdmin = useSession().role === "admin";
   const q = useWhatsAppMessages(30);
   const [toDelete, setToDelete] = useState<WithId<WhatsAppMessage> | null>(null);
   const zernio = useWhatsAppSettings().data?.provider === "zernio";
@@ -315,8 +317,8 @@ export function WhatsAppMessageLog() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Ultimi messaggi</h2>
-      <TestMessage />
+      <h2 className="text-lg font-semibold">{isAdmin ? "Ultimi messaggi" : "I tuoi ultimi messaggi"}</h2>
+      {isAdmin && <TestMessage />}
       {q.loading ? (
         <ListSkeleton rows={3} />
       ) : q.error ? (

@@ -55,33 +55,74 @@ async function main() {
 
   // ── Persone ──
   const adminId = await account("admin@musikademy.test", "Marco", "Ferri", "admin");
-  await db.doc(`teachers/${adminId}`).set({
-    userId: adminId, name: "Marco", surname: "Ferri", email: "admin@musikademy.test", courseIds: [], createdAt: now, updatedAt: now, ...demo,
-  });
+  // Seconda docente (ADR D29): insegna solo Pianoforte in Canto moderno, vede solo i suoi studenti e le sue quote.
+  const teacherId = await account("sara@musikademy.test", "Sara", "Conti", "teacher");
 
-  // ── Corsi ──
+  // ── Corsi e materie ──
   const courses = [
-    { id: "demo-canto-moderno", name: "Canto moderno", description: "Tecnica vocale e repertorio pop/rock" },
-    { id: "demo-canto-lirico", name: "Canto lirico", description: "Impostazione classica e repertorio operistico" },
+    {
+      id: "demo-canto-moderno", name: "Canto moderno", description: "Tecnica vocale e repertorio pop/rock",
+      teacherIds: [adminId, teacherId],
+      subjects: [
+        { id: "canto", name: "Canto", teacherIds: [adminId] },
+        { id: "piano", name: "Pianoforte complementare", teacherIds: [teacherId] },
+      ],
+    },
+    {
+      id: "demo-canto-lirico", name: "Canto lirico", description: "Impostazione classica e repertorio operistico",
+      teacherIds: [adminId],
+      subjects: [{ id: "canto", name: "Canto", teacherIds: [adminId] }],
+    },
   ];
   for (const c of courses) {
-    await db.doc(`courses/${c.id}`).set({ name: c.name, description: c.description, active: true, teacherIds: [adminId], createdAt: now, updatedAt: now, ...demo });
+    await db.doc(`courses/${c.id}`).set({ name: c.name, description: c.description, active: true, teacherIds: c.teacherIds, subjects: c.subjects, createdAt: now, updatedAt: now, ...demo });
+  }
+  // Copia dei corsi di ogni docente, letta dalle Security Rules.
+  for (const [uid, name, surname, email] of [
+    [adminId, "Marco", "Ferri", "admin@musikademy.test"],
+    [teacherId, "Sara", "Conti", "sara@musikademy.test"],
+  ]) {
+    await db.doc(`teachers/${uid}`).set({
+      userId: uid, name, surname, email, courseIds: courses.filter((c) => c.teacherIds.includes(uid)).map((c) => c.id),
+      createdAt: now, updatedAt: now, ...demo,
+    });
   }
 
   const students = [
-    { email: "elena@musikademy.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567", fee: { cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, startDate: day(-14, 0, 0), dueAt: "end" } },
-    { email: "luca@musikademy.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "", fee: { cycleAmount: 140, startDate: day(-5, 0, 0), dueAt: "start" } },
+    { email: "elena@musikademy.test", name: "Elena", surname: "Russo", courseIds: [courses[0].id], phone: "+39 333 1234567" },
+    { email: "luca@musikademy.test", name: "Luca", surname: "Bianchi", courseIds: [courses[1].id], phone: "" },
   ];
   const studentIds: string[] = [];
   for (const s of students) {
     const uid = await account(s.email, s.name, s.surname, "student");
     studentIds.push(uid);
     await db.doc(`students/${uid}`).set({
-      userId: uid, name: s.name, surname: s.surname, email: s.email, phone: s.phone, courseIds: s.courseIds, fee: s.fee,
+      userId: uid, name: s.name, surname: s.surname, email: s.email, phone: s.phone, courseIds: s.courseIds,
       enrollmentDate: day(-60), status: "active", keywords: buildKeywords(s.name, s.surname, s.email),
       createdAt: now, updatedAt: now, ...demo,
     });
     await db.doc(`studentNotes/${uid}`).set({ notes: "Nota privata demo: visibile solo ai docenti.", updatedAt: now, ...demo });
+  }
+
+  // ── Costi per docente, studente e materia (ADR D29) ──
+  const fees = [
+    { s: 0, teacher: adminId, teacherName: "Marco Ferri", course: 0, subject: 0, cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, start: -14, dueAt: "end" },
+    { s: 0, teacher: teacherId, teacherName: "Sara Conti", course: 0, subject: 1, cycleAmount: 100, lessonPrice: 25, lessonsPerCycle: 4, start: -10, dueAt: "start" },
+    { s: 1, teacher: adminId, teacherName: "Marco Ferri", course: 1, subject: 0, cycleAmount: 140, start: -5, dueAt: "start" },
+  ];
+  const feeIds: string[] = [];
+  for (const f of fees) {
+    const s = students[f.s];
+    const c = courses[f.course];
+    const subject = c.subjects[f.subject];
+    const id = `${f.teacher}_${studentIds[f.s]}_${c.id}_${subject.id}`;
+    feeIds.push(id);
+    await db.doc(`fees/${id}`).set({
+      teacherId: f.teacher, teacherName: f.teacherName, studentId: studentIds[f.s], studentName: `${s.name} ${s.surname}`,
+      courseId: c.id, courseName: c.name, subjectId: subject.id, subjectName: subject.name,
+      cycleAmount: f.cycleAmount, ...(f.lessonPrice ? { lessonPrice: f.lessonPrice, lessonsPerCycle: f.lessonsPerCycle } : {}),
+      startDate: day(f.start, 0, 0), dueAt: f.dueAt, createdAt: now, updatedAt: now, ...demo,
+    });
   }
 
   // ── Materiali (file placeholder caricati sullo Storage emulator) ──
@@ -119,12 +160,12 @@ async function main() {
     await db.doc(`lessons/${id}`).set({
       studentId: studentIds[l.s], studentName: `${s.name} ${s.surname}`, teacherId: adminId, teacherName: "Marco Ferri",
       courseId: s.courseIds[0], date, startTime: `${"h" in l ? l.h : 16}:30`, endTime: `${("h" in l ? l.h : 16) + 1}:20`,
-      title: l.title, subject: "Canto", topics: ["Respirazione", "Appoggio", "Vocalizzi"], notes: "notes" in l ? l.notes : "",
+      title: l.title, subjectId: "canto", subject: "Canto", topics: ["Respirazione", "Appoggio", "Vocalizzi"], notes: "notes" in l ? l.notes : "",
       materialIds: "mats" in l ? l.mats : [], status: l.status, keywords: buildKeywords(l.title, s.name, s.surname),
       createdAt: now, updatedAt: now, ...demo,
     });
     if ("att" in l) {
-      await db.doc(`attendance/${id}`).set({ lessonId: id, studentId: studentIds[l.s], lessonDate: date, status: l.att, createdAt: now, updatedAt: now, ...demo });
+      await db.doc(`attendance/${id}`).set({ lessonId: id, studentId: studentIds[l.s], teacherId: adminId, lessonDate: date, status: l.att, createdAt: now, updatedAt: now, ...demo });
     }
   }
 
@@ -153,25 +194,33 @@ async function main() {
   // Cicli di 4 settimane dalla prima lezione, versamenti anche parziali (ADR D21):
   // Elena paga lezione per lezione (scadenza a fine ciclo), Luca in anticipo ed è in ritardo.
   type Paid = { amount: number; day: number; method: string; notes?: string };
-  const cycle = (s: number, startDay: number) => ({ id: `cycle_${studentIds[s]}_${cycleKey(day(startDay).toDate())}`, label: cycleLabel(day(startDay).toDate()), period: cycleKey(day(startDay).toDate()) });
+  const cycle = (fee: number, startDay: number) => ({ id: `cycle_${feeIds[fee]}_${cycleKey(day(startDay).toDate())}`, label: cycleLabel(day(startDay).toDate()), period: cycleKey(day(startDay).toDate()) });
   const elena = cycle(0, -14);
-  const luca = cycle(1, -5);
+  const elenaPiano = cycle(1, -10);
+  const luca = cycle(2, -5);
   const payments = [
-    { id: "demo-payment-1", s: 0, description: "Iscrizione annuale", amount: 50, due: -14, paid: [{ amount: 50, day: -14, method: "card" }] as Paid[] },
-    { id: elena.id, period: elena.period, s: 0, description: `Quota ${elena.label} (4 lezioni)`, amount: 120, due: 13, paid: [{ amount: 30, day: -14, method: "cash", notes: "1ª lezione" }, { amount: 30, day: -7, method: "cash", notes: "2ª lezione" }] as Paid[] },
-    { id: luca.id, period: luca.period, s: 1, description: `Quota ${luca.label}`, amount: 140, due: -5, paid: [] as Paid[] },
+    { id: "demo-payment-1", s: 0, fee: -1, description: "Iscrizione annuale", amount: 50, due: -14, paid: [{ amount: 50, day: -14, method: "card" }] as Paid[] },
+    { id: elena.id, period: elena.period, s: 0, fee: 0, description: `Quota Canto ${elena.label} (4 lezioni)`, amount: 120, due: 13, paid: [{ amount: 30, day: -14, method: "cash", notes: "1ª lezione" }, { amount: 30, day: -7, method: "cash", notes: "2ª lezione" }] as Paid[] },
+    { id: elenaPiano.id, period: elenaPiano.period, s: 0, fee: 1, description: `Quota Pianoforte complementare ${elenaPiano.label} (4 lezioni)`, amount: 100, due: -10, paid: [{ amount: 100, day: -10, method: "bank_transfer" }] as Paid[] },
+    { id: luca.id, period: luca.period, s: 1, fee: 2, description: `Quota Canto ${luca.label}`, amount: 140, due: -5, paid: [] as Paid[] },
   ];
   for (const [i, p] of payments.entries()) {
     const s = students[p.s];
     const installments = p.paid.map((v, j) => ({ id: `demo-${i}-${j}`, amount: v.amount, date: day(v.day, 10), method: v.method, ...(v.notes ? { notes: v.notes } : {}) }));
     const paidAmount = p.paid.reduce((sum, v) => sum + v.amount, 0);
     const last = installments.at(-1);
+    const fee = p.fee >= 0 ? fees[p.fee] : null;
+    const owner = fee?.teacher ?? adminId;
     await db.doc(`payments/${p.id}`).set({
       ...(p.period ? { period: p.period } : {}),
+      ...(fee
+        ? { feeId: feeIds[p.fee], courseId: courses[fee.course].id, subjectName: courses[fee.course].subjects[fee.subject].name }
+        : {}),
+      teacherId: owner, teacherName: fee?.teacherName ?? "Marco Ferri",
       studentId: studentIds[p.s], studentName: `${s.name} ${s.surname}`, description: p.description, amount: p.amount,
       paidAmount, installments, dueDate: day(p.due, 0, 0), ...(last ? { paidDate: last.date, method: last.method } : {}),
       status: paidAmount >= p.amount ? "paid" : paidAmount > 0 ? "partial" : "pending",
-      notes: "", createdBy: adminId, createdAt: now, updatedAt: now, ...demo,
+      notes: "", createdBy: owner, createdAt: now, updatedAt: now, ...demo,
     });
   }
 
@@ -188,7 +237,7 @@ async function main() {
   });
 
   console.log(`\n✓ Dati demo creati. Password per tutti: ${PASSWORD}`);
-  console.log("  admin@musikademy.test (admin) · elena@musikademy.test · luca@musikademy.test (studenti)\n");
+  console.log("  admin@musikademy.test (admin) · sara@musikademy.test (docente) · elena@musikademy.test · luca@musikademy.test (studenti)\n");
 }
 
 /** WAV PCM mono 8kHz di silenzio (file audio valido e leggerissimo). */

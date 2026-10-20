@@ -10,10 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog, FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { cn } from "@/lib/utils";
-import { useActiveStudents, useStaffMutation, useStudent } from "@/features/admin/hooks";
+import { useActiveStudents, useMoneyOwner, useMyFees, useStaffMutation } from "@/features/admin/hooks";
 import { StudentSelect } from "@/features/admin/pickers";
-import { useSession } from "@/features/auth/auth-provider";
-import { paymentService } from "@/services/paymentService";
+import { feeLabel, paymentService } from "@/services/paymentService";
 import { PAYMENT_METHODS, type Installment, type Payment, type WithId } from "@/types";
 import {
   amountToInput,
@@ -70,12 +69,15 @@ function PaymentForm({
   defaultStudentId?: string;
   onDone: () => void;
 }) {
-  const { uid } = useSession();
+  const owner = useMoneyOwner();
   const students = useActiveStudents();
+  // I costi del docente (tutti gli studenti): propongono materia, importo e descrizione.
+  const fees = useMyFees();
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
       studentId: payment?.studentId ?? defaultStudentId ?? "",
+      feeId: payment?.feeId ?? "",
       description: payment?.description ?? "",
       amount: amountToInput(payment?.amount),
       dueDate: toInputDate(payment?.dueDate ?? new Date()),
@@ -88,16 +90,28 @@ function PaymentForm({
   });
   const { errors } = form.formState;
   const studentId = useWatch({ control: form.control, name: "studentId" });
+  const feeId = useWatch({ control: form.control, name: "feeId" });
   const payNowAmount = useWatch({ control: form.control, name: "payNowAmount" });
   const selected = students.data?.find((s) => s.id === studentId);
-  const selectedFee = cycleFee(selected?.fee);
+  const studentFees = (fees.data ?? []).filter((f) => f.studentId === studentId);
+  const selectedFee = studentFees.find((f) => f.id === feeId) ?? null;
+  const selectedCycle = cycleFee(selectedFee);
 
-  // Nuova quota: propone descrizione e importo dal costo del corso dello studente.
+  // Nuova quota: propone descrizione e importo dal costo scelto (materia).
   const applyFee = (id: string) => {
-    const fee = cycleFee(students.data?.find((s) => s.id === id)?.fee);
+    const fee = cycleFee(studentFees.find((f) => f.id === id));
     if (!fee || payment) return;
     if (!form.getValues("amount")) form.setValue("amount", amountToInput(fee.cycleAmount));
-    if (!form.getValues("description")) form.setValue("description", `Quota ${cycleLabel(cycleStartAt(fee.startDate.toDate(), new Date()))}`);
+    if (!form.getValues("description")) {
+      form.setValue("description", `Quota ${cycleLabel(cycleStartAt(fee.startDate.toDate(), new Date()))}`);
+    }
+  };
+  // Con un solo costo per lo studente lo si sceglie subito.
+  const onStudent = (id: string) => {
+    const own = (fees.data ?? []).filter((f) => f.studentId === id);
+    const only = own.length === 1 ? own[0].id : "";
+    form.setValue("feeId", only);
+    if (only) applyFee(only);
   };
 
   const save = useStaffMutation(
@@ -110,13 +124,14 @@ function PaymentForm({
         dueDate: fromInputDate(v.dueDate),
         cancelled: v.cancelled,
         notes: v.notes || undefined,
+        fee: selectedFee,
       };
       if (payment) return paymentService.update(payment.id, input);
       const payNow =
         v.payNowAmount && v.payNowDate && v.payNowMethod
           ? { amount: parseAmount(v.payNowAmount), date: fromInputDate(v.payNowDate), method: v.payNowMethod }
           : undefined;
-      return paymentService.create(input, uid, payNow);
+      return paymentService.create(input, owner, payNow);
     },
     { success: payment ? "Quota aggiornata" : "Quota registrata", invalidate: INVALIDATE, onSuccess: onDone },
   );
@@ -131,12 +146,30 @@ function PaymentForm({
             {...studentField}
             onChange={(e) => {
               studentField.onChange(e);
-              applyFee(e.target.value);
+              onStudent(e.target.value);
             }}
             disabled={!!payment}
           />
         )}
       </Field>
+      {studentFees.length > 0 && (
+        <Field label="Materia" hint="Dai tuoi costi per lo studente">
+          {(p) => (
+            <NativeSelect
+              {...p}
+              {...form.register("feeId", { onChange: (e) => applyFee(e.target.value) })}
+              disabled={!!payment}
+            >
+              <option value="">Nessuna (quota libera)</option>
+              {studentFees.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {feeLabel(f)}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+      )}
       <Field label="Descrizione" error={errors.description?.message} required>
         {(p) => <Input {...p} placeholder="Quota ottobre" {...form.register("description")} />}
       </Field>
@@ -145,7 +178,7 @@ function PaymentForm({
           label="Importo dovuto (€)"
           error={errors.amount?.message}
           required
-          hint={selectedFee && !payment ? `Quota 4 settimane: ${formatCurrency(selectedFee.cycleAmount)}` : undefined}
+          hint={selectedCycle && !payment ? `Quota 4 settimane: ${formatCurrency(selectedCycle.cycleAmount)}` : undefined}
         >
           {(p) => <Input {...p} inputMode="decimal" placeholder="120" {...form.register("amount")} />}
         </Field>
@@ -217,9 +250,11 @@ export function InstallmentDialog({
 }
 
 function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone: () => void }) {
-  const student = useStudent(payment.studentId);
+  const fees = useMyFees(payment.studentId);
   const remaining = remainingOf(payment);
-  const lessonPrice = student.data?.fee?.lessonPrice;
+  // Costo a lezione della materia della quota (o dell'unico costo dello studente).
+  const fee = fees.data?.find((f) => f.id === payment.feeId) ?? (fees.data?.length === 1 ? fees.data[0] : undefined);
+  const lessonPrice = fee?.lessonPrice;
   const schema = useMemo(() => installmentSchema(remaining), [remaining]);
   const form = useForm<InstallmentFormValues>({
     resolver: zodResolver(schema),

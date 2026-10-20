@@ -46,13 +46,15 @@ export function AnnouncementFormDialog({
 }
 
 function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Announcement> | null; onDone: () => void }) {
-  const { uid, profile } = useSession();
+  const { uid, profile, role } = useSession();
+  // A tutta la scuola scrive solo l'admin; il docente ai suoi corsi e ai suoi studenti (ADR D29).
+  const isAdmin = role === "admin";
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
       title: announcement?.title ?? "",
       content: announcement?.content ?? "",
-      targetType: announcement?.targetType ?? "all",
+      targetType: announcement?.targetType ?? (isAdmin ? "all" : "course"),
       targetId: announcement?.targetId ?? "",
       whatsapp: false,
     },
@@ -107,7 +109,7 @@ function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Anno
         <Field label="Destinatari">
           {(p) => (
             <NativeSelect {...p} {...form.register("targetType", { onChange: () => form.setValue("targetId", "") })}>
-              <option value="all">Tutti gli studenti</option>
+              {isAdmin && <option value="all">Tutti gli studenti</option>}
               <option value="course">Un corso / classe</option>
               <option value="student">Un singolo studente</option>
             </NativeSelect>

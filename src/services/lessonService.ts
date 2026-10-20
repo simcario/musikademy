@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import type { Lesson, LessonStatus } from "@/types";
 import { buildKeywords } from "@/utils/keywords";
-import { COLLECTIONS, clean, col, getById, list, paginate, ref, timestamps, touched } from "./base";
+import { COLLECTIONS, clean, col, getById, list, ownedBy, paginate, ref, timestamps, touched, type StaffScope } from "./base";
 
 export interface LessonInput {
   studentId: string;
@@ -24,6 +24,7 @@ export interface LessonInput {
   startTime?: string;
   endTime?: string;
   title: string;
+  subjectId?: string;
   subject?: string;
   topics?: string[];
   notes?: string;
@@ -35,6 +36,7 @@ function toDoc(input: LessonInput) {
   return clean({
     ...input,
     courseId: input.courseId || undefined,
+    subjectId: input.subjectId || undefined,
     date: Timestamp.fromDate(input.date),
     topics: input.topics ?? [],
     materialIds: input.materialIds ?? [],
@@ -61,10 +63,12 @@ export const lessonService = {
     return paginate<Lesson>(COLLECTIONS.lessons, c, cursor, 15);
   },
 
-  async nextForStudent(studentId: string) {
+  /** Prossima lezione; `scope` dallo staff (il docente vede solo le sue, ADR D29). */
+  async nextForStudent(studentId: string, scope?: StaffScope) {
     const [r] = await list<Lesson>(
       COLLECTIONS.lessons,
       where("studentId", "==", studentId),
+      ...(scope ? ownedBy(scope, "teacherId") : []),
       where("status", "==", "scheduled"),
       where("date", ">=", dayRange(new Date(), 0)[0]),
       orderBy("date", "asc"),
@@ -74,38 +78,51 @@ export const lessonService = {
   },
 
   /** Prima lezione non annullata: inizio dei cicli di pagamento (ADR D21). */
-  async firstForStudent(studentId: string) {
+  async firstForStudent(studentId: string, scope: StaffScope) {
     const rows = await list<Lesson>(
       COLLECTIONS.lessons,
       where("studentId", "==", studentId),
+      ...ownedBy(scope, "teacherId"),
       orderBy("date", "asc"),
       limit(5),
     );
     return rows.find((l) => l.status !== "cancelled") ?? null;
   },
 
-  // ── Docente ──
+  // ── Docente: ogni query ha il vincolo dello scope (il docente vede solo le sue lezioni) ──
   /** Tutte le lezioni dello studente (scheda utente: riepilogo per corso). */
-  listForStudent: (studentId: string) =>
-    list<Lesson>(COLLECTIONS.lessons, where("studentId", "==", studentId), orderBy("date", "desc"), limit(500)),
+  listForStudent: (studentId: string, scope: StaffScope) =>
+    list<Lesson>(
+      COLLECTIONS.lessons,
+      where("studentId", "==", studentId),
+      ...ownedBy(scope, "teacherId"),
+      orderBy("date", "desc"),
+      limit(500),
+    ),
 
-  listInRange: (from: Date, days: number) => {
+  listInRange: (from: Date, days: number, scope: StaffScope) => {
     const [start, end] = dayRange(from, days);
-    return list<Lesson>(COLLECTIONS.lessons, where("date", ">=", start), where("date", "<", end), orderBy("date", "asc"));
+    return list<Lesson>(
+      COLLECTIONS.lessons,
+      ...ownedBy(scope, "teacherId"),
+      where("date", ">=", start),
+      where("date", "<", end),
+      orderBy("date", "asc"),
+    );
   },
 
-  page: (filters: { studentId?: string; status?: LessonStatus | "all" }, cursor: unknown | null) => {
-    const c: QueryConstraint[] = [];
+  page: (filters: { studentId?: string; status?: LessonStatus | "all" }, cursor: unknown | null, scope: StaffScope) => {
+    const c: QueryConstraint[] = [...ownedBy(scope, "teacherId")];
     if (filters.studentId) c.push(where("studentId", "==", filters.studentId));
     if (filters.status && filters.status !== "all") c.push(where("status", "==", filters.status));
     c.push(orderBy("date", "desc"));
     return paginate<Lesson>(COLLECTIONS.lessons, c, cursor, 20);
   },
 
-  async countInRange(from: Date, days: number) {
+  async countInRange(from: Date, days: number, scope: StaffScope) {
     const [start, end] = dayRange(from, days);
     const snap = await getCountFromServer(
-      query(col(COLLECTIONS.lessons), where("date", ">=", start), where("date", "<", end)),
+      query(col(COLLECTIONS.lessons), ...ownedBy(scope, "teacherId"), where("date", ">=", start), where("date", "<", end)),
     );
     return snap.data().count;
   },

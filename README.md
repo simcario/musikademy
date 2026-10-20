@@ -66,7 +66,7 @@ npm run seed         # terminale 2 — rifiuta di scrivere su progetti reali
 npm run dev:local    # terminale 3
 ```
 
-Account demo (password `Musikademy2026!`): `admin@musikademy.test`, `elena@musikademy.test`, `luca@musikademy.test`.
+Account demo (password `Musikademy2026!`): `admin@musikademy.test`, `sara@musikademy.test` (docente di Pianoforte complementare: vede solo i suoi studenti e le sue quote), `elena@musikademy.test`, `luca@musikademy.test`.
 Con il flag emulatori attivo anche le API admin (Admin SDK) usano automaticamente gli emulatori.
 
 ## Build e test
@@ -233,6 +233,14 @@ Il codice su GitHub (`simcario/musikademy`, branch `main`) è la sorgente del de
    ```powershell
    npm run deploy:rules
    ```
+5. Migrazioni dei dati: dopo il rilascio di materie e isolamento dei docenti (ADR D29), con le
+   credenziali Admin, prima simula e poi applica:
+   ```powershell
+   npm run migrate-teachers
+   npm run migrate-teachers -- --apply
+   ```
+   Finché non gira, i docenti non vedono presenze e quote precedenti e i vecchi costi degli studenti
+   non compaiono. Lo script è idempotente: elenca i costi che non sa attribuire, da reimpostare a mano.
 
 ### C. Se qualcosa va storto
 
@@ -251,7 +259,7 @@ src/
 ├── services/       unico livello che parla con Firestore/Storage (+ adminApi per i route handler)
 ├── lib/            firebase client/admin, ruoli, validazione, file, PWA
 ├── hooks/  types/  utils/
-scripts/            bootstrap-admin · seed · patch exFAT
+scripts/            bootstrap-admin · seed · migrate-teachers · patch exFAT
 tests/              unit/ · rules/
 ```
 

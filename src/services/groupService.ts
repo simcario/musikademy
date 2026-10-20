@@ -1,7 +1,7 @@
 import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, orderBy, where, writeBatch } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import type { Material, MaterialFolder, Student, StudentGroup, WithId } from "@/types";
-import { COLLECTIONS, chunk, clean, col, list, ref, timestamps, touched } from "./base";
+import { COLLECTIONS, chunk, clean, col, list, ownedBy, ref, scopeCourses, timestamps, touched, type StaffScope } from "./base";
 
 export interface GroupInput {
   name: string;
@@ -14,7 +14,14 @@ export interface GroupInput {
 
 /** Gruppi di studenti (ADR D26). L'appartenenza sta in `students.groupIds`: uno studente può stare in più gruppi. */
 export const groupService = {
-  list: () => list<StudentGroup>(COLLECTIONS.groups, orderBy("name")),
+  /** L'admin li vede tutti; il docente quelli dei suoi corsi (ADR D29). */
+  list: (scope: StaffScope) => {
+    if (scope.admin) return list<StudentGroup>(COLLECTIONS.groups, orderBy("name"));
+    const courses = scopeCourses(scope);
+    return courses.length
+      ? list<StudentGroup>(COLLECTIONS.groups, where("courseId", "in", courses), orderBy("name"))
+      : Promise.resolve([]);
+  },
 
   /** Lettura puntuale: lo studente riceve solo i gruppi di cui fa parte (rules). */
   async getMany(ids: string[]): Promise<WithId<StudentGroup>[]> {
@@ -43,13 +50,19 @@ export const groupService = {
     return groupRef.id;
   },
 
-  /** Elimina il gruppo e lo toglie da studenti, materiali e cartelle a cui era assegnato. */
-  async remove(id: string) {
-    const [students, materials, folders] = await Promise.all([
-      list<Student>(COLLECTIONS.students, where("groupIds", "array-contains", id)),
-      list<Material>(COLLECTIONS.materials, where("audience", "array-contains", id)),
-      list<MaterialFolder>(COLLECTIONS.materialFolders, where("audience", "array-contains", id)),
+  /**
+   * Elimina il gruppo e lo toglie da studenti, materiali e cartelle a cui era assegnato. Il docente
+   * tocca solo i propri materiali: negli altri resta l'id di un gruppo che non esiste più, innocuo.
+   * `memberIds` sono gli studenti del gruppo (il docente non può cercarli per `groupIds`).
+   */
+  async remove(id: string, memberIds: string[], scope: StaffScope) {
+    const [materials, folders] = await Promise.all([
+      list<Material>(COLLECTIONS.materials, ...ownedBy(scope, "createdBy"), where("audience", "array-contains", id)),
+      list<MaterialFolder>(COLLECTIONS.materialFolders, ...ownedBy(scope, "createdBy"), where("audience", "array-contains", id)),
     ]);
+    const students = scope.admin
+      ? await list<Student>(COLLECTIONS.students, where("groupIds", "array-contains", id))
+      : memberIds.map((sid) => ({ id: sid }));
     const unshare = { groupIds: arrayRemove(id), audience: arrayRemove(id), ...touched() };
     const writes = [
       ...students.map((s) => ({ ref: ref(COLLECTIONS.students, s.id), data: { groupIds: arrayRemove(id), ...touched() } })),

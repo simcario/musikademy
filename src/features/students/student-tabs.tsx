@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { AttendanceBadge, Pill } from "@/components/shared/status-badge";
-import { useGroups, useStaffMutation, useStudentAttendance } from "@/features/admin/hooks";
+import { useGroups, useStaffMutation, useStaffScope, useStudentAttendance } from "@/features/admin/hooks";
+import { useSession } from "@/features/auth/auth-provider";
 import { StaffAssignmentList } from "@/features/exercises/assignment-list";
 import { StaffLessonList } from "@/features/lessons/lesson-list";
 import { AssignMaterialsDialog } from "@/features/materials/assign-materials-dialog";
 import { MaterialRow } from "@/features/materials/material-card";
-import { StudentFeeCard } from "@/features/payments/fee-form";
+import { StudentFeesCard } from "@/features/payments/fee-form";
 import { StaffPaymentList } from "@/features/payments/payment-list";
 import { useCourses } from "@/features/student-area/hooks";
 import { qk } from "@/hooks/query-keys";
@@ -27,13 +28,24 @@ import { formatCurrency, formatDate, formatWeekday, toDate } from "@/utils/forma
 import { remainingOf, summarizeAttendance } from "@/utils/status";
 
 export function StudentOverviewTab({ studentId }: { studentId: string }) {
+  const { uid } = useSession();
+  const scope = useStaffScope();
   const att = useStudentAttendance(studentId);
-  const next = useQuery({ queryKey: qk.lessons({ next: studentId }), queryFn: () => lessonService.nextForStudent(studentId) });
+  // Il docente vede le sue lezioni, i suoi esercizi e le sue quote (ADR D29).
+  const next = useQuery({
+    queryKey: qk.lessons({ next: studentId }),
+    queryFn: () => lessonService.nextForStudent(studentId, scope!),
+    enabled: !!scope,
+  });
   const assignments = useQuery({
     queryKey: qk.assignments({ mine: studentId }),
-    queryFn: () => assignmentService.listForStudent(studentId),
+    queryFn: () => assignmentService.listForStudent(studentId, scope!),
+    enabled: !!scope,
   });
-  const payments = useQuery({ queryKey: qk.payments({ mine: studentId }), queryFn: () => paymentService.listForStudent(studentId) });
+  const payments = useQuery({
+    queryKey: qk.payments({ mine: studentId }),
+    queryFn: () => paymentService.listForStudent(studentId, uid),
+  });
 
   const s = summarizeAttendance((att.data ?? []).map((a) => a.status));
   const open = (assignments.data ?? []).filter((a) => a.status !== "completed").length;
@@ -83,15 +95,22 @@ function Card({ label, loading, children }: { label: string; loading: boolean; c
 export function StudentCoursesTab({ student, onEdit }: { student: WithId<Student>; onEdit: () => void }) {
   const courses = toCourseMap(useCourses().data);
   const groups = useGroups();
+  const scope = useStaffScope();
   const att = useStudentAttendance(student.id);
-  const lessons = useQuery({ queryKey: qk.lessons({ all: student.id }), queryFn: () => lessonService.listForStudent(student.id) });
+  const lessons = useQuery({
+    queryKey: qk.lessons({ all: student.id }),
+    queryFn: () => lessonService.listForStudent(student.id, scope!),
+    enabled: !!scope,
+  });
+  // Il docente vede solo i propri corsi tra quelli frequentati (ADR D29).
+  const courseIds = scope?.admin ? student.courseIds : student.courseIds.filter((id) => scope?.courseIds.includes(id));
 
   if (lessons.isError) return <ErrorState error={lessons.error} onRetry={() => lessons.refetch()} />;
   if (att.isError) return <ErrorState error={att.error} onRetry={() => att.refetch()} />;
 
   const all = lessons.data ?? [];
-  const other = all.filter((l) => !l.courseId || !student.courseIds.includes(l.courseId));
-  if (student.courseIds.length === 0 && other.length === 0) {
+  const other = all.filter((l) => !l.courseId || !courseIds.includes(l.courseId));
+  if (courseIds.length === 0 && other.length === 0) {
     return (
       <EmptyState
         icon={GraduationCap}
@@ -109,7 +128,7 @@ export function StudentCoursesTab({ student, onEdit }: { student: WithId<Student
 
   return (
     <div className="space-y-3">
-      {student.courseIds.map((id) => (
+      {courseIds.map((id) => (
         <CourseDetail
           key={id}
           title={courses.get(id)?.name ?? "—"}
@@ -238,9 +257,11 @@ export function StudentAttendanceTab({ studentId }: { studentId: string }) {
 
 export function StudentMaterialsTab({ studentId, studentName }: { studentId: string; studentName: string }) {
   const [assigning, setAssigning] = useState(false);
+  const scope = useStaffScope();
   const q = useInfiniteQuery({
     queryKey: qk.materials({ assignedTo: studentId }),
-    queryFn: ({ pageParam }) => materialService.pageAssignedTo(studentId, pageParam),
+    queryFn: ({ pageParam }) => materialService.pageAssignedTo(studentId, pageParam, scope!),
+    enabled: !!scope,
     initialPageParam: null as unknown,
     getNextPageParam: (last) => last.cursor ?? undefined,
   });
@@ -302,7 +323,7 @@ export function StudentAssignmentsTab({ studentId }: { studentId: string }) {
 export function StudentPaymentsTab({ student }: { student: WithId<Student> }) {
   return (
     <div className="space-y-3">
-      <StudentFeeCard student={student} />
+      <StudentFeesCard student={student} />
       <StaffPaymentList studentId={student.id} />
     </div>
   );

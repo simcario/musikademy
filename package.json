@@ -15,6 +15,7 @@
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-musikademy \"vitest run --config vitest.rules.config.mts\"",
     "emulators": "firebase emulators:start",
     "seed": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/seed.ts",
+    "migrate-teachers": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/migrate-teachers.ts",
     "bootstrap-admin": "node --require ./scripts/exfat-fs-patch.cjs node_modules/tsx/dist/cli.mjs scripts/bootstrap-admin.ts",
     "whatsapp": "npm --prefix whatsapp-worker start",
     "whatsapp:install": "npm --prefix whatsapp-worker install --no-bin-links",

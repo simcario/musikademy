@@ -11,7 +11,7 @@ import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { useStaffMutation } from "@/features/admin/hooks";
-import { useTeachers } from "@/features/student-area/hooks";
+import { useCourses, useTeachers } from "@/features/student-area/hooks";
 import { emailField } from "@/lib/validation";
 import { adminApi, authService } from "@/services/authService";
 import { byName, sortName } from "@/utils/format";
@@ -35,7 +35,16 @@ export function TeachersTab({
   onCreatingChange: (o: boolean) => void;
 }) {
   const q = useTeachers();
+  const courses = useCourses();
   const teachers = [...(q.data ?? [])].sort(byName);
+  // Corsi e materie a cui ogni docente è abilitato (ADR D29): si impostano dal corso.
+  const teachingOf = (id: string) =>
+    (courses.data ?? [])
+      .filter((c) => c.teacherIds.includes(id))
+      .map((c) => {
+        const subjects = (c.subjects ?? []).filter((s) => s.teacherIds.includes(id)).map((s) => s.name);
+        return subjects.length ? `${c.name} (${subjects.join(", ")})` : c.name;
+      });
   return (
     <>
       {!editable && (
@@ -67,6 +76,9 @@ export function TeachersTab({
               <div className="min-w-0">
                 <p className="truncate font-semibold">{sortName(t)}</p>
                 <p className="truncate text-xs text-muted-foreground">{t.email}</p>
+                <p className="text-xs text-muted-foreground">
+                  {teachingOf(t.id).join(" · ") || "Nessun corso: abilitalo dalla scheda di un corso"}
+                </p>
               </div>
             </li>
           ))}

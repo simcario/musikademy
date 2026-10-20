@@ -2,7 +2,7 @@ import { doc, orderBy, where, writeBatch, type DocumentReference } from "firebas
 import { firestore } from "@/lib/firebase/client";
 import type { Material, MaterialFolder, WithId } from "@/types";
 import { AppError } from "@/utils/errors";
-import { COLLECTIONS, chunk, col, getById, list, ref, timestamps, touched } from "./base";
+import { COLLECTIONS, chunk, col, getById, list, ownedBy, ref, timestamps, touched, type StaffScope } from "./base";
 
 export interface FolderSharing {
   studentIds: string[];
@@ -68,7 +68,7 @@ export function subtreeIds(id: string, folders: Folder[]): Set<string> {
  * condivisione più quella ereditata dalla superiore, e i materiali la ricevono dalla loro cartella.
  * `folders` è lo stato già modificato in memoria (condivisione o posizione nuove).
  */
-async function subtreeWrites(root: Folder, folders: Folder[]): Promise<Write[]> {
+async function subtreeWrites(root: Folder, folders: Folder[], scope: StaffScope): Promise<Write[]> {
   const map = toFolderMap(folders);
   const audiences = new Map<string, string[]>();
   const order: Folder[] = [];
@@ -94,7 +94,7 @@ async function subtreeWrites(root: Folder, folders: Folder[]): Promise<Write[]> 
   }));
   // Limite Firestore: 30 valori per `in`.
   for (const ids of chunk(order.map((f) => f.id))) {
-    const materials = await list<Material>(COLLECTIONS.materials, where("folderId", "in", ids));
+    const materials = await list<Material>(COLLECTIONS.materials, ...ownedBy(scope, "createdBy"), where("folderId", "in", ids));
     materials.forEach((m) =>
       writes.push({
         ref: ref(COLLECTIONS.materials, m.id),
@@ -114,8 +114,8 @@ async function commit(writes: Write[]) {
   }
 }
 
-async function loadWith(id: string) {
-  const folders = await folderService.list();
+async function loadWith(id: string, scope: StaffScope) {
+  const folders = await folderService.list(scope);
   const folder = folders.find((f) => f.id === id);
   if (!folder) throw new AppError("Cartella non trovata.");
   return { folders, folder };
@@ -125,8 +125,9 @@ async function loadWith(id: string) {
 export const folderService = {
   get: (id: string) => getById<MaterialFolder>(COLLECTIONS.materialFolders, id),
 
-  // ── Docente ──
-  list: () => list<MaterialFolder>(COLLECTIONS.materialFolders, orderBy("name")),
+  // ── Docente: le sue cartelle (l'admin le vede tutte, ADR D29) ──
+  list: (scope: StaffScope) =>
+    list<MaterialFolder>(COLLECTIONS.materialFolders, ...ownedBy(scope, "createdBy"), orderBy("name")),
 
   // ── Studente: cartelle condivise con lui o con uno dei suoi gruppi (anche tramite una superiore) ──
   async listShared(audienceIds: string[]) {
@@ -161,34 +162,34 @@ export const folderService = {
   },
 
   /** Condivisione: vale per la cartella, le sue sottocartelle e tutti i materiali che contengono. */
-  async share(id: string, sharing: FolderSharing) {
-    const { folders, folder } = await loadWith(id);
+  async share(id: string, sharing: FolderSharing, scope: StaffScope) {
+    const { folders, folder } = await loadWith(id, scope);
     Object.assign(folder, sharing);
-    await commit(await subtreeWrites(folder, folders));
+    await commit(await subtreeWrites(folder, folders, scope));
   },
 
   /** Sposta la cartella dentro `parentId` (`null` = primo livello): eredita la condivisione della nuova posizione. */
-  async move(id: string, parentId: string | null) {
-    const { folders, folder } = await loadWith(id);
+  async move(id: string, parentId: string | null, scope: StaffScope) {
+    const { folders, folder } = await loadWith(id, scope);
     if (parentId && subtreeIds(id, folders).has(parentId)) {
       throw new AppError("Non puoi spostare una cartella dentro se stessa o una sua sottocartella.");
     }
     if (parentId && !folders.some((f) => f.id === parentId)) throw new AppError("Cartella di destinazione non trovata.");
     folder.parentId = parentId ?? "";
-    await commit(await subtreeWrites(folder, folders));
+    await commit(await subtreeWrites(folder, folders, scope));
   },
 
   /** Elimina la cartella: materiali e sottocartelle salgono nella cartella superiore (o al primo livello). */
-  async remove(id: string) {
-    const { folders, folder } = await loadWith(id);
+  async remove(id: string, scope: StaffScope) {
+    const { folders, folder } = await loadWith(id, scope);
     const parent = folder.parentId ? (folders.find((f) => f.id === folder.parentId) ?? null) : null;
     const rest = folders.filter((f) => f.id !== id);
     const writes: Write[] = [];
     for (const child of rest.filter((f) => f.parentId === id)) {
       child.parentId = parent?.id ?? "";
-      writes.push(...(await subtreeWrites(child, rest)));
+      writes.push(...(await subtreeWrites(child, rest, scope)));
     }
-    const materials = await list<Material>(COLLECTIONS.materials, where("folderId", "==", id));
+    const materials = await list<Material>(COLLECTIONS.materials, ...ownedBy(scope, "createdBy"), where("folderId", "==", id));
     materials.forEach((m) =>
       writes.push({
         ref: ref(COLLECTIONS.materials, m.id),

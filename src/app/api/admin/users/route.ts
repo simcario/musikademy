@@ -1,6 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { HttpError, errorResponse, requireCaller } from "@/lib/auth/server";
+import { HttpError, errorResponse, requireCaller, teacherCourses } from "@/lib/auth/server";
 import { createUserSchema } from "@/features/students/schemas";
 import { createInvite } from "@/lib/auth/invites";
 import { buildKeywords } from "@/utils/keywords";
@@ -18,6 +18,13 @@ export async function POST(req: Request) {
     if (!parsed.success) throw new HttpError(400, "Dati non validi.");
     const input = parsed.data;
     const caller = await requireCaller(req, input.role === "student" ? "students:manage" : "roles:manage");
+    // Il docente iscrive i nuovi studenti ai propri corsi, altrimenti non li vedrebbe (ADR D29).
+    if (input.role === "student" && caller.role !== "admin") {
+      const mine = await teacherCourses(caller.uid);
+      if (!input.courseIds.some((c) => mine.includes(c)) || input.courseIds.some((c) => !mine.includes(c))) {
+        throw new HttpError(403, "Iscrivi lo studente ad almeno uno dei tuoi corsi (e solo ai tuoi).");
+      }
+    }
 
     const auth = adminAuth();
     const user = await auth.createUser({

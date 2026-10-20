@@ -11,19 +11,28 @@ import {
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import type { Attendance, AttendanceStatus, Lesson, WithId } from "@/types";
-import { COLLECTIONS, chunk, col, list, ref } from "./base";
+import { COLLECTIONS, chunk, col, list, ownedBy, ref, type StaffScope } from "./base";
 
 export const attendanceService = {
-  /** Storico presenze dello studente (una scuola privata ha decine di lezioni/anno per studente). */
-  listForStudent: (studentId: string) =>
-    list<Attendance>(COLLECTIONS.attendance, where("studentId", "==", studentId), orderBy("lessonDate", "desc"), limit(500)),
+  /**
+   * Storico presenze dello studente (una scuola privata ha decine di lezioni/anno per studente).
+   * `scope` dallo staff: il docente vede solo le presenze delle sue lezioni (ADR D29).
+   */
+  listForStudent: (studentId: string, scope?: StaffScope) =>
+    list<Attendance>(
+      COLLECTIONS.attendance,
+      where("studentId", "==", studentId),
+      ...(scope ? ownedBy(scope, "teacherId") : []),
+      orderBy("lessonDate", "desc"),
+      limit(500),
+    ),
 
   /** Presenze per un insieme di lezioni (docente). `attendance/{lessonId}` → ADR D4. */
-  async mapForLessons(lessonIds: string[]): Promise<Map<string, WithId<Attendance>>> {
+  async mapForLessons(lessonIds: string[], scope: StaffScope): Promise<Map<string, WithId<Attendance>>> {
     const map = new Map<string, WithId<Attendance>>();
     for (const ids of chunk(lessonIds)) {
       if (!ids.length) continue;
-      const rows = await list<Attendance>(COLLECTIONS.attendance, where(documentId(), "in", ids));
+      const rows = await list<Attendance>(COLLECTIONS.attendance, ...ownedBy(scope, "teacherId"), where(documentId(), "in", ids));
       rows.forEach((r) => map.set(r.id, r));
     }
     return map;
@@ -55,6 +64,7 @@ export const attendanceService = {
       {
         lessonId: lesson.id,
         studentId: lesson.studentId,
+        teacherId: lesson.teacherId,
         lessonDate: lesson.date,
         status,
         ...(notes !== undefined ? { notes } : {}),
@@ -74,11 +84,12 @@ export const attendanceService = {
     setDoc(ref(COLLECTIONS.attendance, lessonId), { notes, updatedAt: serverTimestamp() }, { merge: true }),
 
   /** Percentuale complessiva (docente) via aggregazioni server: nessun download dei documenti. */
-  async overallRate() {
+  async overallRate(scope: StaffScope) {
     const base = col(COLLECTIONS.attendance);
+    const own = ownedBy(scope, "teacherId");
     const [effective, present] = await Promise.all([
-      getCountFromServer(query(base, where("status", "in", ["present", "absent", "excused", "makeup"]))),
-      getCountFromServer(query(base, where("status", "in", ["present", "makeup"]))),
+      getCountFromServer(query(base, ...own, where("status", "in", ["present", "absent", "excused", "makeup"]))),
+      getCountFromServer(query(base, ...own, where("status", "in", ["present", "makeup"]))),
     ]);
     const total = effective.data().count;
     return total ? Math.round((present.data().count / total) * 100) : null;
