@@ -3,7 +3,7 @@ rules_version = '2';
 // Musikademy — Firestore Security Rules
 // Principio: negato per default. Il ruolo arriva dal custom claim `role` (ADR D1),
 // impostato solo dall'Admin SDK. Lo studente accede esclusivamente ai propri dati.
-// Il docente (ADR D29) vede gli studenti e i gruppi dei suoi corsi e solo le attività che ha creato
+// Il docente (ADR D34) vede gli studenti e i gruppi dei suoi corsi e solo le attività che ha creato
 // (lezioni, presenze, esercizi, materiali, comunicazioni); l'admin vede tutto. Costi e quote sono
 // personali: ognuno, admin compreso, vede solo i propri.
 service cloud.firestore {
@@ -19,8 +19,12 @@ service cloud.firestore {
     function isTeacher() { return role() == 'teacher'; }
     function uid() { return request.auth.uid; }
     function isOwner(studentId) { return isStudent() && studentId == uid(); }
+    // Permessi del ruolo dell'organizzazione (ADR D31, claim `perms`). L'admin può tutto; lo staff
+    // creato prima dei ruoli configurabili (senza `perms`) ha i permessi predefiniti del Docente.
+    function perms() { return request.auth.token.get('perms', null); }
+    function can(p) { return isAdmin() || (role() == 'teacher' && (perms() == null || p in perms())); }
 
-    // Corsi a cui il docente è abilitato: copia di `courses.teacherIds` in `teachers/{uid}` (ADR D29).
+    // Corsi a cui il docente è abilitato: copia di `courses.teacherIds` in `teachers/{uid}` (ADR D34).
     function myCourses() {
       return get(/databases/$(database)/documents/teachers/$(uid())).data.get('courseIds', []);
     }
@@ -76,7 +80,7 @@ service cloud.firestore {
         && onlyChanges(['name', 'surname', 'phone', 'photoURL', 'updatedAt'])
         && requiredStr('name', 60) && requiredStr('surname', 60) && optStr('phone', 30) && optStr('photoURL', 2048);
       // Lo staff aggiorna l'anagrafica degli studenti.
-      allow update: if resource.data.role == 'student' && canSeeStudent(userId)
+      allow update: if can('students:manage') && resource.data.role == 'student' && canSeeStudent(userId)
         && onlyChanges(['name', 'surname', 'phone', 'updatedAt'])
         && requiredStr('name', 60) && requiredStr('surname', 60) && optStr('phone', 30);
 
@@ -99,8 +103,9 @@ service cloud.firestore {
     match /students/{studentId} {
       allow read: if isOwner(studentId) || isAdmin() || (isTeacher() && teaches(resource.data));
       allow create, delete: if false; // Admin SDK; soft delete via `status`
-      // Il vecchio `fee` (costo unico) non si scrive più dal client: i costi sono in `fees` (ADR D29).
-      allow update: if (isAdmin() || (isTeacher() && teaches(resource.data) && changedCoursesAreMine()))
+      // Il vecchio `fee` (costo unico) non si scrive più dal client: i costi sono in `fees` (ADR D34).
+      allow update: if can('students:manage')
+        && (isAdmin() || (isTeacher() && teaches(resource.data) && changedCoursesAreMine()))
         && onlyChanges(['name', 'surname', 'phone', 'courseIds', 'groupIds', 'enrollmentDate', 'keywords', 'updatedAt'])
         && requiredStr('name', 60) && requiredStr('surname', 60)
         && request.resource.data.courseIds is list && request.resource.data.courseIds.size() <= 30
@@ -117,14 +122,21 @@ service cloud.firestore {
 
     match /groups/{groupId} {
       allow read: if isAdmin() || myGroup(resource.data) || (isStudent() && groupId in studentGroups());
-      allow create: if validGroup() && (isAdmin() || myGroup(request.resource.data));
-      allow update: if validGroup() && (isAdmin() || (myGroup(resource.data) && myGroup(request.resource.data)));
-      allow delete: if isAdmin() || myGroup(resource.data);
+      allow create: if can('students:manage') && validGroup() && (isAdmin() || myGroup(request.resource.data));
+      allow update: if can('students:manage') && validGroup()
+        && (isAdmin() || (myGroup(resource.data) && myGroup(request.resource.data)));
+      allow delete: if can('students:manage') && (isAdmin() || myGroup(resource.data));
     }
 
     // Note private dello staff sullo studente: mai visibili allo studente (§40).
     match /studentNotes/{studentId} {
-      allow read, write: if canSeeStudent(studentId);
+      allow read, write: if can('students:manage') && canSeeStudent(studentId);
+    }
+
+    // Ruoli dell'organizzazione (ADR D31): li scrive solo il server, che ne riallinea i claim.
+    match /roles/{roleId} {
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     // ───────────────────────── teachers / courses ─────────────────────────
@@ -161,22 +173,23 @@ service cloud.firestore {
 
     match /lessons/{lessonId} {
       allow read: if isOwner(resource.data.studentId) || mine(resource.data.teacherId);
-      allow create: if validLesson() && (isAdmin() || (isTeacher() && myLesson()));
-      allow update: if validLesson() && (isAdmin() || (isTeacher() && resource.data.teacherId == uid() && myLesson()));
-      allow delete: if mine(resource.data.teacherId);
+      allow create: if can('lessons:manage') && validLesson() && (isAdmin() || (isTeacher() && myLesson()));
+      allow update: if can('lessons:manage') && validLesson()
+        && (isAdmin() || (isTeacher() && resource.data.teacherId == uid() && myLesson()));
+      allow delete: if can('lessons:manage') && mine(resource.data.teacherId);
     }
 
     // ───────────────────────── attendance ─────────────────────────
     // `teacherId` = docente della lezione: è il campo con cui il docente interroga le sue presenze.
     match /attendance/{lessonId} {
       allow read: if isOwner(resource.data.studentId) || mine(resource.data.get('teacherId', ''));
-      allow create, update: if isStaff()
+      allow create, update: if can('attendance:manage')
         && request.resource.data.lessonId == lessonId
         && request.resource.data.studentId is string
         && request.resource.data.status in ['present', 'absent', 'excused', 'makeup', 'cancelled']
         && (isAdmin() || (request.resource.data.get('teacherId', '') == uid()
             && get(/databases/$(database)/documents/lessons/$(lessonId)).data.teacherId == uid()));
-      allow delete: if mine(resource.data.get('teacherId', ''));
+      allow delete: if can('attendance:manage') && mine(resource.data.get('teacherId', ''));
     }
 
     // ───────────────────────── materials ─────────────────────────
@@ -191,7 +204,7 @@ service cloud.firestore {
     }
 
     // Cartelle di materiali (ADR D26): lo studente vede solo quelle condivise con lui o con un suo gruppo.
-    // Il docente lavora solo sui propri (`createdBy`): la libreria di ognuno è separata (ADR D29).
+    // Il docente lavora solo sui propri (`createdBy`): la libreria di ognuno è separata (ADR D34).
     function myNew() { return isAdmin() || (isTeacher() && request.resource.data.get('createdBy', '') == uid()); }
     function myEdit() {
       return isAdmin() || (isTeacher() && resource.data.get('createdBy', '') == uid() && unchanged('createdBy'));
@@ -199,12 +212,12 @@ service cloud.firestore {
 
     match /materialFolders/{folderId} {
       allow read: if mine(resource.data.get('createdBy', '')) || (isStudent() && sharedWithMe(resource.data.get('audience', [])));
-      allow create, update: if isStaff() && requiredStr('name', 80) && optStr('parentId', 100)
+      allow create, update: if can('materials:manage') && requiredStr('name', 80) && optStr('parentId', 100)
         && request.resource.data.studentIds is list
         && request.resource.data.groupIds is list
         && request.resource.data.audience is list
         && (resource == null ? myNew() : myEdit());
-      allow delete: if mine(resource.data.get('createdBy', ''));
+      allow delete: if can('materials:manage') && mine(resource.data.get('createdBy', ''));
     }
 
     // Il docente non rende un materiale visibile a tutta la scuola né ai corsi che non insegna
@@ -219,7 +232,7 @@ service cloud.firestore {
 
     match /materials/{materialId} {
       allow read: if signedIn() && canReadMaterial(resource.data);
-      allow create, update: if isStaff()
+      allow create, update: if can('materials:manage')
         && (resource == null ? myNew() : myEdit())
         && materialVisibilityAllowed()
         && requiredStr('title', 140) && optStr('description', 2000)
@@ -230,33 +243,68 @@ service cloud.firestore {
         && request.resource.data.studentIds is list
         && request.resource.data.get('groupIds', []) is list
         && request.resource.data.get('audience', []) is list
+        // Derivato dalle playlist che contengono il materiale (ADR D29).
+        && request.resource.data.get('playlistAudience', []) is list
         && optStr('folderId', 100)
         && request.resource.data.storagePath is string
+        // Video online (ADR D30): solo link http(s).
+        && (!('externalUrl' in request.resource.data)
+            || (str('externalUrl', 2048) && request.resource.data.externalUrl.matches('^https?://.+')))
         && optStr('content', 524288);
-      allow delete: if mine(resource.data.get('createdBy', ''));
+      allow delete: if can('materials:manage') && mine(resource.data.get('createdBy', ''));
+    }
+
+    // Playlist (ADR D29): brani in ordine. Lo studente vede solo quelle condivise con lui o con un suo
+    // gruppo; brani e materiali gli diventano leggibili tramite i rispettivi `audience` derivati.
+    // Come i materiali, il docente gestisce solo le proprie (ADR D34).
+    match /playlists/{playlistId} {
+      allow read: if mine(resource.data.get('createdBy', '')) || (isStudent() && sharedWithMe(resource.data.get('audience', [])));
+      allow create, update: if can('materials:manage')
+        && (resource == null ? myNew() : myEdit())
+        && requiredStr('title', 140) && optStr('description', 2000)
+        && request.resource.data.songIds is list && request.resource.data.songIds.size() <= 200
+        && request.resource.data.studentIds is list
+        && request.resource.data.groupIds is list
+        && request.resource.data.audience is list
+        && request.resource.data.get('songNotes', {}) is map;
+      allow delete: if can('materials:manage') && mine(resource.data.get('createdBy', ''));
+    }
+
+    // Brani (ADR D29): materiali per tutti o per singoli gruppi (`items`). `audience` = chi riceve
+    // almeno una playlist che contiene il brano. Il docente gestisce solo i propri (ADR D34).
+    match /songs/{songId} {
+      allow read: if mine(resource.data.get('createdBy', '')) || (isStudent() && sharedWithMe(resource.data.get('audience', [])));
+      allow create, update: if can('materials:manage')
+        && (resource == null ? myNew() : myEdit())
+        && requiredStr('title', 140) && optStr('artist', 140) && optStr('notes', 2000)
+        && request.resource.data.items is list && request.resource.data.items.size() <= 50
+        && request.resource.data.materialIds is list
+        && request.resource.data.audience is list;
+      allow delete: if can('materials:manage') && mine(resource.data.get('createdBy', ''));
     }
 
     // ───────────────────────── assignments ─────────────────────────
     match /assignments/{assignmentId} {
       allow read: if isOwner(resource.data.studentId) || mine(resource.data.get('createdBy', ''));
       // Il docente assegna esercizi solo agli studenti dei suoi corsi.
-      allow create: if isStaff() && myNew()
+      allow create: if can('assignments:manage') && myNew()
         && (isAdmin() || teaches(studentData(request.resource.data.studentId)))
         && request.resource.data.studentId is string && requiredStr('title', 140)
         && request.resource.data.status in ['todo', 'in_progress', 'completed']
         && request.resource.data.materialIds is list && optTimestamp('dueDate');
-      allow update: if isStaff() && myEdit() && requiredStr('title', 140) && unchanged('studentId');
+      allow update: if can('assignments:manage') && myEdit() && requiredStr('title', 140) && unchanged('studentId');
       // Lo studente può cambiare SOLO lo stato del proprio esercizio.
       allow update: if signedIn() && isOwner(resource.data.studentId)
         && onlyChanges(['status', 'updatedAt'])
         && request.resource.data.status in ['todo', 'in_progress', 'completed'];
-      allow delete: if mine(resource.data.get('createdBy', ''));
+      allow delete: if can('assignments:manage') && mine(resource.data.get('createdBy', ''));
     }
 
     // ───────────────────────── fees / payments ─────────────────────────
-    // Economia personale del docente (ADR D29): costi e quote li vede e li gestisce solo il docente
-    // a cui spettano (`teacherId`), admin compreso, oltre allo studente in sola lettura (§15).
-    function myMoney(d) { return isStaff() && d.get('teacherId', '') == uid(); }
+    // Economia personale del docente (ADR D34): costi e quote li vede e li gestisce solo il docente
+    // a cui spettano (`teacherId`), admin compreso, se il suo ruolo gestisce i pagamenti (ADR D31);
+    // lo studente li legge in sola lettura (§15).
+    function myMoney(d) { return can('payments:manage') && d.get('teacherId', '') == uid(); }
     function writesMyMoney() {
       return myMoney(request.resource.data) && (resource == null || myMoney(resource.data));
     }
@@ -287,7 +335,7 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read: if isOwner(resource.data.studentId) || myMoney(resource.data);
       // "Genera quote" legge in transazione quote che possono non esistere ancora (ID deterministici).
-      allow get: if isStaff() && resource == null;
+      allow get: if can('payments:manage') && resource == null;
       // Versamenti parziali (ADR D21): `paidAmount` non supera mai il dovuto.
       allow create, update: if writesMyMoney()
         && request.resource.data.studentId is string
@@ -317,12 +365,12 @@ service cloud.firestore {
 
     match /announcements/{announcementId} {
       allow read: if signedIn() && canReadAnnouncement(resource.data);
-      allow create, update: if isStaff()
+      allow create, update: if can('announcements:manage')
         && (resource == null ? myNew() : myEdit())
         && requiredStr('title', 140) && requiredStr('content', 10000)
         && request.resource.data.targetType in ['all', 'course', 'student']
         && (isAdmin() || announcementForMyStudents());
-      allow delete: if mine(resource.data.get('createdBy', ''));
+      allow delete: if can('announcements:manage') && mine(resource.data.get('createdBy', ''));
     }
     // Destinatari del docente: un suo corso o uno studente dei suoi corsi.
     function announcementForMyStudents() {
@@ -370,7 +418,7 @@ service cloud.firestore {
     match /whatsappMessages/{messageId} {
       allow read: if mine(resource.data.get('createdBy', ''));
       // Lo staff mette in coda; stato e invio li gestisce il worker.
-      allow create: if isStaff()
+      allow create: if can('announcements:manage')
         && (isAdmin() || !('to' in request.resource.data))
         && request.resource.data.kind in ['announcement', 'test']
         && request.resource.data.status == 'queued'
@@ -382,11 +430,11 @@ service cloud.firestore {
         && (!('to' in request.resource.data) || (request.resource.data.to is string && request.resource.data.to.matches('^[1-9][0-9]{7,14}$')))
         && ('studentId' in request.resource.data || 'to' in request.resource.data);
       // "Riprova" su un invio fallito.
-      allow update: if mine(resource.data.get('createdBy', '')) && resource.data.status == 'failed'
+      allow update: if can('announcements:manage') && mine(resource.data.get('createdBy', '')) && resource.data.status == 'failed'
         && request.resource.data.status == 'queued'
         && onlyChanges(['status', 'error', 'updatedAt']);
       // Annullare un messaggio in coda o ripulire il registro (mai uno in invio).
-      allow delete: if mine(resource.data.get('createdBy', '')) && resource.data.status != 'sending';
+      allow delete: if can('announcements:manage') && mine(resource.data.get('createdBy', '')) && resource.data.status != 'sending';
     }
 
     // ───────────────────────── notifications (V2) ─────────────────────────

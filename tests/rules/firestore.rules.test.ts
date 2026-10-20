@@ -28,7 +28,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 let env: RulesTestEnvironment;
 const ALICE = "alice"; // studente del corso "pop"
 const BOB = "bob"; // studente del corso "lirica"
-const TEACHER = "teacher1"; // insegna "pop" (ADR D29)
+const TEACHER = "teacher1"; // insegna "pop" (ADR D34)
 const TEACHER2 = "teacher2"; // insegna "lirica"
 const ADMIN = "admin1";
 
@@ -175,7 +175,7 @@ describe("studente: isolamento dei dati", () => {
   });
 });
 
-describe("docente: isolamento per corso (ADR D29)", () => {
+describe("docente: isolamento per corso (ADR D34)", () => {
   it("vede solo gli studenti dei suoi corsi, con le loro note e anagrafiche", async () => {
     await assertSucceeds(getDoc(doc(teacher(), "students", ALICE)));
     await assertFails(getDoc(doc(teacher(), "students", BOB)));
@@ -312,7 +312,7 @@ describe("docente: isolamento per corso (ADR D29)", () => {
   });
 });
 
-describe("economia personale del docente (ADR D29)", () => {
+describe("economia personale del docente (ADR D34)", () => {
   const quota = { studentId: ALICE, teacherId: TEACHER, amount: 80, dueDate: Timestamp.now(), status: "pending" };
 
   it("ognuno vede solo le proprie quote, admin compreso", async () => {
@@ -475,6 +475,130 @@ describe("cartelle e gruppi (ADR D26)", () => {
   });
 });
 
+describe("ruoli configurabili (ADR D31)", () => {
+  // Segreteria: staff che gestisce solo pagamenti e comunicazioni.
+  const office = () => env.authenticatedContext("office", { role: "teacher", roleId: "segreteria", perms: ["payments:manage", "announcements:manage"] }).firestore();
+  // Musicista: area personale, i permessi di gestione nel claim non valgono.
+  const musician = () => env.authenticatedContext(ALICE, { role: "student", roleId: "musicista", perms: ["area:materials", "lessons:manage"] }).firestore();
+
+  // Anche questo staff è isolato (ADR D34): gestisce solo le proprie quote e scrive ai propri corsi.
+  beforeEach(() =>
+    env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "teachers", "office"), { userId: "office", courseIds: ["lirica"] })),
+  );
+
+  it("lo staff scrive solo nelle sezioni concesse dal suo ruolo", async () => {
+    const quota = { studentId: BOB, teacherId: "office", amount: 120, dueDate: Timestamp.now(), status: "pending" };
+    await assertSucceeds(setDoc(doc(office(), "payments", "p-office"), quota));
+    await assertSucceeds(
+      setDoc(doc(office(), "announcements", "new"), { title: "T", content: "C", targetType: "course", targetId: "lirica", createdBy: "office" }),
+    );
+    await assertFails(setDoc(doc(office(), "lessons", "l-office"), { studentId: BOB, teacherId: "office", courseId: "lirica", title: "L", date: Timestamp.now(), status: "scheduled", materialIds: [] }));
+    await assertFails(setDoc(doc(office(), "materials", "m-x"), { title: "M", visibility: "student", category: "altro", studentIds: [], storagePath: "x", createdBy: "office" }));
+    await assertFails(getDoc(doc(office(), "studentNotes", BOB)));
+    // Le quote degli altri docenti restano personali, anche per chi gestisce i pagamenti.
+    await assertFails(getDoc(doc(office(), "payments", "p-bob")));
+  });
+
+  it("chi non gestisce i pagamenti non li legge, nemmeno i propri", async () => {
+    const noPay = env.authenticatedContext(TEACHER2, { role: "teacher", roleId: "docente-base", perms: ["lessons:manage"] }).firestore();
+    await assertFails(getDoc(doc(noPay, "payments", "p-bob")));
+    await assertSucceeds(updateDoc(doc(noPay, "lessons", "l-bob"), { title: "Nuovo titolo" }));
+  });
+
+  it("un ruolo dell'area personale resta isolato anche con permessi di gestione nel claim", async () => {
+    await assertSucceeds(getDoc(doc(musician(), "materials", "m-all")));
+    await assertFails(updateDoc(doc(musician(), "lessons", "l-alice"), { title: "Hack" }));
+    await assertFails(getDoc(doc(musician(), "payments", "p-bob")));
+  });
+
+  it("i ruoli si leggono ma li scrive solo il server", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "roles", "musicista"), { name: "Musicista", kind: "member", permissions: [] }));
+    await assertSucceeds(getDoc(doc(student(ALICE), "roles", "musicista")));
+    await assertFails(setDoc(doc(as("admin1", "admin"), "roles", "x"), { name: "X", kind: "staff", permissions: [] }));
+    await assertFails(getDoc(doc(anon(), "roles", "musicista")));
+  });
+});
+
+describe("playlist e video online (ADR D29, D30)", () => {
+  const CORO = "g-coro";
+  // Brani, playlist e materiali sono del docente che li crea (ADR D34).
+  const material = { title: "M", visibility: "student", category: "ascolto", studentIds: [], storagePath: "x", createdBy: TEACHER };
+  const playlist = { title: "Saggio", songIds: [], studentIds: [], groupIds: [], audience: [], createdBy: TEACHER };
+  const song = { title: "Hallelujah", items: [], materialIds: [], audience: [], createdBy: TEACHER };
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await updateDoc(doc(db, "students", ALICE), { groupIds: [CORO] });
+      await setDoc(doc(db, "playlists", "p-coro"), { ...playlist, songIds: ["s1"], groupIds: [CORO], audience: [CORO] });
+      await setDoc(doc(db, "playlists", "p-privata"), { ...playlist, songIds: ["s2"] });
+      await setDoc(doc(db, "songs", "s1"), { ...song, items: [{ materialId: "m-pl", groupIds: [] }], materialIds: ["m-pl"], audience: [CORO] });
+      await setDoc(doc(db, "songs", "s2"), song);
+      // Materiale ricevuto solo tramite la playlist: `playlistAudience` confluisce in `audience`.
+      await setDoc(doc(db, "materials", "m-pl"), { ...material, playlistAudience: [CORO], audience: [CORO] });
+    });
+  });
+
+  it("l'admin crea un brano come fa l'app (songService.create)", async () => {
+    const admin = as("admin1", "admin");
+    const payload = {
+      title: "Alive",
+      items: [{ materialId: "m-pl", groupIds: [] }],
+      materialIds: ["m-pl"],
+      audience: [],
+      createdBy: "admin1",
+      keywords: ["alive"],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await assertSucceeds(setDoc(doc(admin, "songs", "s-app"), payload));
+    await assertSucceeds(setDoc(doc(admin, "songs", "s-app2"), { ...payload, artist: "Autore", notes: "Note" }));
+  });
+
+  it("lo studente vede solo le playlist condivise con sé o con un suo gruppo, e i loro materiali", async () => {
+    await assertSucceeds(getDoc(doc(student(ALICE), "playlists", "p-coro")));
+    await assertFails(getDoc(doc(student(BOB), "playlists", "p-coro")));
+    await assertFails(getDoc(doc(student(ALICE), "playlists", "p-privata")));
+    await assertSucceeds(
+      getDocs(query(collection(student(ALICE), "playlists"), where("audience", "array-contains-any", [ALICE, CORO]))),
+    );
+    await assertFails(getDocs(collection(student(ALICE), "playlists")));
+    await assertSucceeds(getDoc(doc(student(ALICE), "materials", "m-pl")));
+    await assertFails(getDoc(doc(student(BOB), "materials", "m-pl")));
+    // Brani: leggibili solo da chi riceve una playlist che li contiene.
+    await assertSucceeds(getDoc(doc(student(ALICE), "songs", "s1")));
+    await assertFails(getDoc(doc(student(BOB), "songs", "s1")));
+    await assertFails(getDoc(doc(student(ALICE), "songs", "s2")));
+    await assertFails(updateDoc(doc(student(ALICE), "songs", "s1"), { audience: [ALICE] }));
+  });
+
+  it("solo lo staff crea e modifica le playlist", async () => {
+    await assertFails(updateDoc(doc(student(ALICE), "playlists", "p-coro"), { audience: [ALICE] }));
+    await assertFails(setDoc(doc(student(ALICE), "playlists", "new"), playlist));
+    await assertSucceeds(setDoc(doc(teacher(), "playlists", "new"), playlist));
+    await assertFails(setDoc(doc(teacher(), "playlists", "bad"), { ...playlist, title: "" }));
+    await assertFails(setDoc(doc(teacher(), "playlists", "bad2"), { ...playlist, songIds: "x" }));
+    await assertSucceeds(setDoc(doc(teacher(), "songs", "new"), { ...song, items: [{ materialId: "m-pl", groupIds: [CORO] }] }));
+    await assertFails(setDoc(doc(teacher(), "songs", "bad"), { ...song, title: "" }));
+    await assertFails(setDoc(doc(student(ALICE), "songs", "bad2"), song));
+    await assertSucceeds(updateDoc(doc(teacher(), "materials", "m-pl"), { playlistAudience: [], audience: [] }));
+    await assertFails(updateDoc(doc(teacher(), "materials", "m-pl"), { playlistAudience: "tutti" }));
+    await assertSucceeds(deleteDoc(doc(teacher(), "playlists", "p-privata")));
+    // Quelli degli altri docenti non li vede né li modifica.
+    await assertFails(getDoc(doc(teacher2(), "playlists", "p-coro")));
+    await assertFails(updateDoc(doc(teacher2(), "songs", "s1"), { title: "Hack" }));
+    await assertFails(setDoc(doc(teacher(), "songs", "other"), { ...song, createdBy: TEACHER2 }));
+    await assertSucceeds(getDocs(query(collection(teacher(), "songs"), where("createdBy", "==", TEACHER))));
+    await assertFails(getDocs(collection(teacher(), "songs")));
+  });
+
+  it("un video online ha solo link http(s)", async () => {
+    const link = { ...material, category: "video", storagePath: "", size: 0 };
+    await assertSucceeds(setDoc(doc(teacher(), "materials", "v1"), { ...link, externalUrl: "https://youtu.be/dQw4w9WgXcQ" }));
+    await assertFails(setDoc(doc(teacher(), "materials", "v2"), { ...link, externalUrl: "javascript:alert(1)" }));
+  });
+});
+
 describe("inviti", () => {
   it("nessun client legge o scrive gli inviti, nemmeno l'admin", async () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "invites", "h1"), { uid: ALICE, acceptedAt: null }));
@@ -548,7 +672,7 @@ describe("WhatsApp (ADR D24)", () => {
     await assertFails(setDoc(doc(teacher(), "whatsappMessages", "m4"), { ...message("altro") }));
     await assertFails(setDoc(doc(student(ALICE), "whatsappMessages", "m5"), message(ALICE)));
     await assertFails(updateDoc(doc(teacher(), "whatsappMessages", "m1"), { status: "sent" }));
-    // Prova verso un numero libero: solo l'admin (ADR D29).
+    // Prova verso un numero libero: solo l'admin (ADR D34).
     const test = { ...omit(message(TEACHER), "studentId"), kind: "test", to: "393331234567" };
     await assertFails(setDoc(doc(teacher(), "whatsappMessages", "t1"), test));
     await assertSucceeds(setDoc(doc(as("admin1", "admin"), "whatsappMessages", "t2"), { ...test, createdBy: "admin1" }));

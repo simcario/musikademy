@@ -11,7 +11,8 @@ import { extensionOf, saveMarkdownAsPdf } from "@/lib/files";
 import { errorMessage } from "@/utils/errors";
 import { Markdown } from "./markdown";
 
-export type ViewerKind = "pdf" | "video" | "image" | "markdown" | "other";
+/** `embed` = player di un servizio video (YouTube, Vimeo) incorporato in un iframe. */
+export type ViewerKind = "pdf" | "video" | "embed" | "image" | "markdown" | "other";
 
 /** Tipo di visualizzazione dedotto dal nome file (allegati senza metadati, es. comunicazioni). */
 export function viewerKindOf(fileName: string): ViewerKind {
@@ -44,6 +45,7 @@ export function FileViewer({
   fileName,
   kind,
   url,
+  embedUrl,
   urlPending,
   urlError,
   content,
@@ -56,6 +58,8 @@ export function FileViewer({
   fileName?: string;
   kind: ViewerKind;
   url?: string;
+  /** Solo `embed`: indirizzo del player; `url` resta la pagina da aprire in una nuova scheda. */
+  embedUrl?: string;
   urlPending?: boolean;
   urlError?: unknown;
   content?: string;
@@ -134,6 +138,15 @@ export function FileViewer({
             </article>
           ) : kind === "video" ? (
             <video src={url} controls playsInline autoPlay preload="metadata" className="absolute inset-0 size-full bg-black object-contain" />
+          ) : kind === "embed" ? (
+            <iframe
+              src={embedUrl}
+              title={title}
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+              className="absolute inset-0 size-full border-0 bg-black"
+            />
           ) : kind === "image" ? (
             <Centered>
               {/* eslint-disable-next-line @next/next/no-img-element -- URL firmato dinamico di Storage */}

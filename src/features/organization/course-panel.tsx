@@ -168,12 +168,12 @@ export function CoursePanel({ courseId, tab: tabParam }: { courseId: string; tab
 
 /** Dati del corso: modificabili dall'amministratore, in sola lettura per i docenti. */
 function CourseDetails({ course }: { course: WithId<Course> }) {
-  const { role } = useSession();
+  const { access } = useSession();
   const teachers = useTeachers();
   // "Annulla" fa ripartire il form dai dati salvati.
   const [version, setVersion] = useState(0);
 
-  if (can(role, "settings:manage")) {
+  if (can(access, "settings:manage")) {
     return <CourseForm key={version} course={course} onDone={() => undefined} onCancel={() => setVersion((v) => v + 1)} />;
   }
 

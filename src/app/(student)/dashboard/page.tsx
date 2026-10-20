@@ -10,6 +10,7 @@ import { AssignmentBadge, Pill } from "@/components/shared/status-badge";
 import { InteractiveBadge } from "@/features/exercises/interactive/interactive-player";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/features/auth/auth-provider";
+import { can } from "@/lib/auth/roles";
 import { MaterialActions, MaterialIcon, TYPE_META } from "@/features/materials/material-card";
 import {
   useMyAnnouncements,
@@ -25,7 +26,9 @@ import { formatDate, formatWeekday, relativeDay, toDate } from "@/utils/format";
 import { summarizeAttendance } from "@/utils/status";
 
 export default function StudentDashboard() {
-  const { profile } = useSession();
+  const { profile, access } = useSession();
+  // Solo i riquadri delle sezioni concesse dal ruolo (ADR D31).
+  const show = (p: Parameters<typeof can>[1]) => can(access, p);
   return (
     <PageContainer className="space-y-7">
       <div className="flex items-center justify-between gap-3">
@@ -40,15 +43,15 @@ export default function StudentDashboard() {
 
       <div className="grid gap-7 lg:grid-cols-[1.2fr_1fr]">
         <div className="space-y-7">
-          <NextLessonHero />
-          <TodoAssignments />
+          {show("area:lessons") && <NextLessonHero />}
+          {show("area:exercises") && <TodoAssignments />}
         </div>
         <div className="space-y-7">
-          <AttendanceSummaryTiles />
-          <LatestAnnouncements />
+          {show("area:attendance") && <AttendanceSummaryTiles />}
+          {show("area:announcements") && <LatestAnnouncements />}
         </div>
       </div>
-      <LatestMaterials />
+      {show("area:materials") && <LatestMaterials />}
     </PageContainer>
   );
 }

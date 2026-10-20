@@ -39,7 +39,7 @@ export const announcementService = {
       .slice(0, max);
   },
 
-  /** L'admin le vede tutte; il docente le sue e quelle a tutta la scuola (ADR D29). */
+  /** L'admin le vede tutte; il docente le sue e quelle a tutta la scuola (ADR D34). */
   page: (cursor: unknown | null, scope: StaffScope) =>
     scope.admin
       ? paginate<Announcement>(COLLECTIONS.announcements, [orderBy("publishedAt", "desc")], cursor, 20)

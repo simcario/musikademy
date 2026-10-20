@@ -16,6 +16,7 @@ import {
   Send,
   StickyNote,
   Trash2,
+  UsersRound,
   Wallet,
 } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ import {
   StudentAssignmentsTab,
   StudentAttendanceTab,
   StudentCoursesTab,
+  StudentGroupsTab,
   StudentLessonsTab,
   StudentMaterialsTab,
   StudentNotesTab,
@@ -49,11 +51,13 @@ import type { InviteInfo } from "@/lib/auth/invite-token";
 import { studentService } from "@/services/studentService";
 import { toCourseMap } from "@/services/userService";
 import { formatDate, fullName } from "@/utils/format";
+import { useRoleName } from "@/features/roles/hooks";
 import { PanelBody, PanelHeader, usePanel } from "./panel";
 
 const TABS = [
   { value: "overview", label: "Panoramica", icon: LayoutDashboard },
   { value: "courses", label: "Corsi", icon: GraduationCap },
+  { value: "groups", label: "Gruppi", icon: UsersRound },
   { value: "materials", label: "Materiali", icon: Library },
   { value: "lessons", label: "Lezioni", icon: CalendarDays },
   { value: "attendance", label: "Presenze", icon: ClipboardCheck },
@@ -61,6 +65,12 @@ const TABS = [
   { value: "payments", label: "Pagamenti", icon: Wallet },
   { value: "notes", label: "Note", icon: StickyNote },
 ] as const;
+
+/** Ruolo dell'organizzazione dell'utente (ADR D31). */
+function RoleBadge({ roleId }: { roleId?: string }) {
+  const name = useRoleName(roleId ?? "student");
+  return name ? <Pill tone="secondary">{name}</Pill> : null;
+}
 
 /** Livello "utente" del pannello: dati dello studente, corsi frequentati, materiali e storico. */
 export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab?: string }) {
@@ -111,6 +121,8 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
     );
   }
   const name = fullName(s);
+  // Promosso allo staff: il profilo resta solo come storico, l'account si gestisce nella scheda Staff.
+  const promoted = !!s.promotedAt;
 
   return (
     <>
@@ -118,56 +130,69 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
         title={name}
         badges={
           <>
-            <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
-              {s.status === "active" ? "Attivo" : "Disattivato"}
-            </Pill>
-            {s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
+            {promoted ? (
+              <Pill tone="primary">Promosso allo staff</Pill>
+            ) : (
+              <Pill tone={s.status === "active" ? "success" : "neutral"} dot>
+                {s.status === "active" ? "Attivo" : "Disattivato"}
+              </Pill>
+            )}
+            {!promoted && s.inviteStatus === "pending" && <Pill tone="warning">Invito in attesa</Pill>}
+            <RoleBadge roleId={s.roleId} />
           </>
         }
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label={`Azioni per ${name}`}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-muted"
-            >
-              <MoreVertical className="size-5" aria-hidden />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-auto min-w-64 max-w-[calc(100vw-2rem)]">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Contatti</DropdownMenuLabel>
-                <DropdownMenuItem className="min-h-10" onClick={() => (window.location.href = `mailto:${s.email}`)}>
-                  <Mail aria-hidden /> <span className="truncate">{s.email}</span>
+          !promoted && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label={`Azioni per ${name}`}
+                className="flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-muted"
+              >
+                <MoreVertical className="size-5" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto min-w-64 max-w-[calc(100vw-2rem)]">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Contatti</DropdownMenuLabel>
+                  <DropdownMenuItem className="min-h-10" onClick={() => (window.location.href = `mailto:${s.email}`)}>
+                    <Mail aria-hidden /> <span className="truncate">{s.email}</span>
+                  </DropdownMenuItem>
+                  {s.phone && (
+                    <DropdownMenuItem className="min-h-10" onClick={() => (window.location.href = `tel:${s.phone}`)}>
+                      <Phone aria-hidden /> {s.phone}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="min-h-10" onClick={() => setEditing(true)}>
+                  <Pencil aria-hidden /> Modifica
                 </DropdownMenuItem>
-                {s.phone && (
-                  <DropdownMenuItem className="min-h-10" onClick={() => (window.location.href = `tel:${s.phone}`)}>
-                    <Phone aria-hidden /> {s.phone}
+                {s.status === "active" && (
+                  <DropdownMenuItem className="min-h-10" onClick={() => newInvite.mutate(undefined)} disabled={newInvite.isPending}>
+                    <Send aria-hidden /> Invito Google
                   </DropdownMenuItem>
                 )}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="min-h-10" onClick={() => setEditing(true)}>
-                <Pencil aria-hidden /> Modifica
-              </DropdownMenuItem>
-              {s.status === "active" && (
-                <DropdownMenuItem className="min-h-10" onClick={() => newInvite.mutate(undefined)} disabled={newInvite.isPending}>
-                  <Send aria-hidden /> Invito Google
+                <DropdownMenuItem
+                  variant={s.status === "active" ? "destructive" : "default"}
+                  className="min-h-10"
+                  onClick={() => setConfirmStatus(true)}
+                >
+                  <Power aria-hidden /> {s.status === "active" ? "Disattiva" : "Riattiva"}
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                variant={s.status === "active" ? "destructive" : "default"}
-                className="min-h-10"
-                onClick={() => setConfirmStatus(true)}
-              >
-                <Power aria-hidden /> {s.status === "active" ? "Disattiva" : "Riattiva"}
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setConfirmDelete(true)}>
-                <Trash2 aria-hidden /> Elimina studente
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setConfirmDelete(true)}>
+                  <Trash2 aria-hidden /> Elimina studente
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
         }
       />
       <PanelBody>
+        {promoted && (
+          <p className="rounded-lg bg-info-soft p-3 text-sm text-info">
+            Dal {formatDate(s.promotedAt!)} fa parte dello staff: qui resta lo storico da studente. Ruolo e inviti si
+            gestiscono in Organizzazione › Staff.
+          </p>
+        )}
         <div className="space-y-2">
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -198,6 +223,7 @@ export function UserPanel({ studentId, tab: tabParam }: { studentId: string; tab
         <div>
           {tab === "overview" && <StudentOverviewTab studentId={studentId} />}
           {tab === "courses" && <StudentCoursesTab student={s} onEdit={() => setEditing(true)} />}
+          {tab === "groups" && <StudentGroupsTab key={studentId} student={s} />}
           {tab === "lessons" && <StudentLessonsTab studentId={studentId} />}
           {tab === "attendance" && <StudentAttendanceTab studentId={studentId} />}
           {tab === "materials" && <StudentMaterialsTab studentId={studentId} studentName={name} />}

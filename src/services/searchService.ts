@@ -16,7 +16,7 @@ export interface SearchHit {
 /**
  * Ricerca globale docente (ADR D7): `array-contains` sulle keyword di ogni collezione.
  * Un motore esterno (Algolia/Typesense) può sostituire questa funzione mantenendo la firma.
- * Il docente cerca solo tra ciò che vede (ADR D29): i suoi studenti e le sue attività.
+ * Il docente cerca solo tra ciò che vede (ADR D34): i suoi studenti e le sue attività.
  */
 export async function globalSearch(q: string, scope: StaffScope, perKind = 5): Promise<SearchHit[]> {
   const token = searchToken(q);

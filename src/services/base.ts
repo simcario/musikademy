@@ -25,6 +25,9 @@ export const COLLECTIONS = {
   lessons: "lessons",
   materials: "materials",
   materialFolders: "materialFolders",
+  playlists: "playlists",
+  songs: "songs",
+  roles: "roles",
   groups: "groups",
   assignments: "assignments",
   attendance: "attendance",
@@ -89,7 +92,7 @@ export function clean<T extends Record<string, unknown>>(data: T): T {
 }
 
 /**
- * Chi interroga, nell'area docente (ADR D29). L'admin vede tutto; il docente gli studenti e i gruppi
+ * Chi interroga, nell'area docente (ADR D34). L'admin vede tutto; il docente gli studenti e i gruppi
  * dei suoi corsi (`courseIds`, copia di `teachers/{uid}.courseIds`) e solo le attività che ha creato.
  * Ogni query del docente deve contenere questi vincoli, altrimenti le rules la rifiutano.
  */

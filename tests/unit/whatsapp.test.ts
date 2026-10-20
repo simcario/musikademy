@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ANNOUNCEMENT_TEMPLATE,
+  DEFAULT_META_TEMPLATES,
   DEFAULT_REMINDER_TEMPLATE,
   addDays,
   announcementVars,
@@ -136,11 +137,14 @@ describe("trascodifica per i template Meta (Zernio)", () => {
     expect(templateParam("")).toBe("—");
     expect(templateParam("x".repeat(10), 5)).toBe("xxxx…");
     const vars = announcementVars({ title: "Saggio", content: "# Avviso\nSabato alle **18**" }, { name: "Elena" });
-    expect(metaParams(DEFAULT_ANNOUNCEMENT_TEMPLATE, "announcement", vars)).toEqual([
+    // Il template già registrato su Meta contiene ancora {testo}: va messo su una riga.
+    expect(metaParams(DEFAULT_META_TEMPLATES.announcement.text, "announcement", vars)).toEqual([
       "Elena",
       "Saggio",
       "*Avviso* · Sabato alle *18*",
     ]);
+    // Il nuovo testo predefinito non ha {testo} (classificazione UTILITY).
+    expect(metaParams(DEFAULT_ANNOUNCEMENT_TEMPLATE, "announcement", vars)).toEqual(["Elena", "Saggio"]);
   });
   it("nomi dei template unici e validi per Meta", () => {
     const name = metaTemplateName("reminder", new Date("2026-10-12T09:30:15Z"));

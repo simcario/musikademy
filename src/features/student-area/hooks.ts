@@ -11,6 +11,7 @@ import { folderService } from "@/services/folderService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters, type StudentMaterialCursor } from "@/services/materialService";
 import { feeService, paymentService } from "@/services/paymentService";
+import { playlistService, songService } from "@/services/playlistService";
 import { studentService } from "@/services/studentService";
 import { courseService, teacherService } from "@/services/userService";
 import type { Assignment, AssignmentStatus, LessonStatus, WithId } from "@/types";
@@ -131,6 +132,22 @@ export function useMyFolders() {
   });
 }
 
+/** Playlist condivise con lo studente o con il suo gruppo attivo (ADR D29). */
+export function useMyPlaylists() {
+  const { uid } = useSession();
+  const { scope, ready } = useStudentContext();
+  return useQuery({
+    queryKey: qk.playlists({ mine: uid, audienceIds: scope.audienceIds }),
+    queryFn: () => playlistService.listShared(scope.audienceIds),
+    enabled: ready,
+  });
+}
+
+/** Brani di una playlist ricevuta (ADR D29). */
+export function useSongsByIds(ids: string[]) {
+  return useQuery({ queryKey: qk.songs({ ids }), queryFn: () => songService.getMany(ids), enabled: ids.length > 0 });
+}
+
 export function useMaterialsByIds(ids: string[]) {
   return useQuery({
     queryKey: qk.materials({ ids }),
@@ -144,7 +161,7 @@ export function useMyPayments() {
   return useQuery({ queryKey: qk.payments({ mine: uid }), queryFn: () => paymentService.listForStudent(uid) });
 }
 
-/** I costi dei miei docenti, uno per materia (ADR D29). */
+/** I costi dei miei docenti, uno per materia (ADR D34). */
 export function useMyCosts() {
   const { uid } = useSession();
   return useQuery({ queryKey: qk.fees({ mine: uid }), queryFn: () => feeService.listForStudent(uid) });

@@ -25,6 +25,8 @@ export interface StudentInput {
   surname: string;
   email: string;
   phone?: string;
+  /** Ruolo dell'organizzazione (ADR D31); usato solo alla creazione. */
+  roleId?: string;
   courseIds: string[];
   enrollmentDate: Date;
   notes?: string;
@@ -48,7 +50,7 @@ function filterConstraints(f: StudentFilters): QueryConstraint[] {
 }
 
 /**
- * Studenti dei corsi del docente (ADR D29): `array-contains-any` sui suoi corsi, il vincolo che
+ * Studenti dei corsi del docente (ADR D34): `array-contains-any` sui suoi corsi, il vincolo che
  * le rules richiedono. Non si combina con la ricerca per keyword, che qui si fa sul risultato
  * (un docente segue al massimo qualche decina di studenti).
  */
@@ -83,8 +85,12 @@ export const studentService = {
   create: (input: StudentInput) =>
     adminApi<{ uid: string; invite: InviteInfo }>("users", {
       method: "POST",
-      body: { ...input, enrollmentDate: input.enrollmentDate.toISOString(), role: "student" },
+      body: { ...input, enrollmentDate: input.enrollmentDate.toISOString(), roleId: input.roleId || "student" },
     }),
+
+  /** Cambia il ruolo dell'organizzazione (solo admin, ADR D31): l'utente dovrà accedere di nuovo. */
+  setRole: (uid: string, roleId: string) =>
+    adminApi<{ ok: true }>(`users/${uid}`, { method: "PATCH", body: { roleId } }),
 
   /** Aggiorna anagrafica; l'email si cambia solo via API (deve restare allineata con Auth). */
   async update(uid: string, input: Omit<StudentInput, "email"> & { email: string }) {

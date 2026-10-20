@@ -1,5 +1,5 @@
 /**
- * Migrazione a materie, isolamento dei docenti ed economia personale (ADR D29).
+ * Migrazione a materie, isolamento dei docenti ed economia personale (ADR D34).
  *
  *   npm run migrate-teachers            → simulazione: mostra cosa cambierebbe
  *   npm run migrate-teachers -- --apply → scrive le modifiche

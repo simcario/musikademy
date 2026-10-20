@@ -6,6 +6,7 @@ import {
   BookOpen,
   Download,
   Ellipsis,
+  ExternalLink,
   Eye,
   FileMusic,
   FileText,
@@ -13,6 +14,7 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   ListChecks,
+  MoreVertical,
   Music,
   NotebookText,
   Pause,
@@ -22,11 +24,20 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Marquee } from "@/components/shared/marquee";
 import { FileViewer, type ViewerKind } from "@/components/shared/file-viewer";
 import { Pill } from "@/components/shared/status-badge";
 import { qk } from "@/hooks/query-keys";
 import { dirOf, pdfFileName, saveBlob, saveMarkdownAsPdf } from "@/lib/files";
 import { cn } from "@/lib/utils";
+import { VIDEO_PROVIDER_LABEL, parseVideoUrl } from "@/lib/video";
 import { materialService } from "@/services/materialService";
 import type { Material, MaterialCategory, MaterialType, WithId } from "@/types";
 import { errorMessage } from "@/utils/errors";
@@ -67,9 +78,15 @@ export function MaterialIcon({ type, className }: { type: MaterialType; classNam
   );
 }
 
-export function useMaterialUrl(material: Pick<Material, "storagePath"> | null, enabled = true) {
+/** Dimensione del file, oppure il servizio per i video online (YouTube, Vimeo…). */
+export function materialSizeLabel(m: Pick<Material, "size" | "externalUrl">): string {
+  if (!m.externalUrl) return formatFileSize(m.size);
+  return VIDEO_PROVIDER_LABEL[parseVideoUrl(m.externalUrl)?.provider ?? "link"];
+}
+
+export function useMaterialUrl(material: Pick<Material, "storagePath" | "externalUrl"> | null, enabled = true) {
   return useQuery({
-    queryKey: qk.materialUrl(material?.storagePath ?? ""),
+    queryKey: qk.materialUrl(material?.externalUrl || material?.storagePath || ""),
     queryFn: () => materialService.fileUrl(material!),
     enabled: !!material && enabled,
     staleTime: 30 * 60_000,
@@ -96,8 +113,16 @@ export function MaterialViewer({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const kind = VIEWER_KIND[material.type] ?? "other";
-  const needsUrl = !(kind === "markdown" && material.content !== undefined);
+  // Video online (ADR D30): player di YouTube/Vimeo incorporato, oppure il file video dal suo indirizzo.
+  const online = material.externalUrl ? parseVideoUrl(material.externalUrl) : null;
+  const kind: ViewerKind = online
+    ? online.embedUrl
+      ? "embed"
+      : online.provider === "file"
+        ? "video"
+        : "other"
+    : (VIEWER_KIND[material.type] ?? "other");
+  const needsUrl = !online && !(kind === "markdown" && material.content !== undefined);
   const url = useMaterialUrl(material, open && needsUrl);
   return (
     <FileViewer
@@ -106,7 +131,8 @@ export function MaterialViewer({
       title={material.title}
       fileName={material.fileName}
       kind={kind}
-      url={url.data}
+      url={online?.url ?? url.data}
+      embedUrl={online?.embedUrl}
       urlPending={needsUrl && url.isPending}
       urlError={url.error}
       content={material.content}
@@ -144,12 +170,30 @@ async function download(material: WithId<Material>) {
   }
 }
 
-export function MaterialActions({ material, compact }: { material: WithId<Material>; compact?: boolean }) {
+/**
+ * Azioni di un materiale: un solo pulsante per l'azione principale del suo tipo (ascolta, leggi, guarda,
+ * apri) e un menu con tutto il resto (testo, download, link d'origine, più le voci passate in `menuItems`,
+ * es. la gestione del docente). Su mobile il pulsante principale è solo un'icona, per lasciare spazio al titolo.
+ */
+export function MaterialActions({
+  material,
+  compact,
+  menuItems,
+}: {
+  material: WithId<Material>;
+  compact?: boolean;
+  /** Voci aggiuntive del menu (DropdownMenuItem), dopo quelle del materiale. */
+  menuItems?: React.ReactNode;
+}) {
   const dock = useAudioDock();
   const [viewing, setViewing] = useState(false);
   const isAudio = material.type === "audio";
+  const online = material.externalUrl ? parseVideoUrl(material.externalUrl) : null;
+  // Un link che non è un video riconosciuto si apre direttamente nel sito d'origine.
+  const linkOut = !!material.externalUrl && (!online || online.provider === "link");
   const current = dock.isCurrent(material.id);
   const playing = current && dock.state.playing;
+  const listen = material.category === "ascolto" || material.category === "base";
 
   const label = isAudio
     ? playing
@@ -157,39 +201,65 @@ export function MaterialActions({ material, compact }: { material: WithId<Materi
       : material.category === "base"
         ? "Ascolta base"
         : "Ascolta"
-    : material.type === "video"
-      ? "Guarda video"
-      : material.category === "spartito"
-        ? "Apri spartito"
-        : material.type === "image"
-          ? "Visualizza"
-          : "Leggi";
+    : material.externalUrl && listen
+      ? material.category === "base"
+        ? "Ascolta base"
+        : "Ascolta"
+      : material.type === "video"
+        ? "Guarda video"
+        : material.category === "spartito"
+          ? "Apri spartito"
+          : material.type === "image"
+            ? "Visualizza"
+            : "Leggi";
+
+  const PrimaryIcon = isAudio ? (playing ? Pause : Play) : linkOut ? ExternalLink : Eye;
+  const openLink = () => window.open(material.externalUrl, "_blank", "noopener,noreferrer");
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex shrink-0 items-center gap-1">
       <Button
         size={compact ? "sm" : "default"}
         variant={isAudio && current ? "default" : "secondary"}
-        onClick={() => (isAudio ? dock.playMaterial(material) : setViewing(true))}
+        onClick={() => (isAudio ? dock.playMaterial(material) : linkOut ? openLink() : setViewing(true))}
         aria-label={`${label}: ${material.title}`}
+        title={label}
+        className="max-sm:size-10 max-sm:px-0"
       >
-        {isAudio ? (
-          playing ? <Pause className="fill-current" aria-hidden /> : <Play className="fill-current" aria-hidden />
-        ) : (
-          <Eye aria-hidden />
-        )}
-        {label}
+        <PrimaryIcon className={cn(isAudio && "fill-current")} aria-hidden />
+        <span className="hidden sm:inline">{label}</span>
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => download(material)}
-        aria-label={`Scarica ${material.title}${material.type === "markdown" ? " in PDF" : ""}`}
-        title={material.type === "markdown" ? "Scarica in PDF" : undefined}
-      >
-        <Download className="size-5" aria-hidden />
-      </Button>
-      {!isAudio && <MaterialViewer material={material} open={viewing} onOpenChange={setViewing} />}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`Altre azioni: ${material.title}`}
+          className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-muted"
+        >
+          <MoreVertical className="size-5" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {isAudio && material.lyrics && (
+            <DropdownMenuItem className="min-h-10" onClick={() => dock.openFull(material)}>
+              <NotebookText aria-hidden /> Ascolta con il testo
+            </DropdownMenuItem>
+          )}
+          {material.externalUrl ? (
+            <DropdownMenuItem className="min-h-10" onClick={openLink}>
+              <ExternalLink aria-hidden /> Apri su {materialSizeLabel(material)}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem className="min-h-10" onClick={() => download(material)}>
+              <Download aria-hidden /> {material.type === "markdown" ? "Scarica in PDF" : "Scarica"}
+            </DropdownMenuItem>
+          )}
+          {menuItems && (
+            <>
+              <DropdownMenuSeparator />
+              {menuItems}
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {!isAudio && !linkOut && <MaterialViewer material={material} open={viewing} onOpenChange={setViewing} />}
     </div>
   );
 }
@@ -208,9 +278,11 @@ export function MaterialCard({ material, badge }: { material: WithId<Material>; 
             </p>
             {badge}
           </div>
-          <h3 className="truncate font-semibold">{material.title}</h3>
+          <h3 className="font-semibold">
+            <Marquee>{material.title}</Marquee>
+          </h3>
           <p className="line-clamp-2 text-xs text-muted-foreground">
-            {[formatFileSize(material.size), material.description].filter(Boolean).join(" • ")}
+            {[materialSizeLabel(material), material.description].filter(Boolean).join(" • ")}
           </p>
         </div>
       </div>
@@ -253,40 +325,41 @@ export function TrackList({
   return (
     <ul className="card-surface divide-y divide-border">
       {tracks.map((m) => (
-        <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        <li key={m.id} className="flex items-center gap-3 px-3 py-3 sm:px-4">
           <MaterialIcon type={m.type} className="size-10 rounded-lg" />
-          <div className="min-w-0 flex-1 basis-40">
+          <div className="min-w-0 flex-1">
             <p className="section-label flex items-center gap-2 text-brand-ink">
               {CATEGORY_META[m.category].label} · {TYPE_META[m.type]?.label}
+              {m.lyrics && <NotebookText className="size-3.5" aria-label="Con testo" />}
               {badge?.(m)}
             </p>
-            <h3 className="truncate font-semibold">{m.title}</h3>
+            <h3 className="font-semibold">
+              <Marquee>{m.title}</Marquee>
+            </h3>
             <p className="truncate text-xs text-muted-foreground">
-              {[formatFileSize(m.size), formatShortDate(m.createdAt), m.description].filter(Boolean).join(" • ")}
+              {[materialSizeLabel(m), formatShortDate(m.createdAt), m.description].filter(Boolean).join(" • ")}
             </p>
           </div>
-          <div className="flex items-center gap-1">
-            <LyricsButton material={m} />
-            <MaterialActions material={m} compact />
-          </div>
+          <MaterialActions material={m} compact />
         </li>
       ))}
     </ul>
   );
 }
 
-/** Riga compatta per dettaglio lezione / esercizio. */
+/** Riga compatta per dettaglio lezione / esercizio / brano. */
 export function MaterialRow({ material, action }: { material: WithId<Material>; action?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 rounded-lg bg-surface-low p-2.5">
       <MaterialIcon type={material.type} className="size-10 rounded-lg" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{material.title}</p>
+        <p className="text-sm font-semibold">
+          <Marquee>{material.title}</Marquee>
+        </p>
         <p className="truncate text-xs text-muted-foreground">
-          {CATEGORY_META[material.category].label} · {formatFileSize(material.size)}
+          {CATEGORY_META[material.category].label} · {materialSizeLabel(material)}
         </p>
       </div>
-      <LyricsButton material={material} />
       <MaterialActions material={material} compact />
       {action}
     </div>

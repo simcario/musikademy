@@ -14,6 +14,7 @@ import { groupService } from "@/services/groupService";
 import { lessonService } from "@/services/lessonService";
 import { materialService, type MaterialFilters } from "@/services/materialService";
 import { feeService, paymentService, type MoneyOwner, type PaymentFilters } from "@/services/paymentService";
+import { playlistService, songService } from "@/services/playlistService";
 import { studentService, type StudentFilters } from "@/services/studentService";
 import { teacherService } from "@/services/userService";
 import type { AssignmentStatus, LessonStatus } from "@/types";
@@ -42,7 +43,7 @@ export function useStaffMutation<V, R = unknown>(
 }
 
 /**
- * Chi sta usando l'area docente (ADR D29): uid, admin o docente e i corsi a cui è abilitato
+ * Chi sta usando l'area docente (ADR D34): uid, admin o docente e i corsi a cui è abilitato
  * (`teachers/{uid}.courseIds`, gli stessi che leggono le rules). `null` finché non è caricato:
  * le query dell'area docente partono solo dopo, con i vincoli giusti.
  */
@@ -72,7 +73,7 @@ function scoped(scope: StaffScope | null) {
   return { enabled: !!scope, scope: scope as StaffScope };
 }
 
-/** Il docente come titolare di costi e quote (economia personale, ADR D29). */
+/** Il docente come titolare di costi e quote (economia personale, ADR D34). */
 export function useMoneyOwner(): MoneyOwner {
   const { uid, profile } = useSession();
   return { uid, name: profile ? fullName(profile) : "" };
@@ -99,12 +100,13 @@ export function useActiveStudents() {
   });
 }
 
-export function useGroups() {
-  const { enabled, scope } = scoped(useStaffScope());
+/** `enabled` falso dove il componente è condiviso con l'area personale (brani, playlist). */
+export function useGroups(enabled = true) {
+  const { enabled: ready, scope } = scoped(useStaffScope());
   return useQuery({
     queryKey: [...qk.groups(), scope?.courseIds ?? []],
     queryFn: () => groupService.list(scope),
-    enabled,
+    enabled: enabled && ready,
     staleTime: 5 * 60_000,
   });
 }
@@ -112,6 +114,17 @@ export function useGroups() {
 export function useFolders() {
   const { enabled, scope } = scoped(useStaffScope());
   return useQuery({ queryKey: qk.folders("staff"), queryFn: () => folderService.list(scope), enabled, staleTime: 5 * 60_000 });
+}
+
+export function usePlaylists(enabled = true) {
+  const { enabled: ready, scope } = scoped(useStaffScope());
+  return useQuery({ queryKey: qk.playlists("staff"), queryFn: () => playlistService.list(scope), enabled: enabled && ready });
+}
+
+/** I brani (ADR D29): l'admin tutti, il docente i propri (ADR D34). */
+export function useSongs(enabled = true) {
+  const { enabled: ready, scope } = scoped(useStaffScope());
+  return useQuery({ queryKey: qk.songs("staff"), queryFn: () => songService.list(scope), enabled: enabled && ready });
 }
 
 export function useStudent(uid: string) {
@@ -183,7 +196,7 @@ export function useAssignmentsPage(filters: { studentId?: string; status?: Assig
   });
 }
 
-/** Quote del docente: ognuno, admin compreso, vede solo le proprie (ADR D29). */
+/** Quote del docente: ognuno, admin compreso, vede solo le proprie (ADR D34). */
 export function usePaymentsPage(filters: PaymentFilters) {
   const { uid } = useSession();
   return useInfiniteQuery({
@@ -194,9 +207,10 @@ export function usePaymentsPage(filters: PaymentFilters) {
   });
 }
 
-export function usePaymentTotals(range?: { from: Date; to: Date }) {
+export function usePaymentTotals(range?: { from: Date; to: Date }, enabled = true) {
   const { uid } = useSession();
   return useQuery({
+    enabled,
     queryKey: qk.payments({ totals: range ? [range.from.toISOString(), range.to.toISOString()] : "all" }),
     queryFn: () => paymentService.totals(uid, range),
   });
@@ -222,7 +236,8 @@ export function useAnnouncementsPage() {
   });
 }
 
-export function useDashboardStats() {
+/** `payments`: il ruolo può vedere gli incassi (ADR D31); altrimenti le rules negherebbero la lettura. */
+export function useDashboardStats(payments = true) {
   const today = new Date();
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
@@ -231,7 +246,7 @@ export function useDashboardStats() {
     today: useQuery({ queryKey: qk.stats("lessons-today"), queryFn: () => lessonService.countInRange(today, 1, scope), enabled }),
     week: useQuery({ queryKey: qk.stats("lessons-week"), queryFn: () => lessonService.countInRange(monday, 7, scope), enabled }),
     attendance: useQuery({ queryKey: qk.stats("attendance-rate"), queryFn: () => attendanceService.overallRate(scope), enabled }),
-    payments: usePaymentTotals(),
+    payments: usePaymentTotals(undefined, payments),
     students: useActiveStudents(),
   };
 }

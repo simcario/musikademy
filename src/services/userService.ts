@@ -54,7 +54,7 @@ export const courseService = {
 
   /**
    * Crea o aggiorna il corso e allinea `teachers/{uid}.courseIds`, che le rules usano per
-   * l'isolamento dei docenti (ADR D29). Le materie tengono solo docenti abilitati al corso.
+   * l'isolamento dei docenti (ADR D34). Le materie tengono solo docenti abilitati al corso.
    */
   async save(course: WithId<Course> | null, input: CourseInput) {
     const batch = writeBatch(firestore());

@@ -1,6 +1,6 @@
 import type { Course, Fee } from "@/types";
 
-/** ID del costo (ADR D29): uno per docente, studente, corso e materia ("corso" se senza materie). */
+/** ID del costo (ADR D34): uno per docente, studente, corso e materia ("corso" se senza materie). */
 export const feeId = (teacherId: string, studentId: string, courseId: string, subjectId?: string) =>
   `${teacherId}_${studentId}_${courseId}_${subjectId || "corso"}`;
 

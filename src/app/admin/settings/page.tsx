@@ -53,8 +53,8 @@ function Settings() {
 
 // ─────────────── WhatsApp ───────────────
 function WhatsAppSection() {
-  const { role } = useSession();
-  const isAdmin = can(role, "settings:manage");
+  const { access } = useSession();
+  const isAdmin = can(access, "settings:manage");
   const provider = useWhatsAppSettings().data?.provider;
   return (
     <>

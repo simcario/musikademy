@@ -7,6 +7,10 @@ service firebase.storage {
     function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
     function isStaff() { return role() in ['admin', 'teacher']; }
     function isStudent() { return role() == 'student'; }
+    // Permessi del ruolo (ADR D31), come in firestore.rules.
+    function can(p) {
+      return role() == 'admin' || (role() == 'teacher' && (request.auth.token.get('perms', null) == null || p in request.auth.token.perms));
+    }
     function mb(n) { return n * 1024 * 1024; }
 
     function validMaterialUpload() {
@@ -33,7 +37,7 @@ service firebase.storage {
         || m.get('audience', []).hasAny(me().get('groupIds', []));
     }
 
-    // Il docente legge i file dei propri materiali (ADR D29); quelli di un materiale non ancora
+    // Il docente legge i file dei propri materiali (ADR D34); quelli di un materiale non ancora
     // salvato (subito dopo il caricamento) li legge chi li ha caricati, cioè lo staff.
     function staffCanReadMaterial(materialId) {
       let path = /databases/(default)/documents/materials/$(materialId);
@@ -43,14 +47,14 @@ service firebase.storage {
 
     match /materials/{materialId}/{fileName} {
       allow read: if (isStaff() && staffCanReadMaterial(materialId)) || (isStudent() && studentCanReadMaterial(materialId));
-      allow create, update: if isStaff() && validMaterialUpload();
-      allow delete: if isStaff();
+      allow create, update: if can('materials:manage') && validMaterialUpload();
+      allow delete: if can('materials:manage');
     }
 
     match /announcements/{announcementId}/{fileName} {
       allow read: if signedIn();
-      allow write: if isStaff() && request.resource.size <= mb(20);
-      allow delete: if isStaff();
+      allow write: if can('announcements:manage') && request.resource.size <= mb(20);
+      allow delete: if can('announcements:manage');
     }
 
     match /users/{userId}/avatar/{fileName} {

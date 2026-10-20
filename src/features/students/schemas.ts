@@ -14,6 +14,8 @@ export const studentFormSchema = z.object({
   surname: z.string().trim().min(1, "Inserisci il cognome").max(60),
   email: emailField("Email non valida"),
   phone,
+  /** Ruolo dell'organizzazione dell'area personale (Studente, Musicista…; ADR D31). */
+  roleId: z.string().min(1, "Scegli il ruolo"),
   courseIds: z.array(z.string()).max(30),
   enrollmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida"),
   notes: z.string().max(2000).optional().or(z.literal("")),
@@ -26,17 +28,20 @@ export const createUserSchema = z.object({
   surname: z.string().trim().min(1).max(60),
   email: emailField(),
   phone,
-  role: z.enum(["student", "teacher", "admin"]),
+  /** Ruolo tecnico (account precedenti) oppure, di preferenza, `roleId`: il ruolo dell'organizzazione (ADR D31). */
+  role: z.enum(["student", "teacher", "admin"]).optional(),
+  roleId: z.string().min(1).max(100).optional(),
   courseIds: z.array(z.string()).max(30).default([]),
   enrollmentDate: z.iso.datetime().optional(),
   notes: z.string().max(2000).optional(),
-});
+}).refine((v) => !!(v.role || v.roleId), "Ruolo mancante");
 export type CreateUserPayload = z.infer<typeof createUserSchema>;
 
 export const updateUserSchema = z
   .object({
     active: z.boolean().optional(),
     role: z.enum(["student", "teacher", "admin"]).optional(),
+    roleId: z.string().min(1).max(100).optional(),
     email: emailField().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "Nessuna modifica");

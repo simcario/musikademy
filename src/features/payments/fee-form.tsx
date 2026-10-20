@@ -25,7 +25,7 @@ import { amountToInput, feeFormSchema, parseAmount, type FeeFormValues } from ".
 export const DUE_AT_LABEL = { start: "a inizio ciclo", end: "a fine ciclo" } as const;
 
 /**
- * I costi del docente per lo studente (ADR D29), uno per materia (o per corso, se non ha materie):
+ * I costi del docente per lo studente (ADR D34), uno per materia (o per corso, se non ha materie):
  * personali, li vede solo lui. Da qui si generano le quote dei cicli.
  */
 export function StudentFeesCard({ student }: { student: WithId<Student> }) {

@@ -24,11 +24,13 @@ import {
 } from "firebase/storage";
 import { firebaseStorage, firestore } from "@/lib/firebase/client";
 import { MARKDOWN_MAX_SIZE, assetImageName, checkFile, dirOf, isAssetImage, safeFileName } from "@/lib/files";
+import { parseVideoUrl } from "@/lib/video";
 import { LYRICS_CATEGORY, type Material, type MaterialCategory, type Page, type Visibility, type WithId } from "@/types";
 import { AppError } from "@/utils/errors";
 import { buildKeywords, searchToken } from "@/utils/keywords";
-import { COLLECTIONS, chunk, clean, getById, list, ownedBy, paginate, ref, touched, type StaffScope } from "./base";
+import { COLLECTIONS, chunk, clean, col, getById, list, ownedBy, paginate, ref, touched, type StaffScope } from "./base";
 import { folderService, materialAudience } from "./folderService";
+import { songService } from "./playlistService";
 
 export interface MaterialMeta {
   title: string;
@@ -39,6 +41,9 @@ export interface MaterialMeta {
   studentIds: string[];
   groupIds?: string[];
   folderId?: string;
+  /** Brano a cui aggiungere il materiale appena creato, con i gruppi per cui vale (ADR D29). */
+  /** `scope`: chi carica, per riallineare solo i propri brani e playlist (ADR D34). */
+  song?: { id: string; groupIds: string[]; scope: StaffScope };
 }
 
 export type MaterialDetails = Pick<MaterialMeta, "title" | "description" | "category">;
@@ -102,7 +107,7 @@ export const materialService = {
     );
   },
 
-  // ── Docente: la sua libreria (l'admin vede tutti i materiali, ADR D29) ──
+  // ── Docente: la sua libreria (l'admin vede tutti i materiali, ADR D34) ──
   page: (filters: MaterialFilters, cursor: unknown | null, scope: StaffScope) =>
     paginate<Material>(COLLECTIONS.materials, [...ownedBy(scope, "createdBy"), ...filterConstraints(filters)], cursor, 20),
 
@@ -187,15 +192,17 @@ export const materialService = {
     const done = new Promise<string>((resolve, reject) => {
       task.then(
         async () => {
+          let created = false;
           try {
             // Markdown: il testo va nel documento, così il viewer non dipende dal CORS del bucket.
             const content = check.type === "markdown" ? await file.text() : undefined;
             const folder = meta.folderId ? await folderService.get(meta.folderId) : null;
             const groupIds = meta.groupIds ?? [];
+            const { song, ...fields } = meta;
             await setDoc(
               ref(COLLECTIONS.materials, id),
               clean({
-                ...meta,
+                ...fields,
                 courseId: meta.courseId || undefined,
                 studentIds: meta.studentIds,
                 groupIds,
@@ -213,10 +220,16 @@ export const materialService = {
                 updatedAt: serverTimestamp(),
               }),
             );
+            created = true;
+            if (song) {
+              await songService.addItem(song.id, { materialId: id, groupIds: song.groupIds }, song.scope).catch(() => {
+                throw new AppError("Materiale caricato, ma non aggiunto al brano: aggiungilo dalla sezione Brani.");
+              });
+            }
             resolve(id);
           } catch (e) {
             // Documento non creato: rimuovo il file orfano.
-            await deleteObject(sRef).catch(() => undefined);
+            if (!created) await deleteObject(sRef).catch(() => undefined);
             reject(e);
           }
         },
@@ -224,6 +237,41 @@ export const materialService = {
       );
     });
     return { task, done };
+  },
+
+  /**
+   * Video online (ADR D30): un materiale senza file, con il link a YouTube, Vimeo o a un video pubblico.
+   * Si crea subito, senza coda di upload.
+   */
+  async createLink(url: string, meta: MaterialMeta, createdBy: string): Promise<string> {
+    const video = parseVideoUrl(url);
+    if (!video) throw new AppError("Link non valido: incolla l'indirizzo completo del video (https://…).");
+    const r = doc(col(COLLECTIONS.materials));
+    const folder = meta.folderId ? await folderService.get(meta.folderId) : null;
+    const groupIds = meta.groupIds ?? [];
+    const { song, ...fields } = meta;
+    await setDoc(
+      r,
+      clean({
+        ...fields,
+        courseId: meta.courseId || undefined,
+        groupIds,
+        folderId: folder?.id ?? "",
+        audience: materialAudience(groupIds, folder),
+        type: "video",
+        storagePath: "",
+        fileName: "",
+        contentType: "text/uri-list",
+        size: 0,
+        externalUrl: video.url,
+        createdBy,
+        keywords: buildKeywords(meta.title, meta.description, meta.category),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    if (song) await songService.addItem(song.id, { materialId: r.id, groupIds: song.groupIds }, song.scope);
+    return r.id;
   },
 
   // ── Testi (ADR D27) ──
@@ -262,7 +310,10 @@ export const materialService = {
    * URL del file risolto a runtime: getDownloadURL verifica le Storage Rules.
    * Non viene salvato in Firestore (il token dell'URL bypasserebbe le rules).
    */
-  fileUrl: (material: Pick<Material, "storagePath">) => getDownloadURL(storageRef(firebaseStorage(), material.storagePath)),
+  fileUrl: (material: Pick<Material, "storagePath" | "externalUrl">) =>
+    material.externalUrl
+      ? Promise.resolve(material.externalUrl)
+      : getDownloadURL(storageRef(firebaseStorage(), material.storagePath)),
 
   /** Contenuto del file, per salvarlo sul dispositivo. Richiede il CORS sul bucket (storage.cors.json). */
   fileBlob: (material: Pick<Material, "storagePath">) => getBlob(storageRef(firebaseStorage(), material.storagePath)),
@@ -270,9 +321,15 @@ export const materialService = {
   /**
    * Modifica del documento: titolo, descrizione, categoria e, per i Markdown, il testo (`content`).
    * Il testo viene riscritto anche nel file su Storage, così download e dimensione restano allineati.
+   * Per i video online si può cambiare il link (`externalUrl`).
    */
-  async updateDetails(material: WithId<Material>, details: MaterialDetails, content?: string) {
-    let file: { content?: string; size?: number } = {};
+  async updateDetails(material: WithId<Material>, details: MaterialDetails, content?: string, externalUrl?: string) {
+    let file: { content?: string; size?: number; externalUrl?: string } = {};
+    if (material.externalUrl && externalUrl !== undefined) {
+      const video = parseVideoUrl(externalUrl);
+      if (!video) throw new AppError("Link non valido: incolla l'indirizzo completo del video (https://…).");
+      file = { externalUrl: video.url };
+    }
     if (content !== undefined) {
       const blob = new Blob([content], { type: material.contentType });
       if (blob.size > MARKDOWN_MAX_SIZE) throw new AppError("Documento troppo lungo: il limite è 512 KB.");
@@ -291,8 +348,8 @@ export const materialService = {
     if (content !== undefined) await this.pruneImages(material, content).catch(() => undefined);
   },
 
-  /** Assegnazione: a chi è visibile il materiale (la condivisione della sua cartella resta valida). */
-  async updateAssignment(material: Pick<WithId<Material>, "id" | "folderId">, a: MaterialAssignment) {
+  /** Assegnazione: a chi è visibile il materiale (la condivisione della sua cartella e delle sue playlist resta valida). */
+  async updateAssignment(material: Pick<WithId<Material>, "id" | "folderId" | "playlistAudience">, a: MaterialAssignment) {
     const folder = material.folderId ? await folderService.get(material.folderId) : null;
     const groupIds = a.groupIds ?? [];
     await updateDoc(ref(COLLECTIONS.materials, material.id), {
@@ -300,17 +357,17 @@ export const materialService = {
       courseId: a.courseId || "",
       studentIds: a.studentIds,
       groupIds,
-      audience: materialAudience(groupIds, folder),
+      audience: materialAudience(groupIds, folder, material.playlistAudience),
       ...touched(),
     });
   },
 
   /** Sposta il materiale in una cartella (`null` = nessuna): ne eredita la condivisione. */
-  async moveToFolder(material: Pick<WithId<Material>, "id" | "groupIds">, folderId: string | null) {
+  async moveToFolder(material: Pick<WithId<Material>, "id" | "groupIds" | "playlistAudience">, folderId: string | null) {
     const folder = folderId ? await folderService.get(folderId) : null;
     await updateDoc(ref(COLLECTIONS.materials, material.id), {
       folderId: folder?.id ?? "",
-      audience: materialAudience(material.groupIds, folder),
+      audience: materialAudience(material.groupIds, folder, material.playlistAudience),
       ...touched(),
     });
   },
@@ -341,7 +398,11 @@ export const materialService = {
   async remove(material: WithId<Material>, scope: StaffScope) {
     // Un testo eliminato sparisce anche dalle tracce a cui era associato.
     if (material.type === "markdown") await this.linkLyrics(material.id, "", [], scope);
+    // …e un materiale eliminato dai brani (ADR D29).
+    await songService.detachMaterial(material.id, scope);
     await deleteDoc(ref(COLLECTIONS.materials, material.id));
+    // I video online non hanno file su Storage.
+    if (!material.storagePath) return;
     await deleteObject(storageRef(firebaseStorage(), material.storagePath)).catch(() => undefined);
     await this.pruneImages(material, "").catch(() => undefined);
   },

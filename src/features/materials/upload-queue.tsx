@@ -19,7 +19,8 @@ interface UploadItem {
   cancel: () => void;
 }
 
-const UploadContext = createContext<{ start: (file: File, meta: MaterialMeta, uid: string) => void } | null>(null);
+/** `start` restituisce l'ID del materiale a caricamento finito (rifiutata se fallisce o si annulla). */
+const UploadContext = createContext<{ start: (file: File, meta: MaterialMeta, uid: string) => Promise<string> } | null>(null);
 
 /**
  * Coda di upload: l'interfaccia resta utilizzabile durante il caricamento (§25).
@@ -31,25 +32,26 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   const patch = (id: string, p: Partial<UploadItem>) => setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...p } : x)));
 
   const start = useCallback(
-    (file: File, meta: MaterialMeta, uid: string) => {
+    (file: File, meta: MaterialMeta, uid: string): Promise<string> => {
       const id = crypto.randomUUID();
       let handle: ReturnType<typeof materialService.upload>;
       try {
         handle = materialService.upload(file, meta, uid);
       } catch (e) {
         toast.error(errorMessage(e));
-        return;
+        return Promise.reject(e);
       }
       setItems((xs) => [...xs, { id, name: meta.title, progress: 0, status: "uploading", cancel: () => handle.task.cancel() }]);
       handle.task.on("state_changed", (snap) => {
         const progress = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
         patch(id, { progress, status: progress >= 100 ? "saving" : "uploading" });
       });
-      handle.done
+      void handle.done
         .then(() => {
           patch(id, { status: "done", progress: 100 });
           toast.success(`“${meta.title}” caricato`);
           qc.invalidateQueries({ queryKey: ["materials"] });
+          qc.invalidateQueries({ queryKey: ["songs"] });
           setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4000);
         })
         .catch((e) => {
@@ -57,6 +59,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
           patch(id, { status: canceled ? "canceled" : "error", error: canceled ? undefined : errorMessage(e) });
           if (canceled) setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 2000);
         });
+      return handle.done;
     },
     [qc],
   );

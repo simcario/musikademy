@@ -76,7 +76,7 @@ export const whatsappService = {
   saveSettings: (s: EditableWhatsAppSettings) => setDoc(waDoc(WA_DOC.settings), { ...s, ...touched() }, { merge: true }),
 
   /** Ultimi messaggi in tempo reale (registro invii). */
-  /** Registro invii: l'admin vede tutto, il docente i messaggi che ha messo in coda (ADR D29). */
+  /** Registro invii: l'admin vede tutto, il docente i messaggi che ha messo in coda (ADR D34). */
   watchRecent(max: number, scope: StaffScope, onChange: (m: WithId<WhatsAppMessage>[]) => void, onError: (e: Error) => void) {
     return onSnapshot(
       query(col(COLLECTIONS.whatsappMessages), ...ownedBy(scope, "createdBy"), orderBy("createdAt", "desc"), limit(max)),

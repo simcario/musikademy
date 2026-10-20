@@ -62,7 +62,11 @@ function FolderNameForm({
   const save = useStaffMutation(
     async () => {
       if (folder) await folderService.rename(folder.id, trimmed);
-      else onCreated?.(await folderService.create(trimmed, parentId, uid));
+      else {
+        // Prima si crea, poi si avvisa: con `onCreated?.(await …)` la creazione salterebbe se `onCreated` manca.
+        const id = await folderService.create(trimmed, parentId, uid);
+        onCreated?.(id);
+      }
     },
     { success: folder ? "Cartella rinominata" : "Cartella creata", invalidate: [["folders"]], onSuccess: onDone },
   );

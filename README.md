@@ -66,7 +66,7 @@ npm run seed         # terminale 2 — rifiuta di scrivere su progetti reali
 npm run dev:local    # terminale 3
 ```
 
-Account demo (password `Musikademy2026!`): `admin@musikademy.test`, `sara@musikademy.test` (docente di Pianoforte complementare: vede solo i suoi studenti e le sue quote), `elena@musikademy.test`, `luca@musikademy.test`.
+Account demo: `admin@musikademy.test`, `sara@musikademy.test` (docente di Pianoforte complementare: vede solo i suoi studenti e le sue quote), `elena@musikademy.test`, `luca@musikademy.test`. Si entra solo con Google: `npm run seed` stampa un link d'invito per ciascuno (negli emulatori il popup Google accetta qualsiasi email).
 Con il flag emulatori attivo anche le API admin (Admin SDK) usano automaticamente gli emulatori.
 
 ## Build e test
@@ -175,7 +175,7 @@ Il codice su GitHub (`simcario/musikademy`, branch `main`) è la sorgente del de
    npx firebase login
    ```
 2. **Servizi Firebase** — Console → progetto `musikademy-56b76`:
-   - *Authentication → Metodo di accesso*: abilita **Email/password** e **Google**
+   - *Authentication → Metodo di accesso*: abilita solo **Google** (Email/password va lasciato disattivato, ADR D33)
    - *Firestore Database*: crea il database (produzione, regione `europe-west`)
    - *Storage*: crea il bucket
 3. **Backend App Hosting** — Console → *App Hosting → Crea backend*:
@@ -233,7 +233,7 @@ Il codice su GitHub (`simcario/musikademy`, branch `main`) è la sorgente del de
    ```powershell
    npm run deploy:rules
    ```
-5. Migrazioni dei dati: dopo il rilascio di materie e isolamento dei docenti (ADR D29), con le
+5. Migrazioni dei dati: dopo il rilascio di materie e isolamento dei docenti (ADR D34), con le
    credenziali Admin, prima simula e poi applica:
    ```powershell
    npm run migrate-teachers

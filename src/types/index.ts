@@ -11,6 +11,8 @@ export interface AppUser {
   surname: string;
   email: string;
   role: Role;
+  /** Ruolo dell'organizzazione (`roles/{id}`, ADR D31); assente = quello di sistema uguale a `role`. */
+  roleId?: string;
   photoURL?: string;
   phone?: string;
   active: boolean;
@@ -25,6 +27,8 @@ export interface Student {
   name: string;
   surname: string;
   email: string;
+  /** Ruolo dell'organizzazione (Studente, Musicista…; ADR D31); assente = Studente. */
+  roleId?: string;
   courseIds: string[];
   /** Gruppi di cui fa parte (ADR D26). Assente sui documenti precedenti. */
   groupIds?: string[];
@@ -32,9 +36,11 @@ export interface Student {
   status: StudentStatus;
   /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
   inviteStatus?: "pending" | "accepted";
+  /** Promosso a un ruolo dello staff: il profilo resta archiviato (disattivato) con lo storico. */
+  promotedAt?: Timestamp;
   phone?: string;
   /**
-   * Vecchio costo unico dello studente, sostituito dai costi per docente e materia (`fees`, ADR D29):
+   * Vecchio costo unico dello studente, sostituito dai costi per docente e materia (`fees`, ADR D34):
    * lo script `migrate-teachers` lo converte e lo rimuove.
    */
   fee?: StudentFee;
@@ -57,7 +63,7 @@ export interface StudentFee {
 }
 
 /**
- * Costo personale del docente (ADR D29): uno per docente, studente e materia (o corso, se non ha materie).
+ * Costo personale del docente (ADR D34): uno per docente, studente e materia (o corso, se non ha materie).
  * ID deterministico (`feeId`); lo vedono solo il docente e lo studente.
  */
 export interface Fee extends StudentFee {
@@ -79,7 +85,12 @@ export interface Teacher {
   name: string;
   surname: string;
   email: string;
-  /** Corsi a cui è abilitato: copia di `courses.teacherIds`, letta dalle Security Rules (ADR D29). */
+  /** Ruolo dell'organizzazione (Docente, Segreteria…; ADR D31); assente = Docente. */
+  roleId?: string;
+  phone?: string;
+  /** Accesso con Google tramite invito (ADR D20). Assente sugli account precedenti (email/password). */
+  inviteStatus?: "pending" | "accepted";
+  /** Corsi a cui è abilitato: copia di `courses.teacherIds`, letta dalle Security Rules (ADR D34). */
   courseIds: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -99,7 +110,7 @@ export interface StudentGroup {
 /** Uno studente può stare al massimo in tanti gruppi (limite di `array-contains-any`: 30 valori, uno è il suo UID). */
 export const MAX_GROUPS_PER_STUDENT = 29;
 
-/** Materia di un corso (ADR D29), insegnata dai docenti in `teacherIds` (tra quelli del corso). */
+/** Materia di un corso (ADR D34), insegnata dai docenti in `teacherIds` (tra quelli del corso). */
 export interface CourseSubject {
   id: string;
   name: string;
@@ -188,6 +199,11 @@ export interface Material {
    */
   lyricsId?: string;
   lyrics?: string;
+  /**
+   * Video online (ADR D30): link a YouTube, Vimeo o a un file video pubblico. Il materiale non ha
+   * un file su Storage (`storagePath` e `fileName` vuoti, `size` 0).
+   */
+  externalUrl?: string;
   courseId?: string;
   createdBy: string;
   visibility: Visibility;
@@ -201,10 +217,70 @@ export interface Material {
    * È il campo che rules e query dello studente interrogano (vedi `materialAudience`).
    */
   audience?: string[];
+  /**
+   * Derivato (ADR D29): chi può aprire il materiale perché sta in un brano di una playlist condivisa
+   * (i gruppi indicati nel brano, oppure chi riceve la playlist). Entra in `audience`.
+   */
+  playlistAudience?: string[];
   keywords: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+/**
+ * Materiale di un brano (ADR D29): vale per i gruppi indicati (es. l'ascolto della parte dei Soprani)
+ * oppure, con `groupIds` vuoto, per tutti quelli che ricevono il brano.
+ */
+export interface SongItem {
+  materialId: string;
+  groupIds: string[];
+}
+
+/** Brano (ADR D29): un titolo con i suoi materiali (ascolti, basi, spartiti, testi, video…), anche diversi per gruppo. */
+export interface Song {
+  title: string;
+  /** Autore o interprete. */
+  artist?: string;
+  notes?: string;
+  items: SongItem[];
+  /** Derivato: i materiali di `items`, per trovare i brani che contengono un materiale. */
+  materialIds: string[];
+  /** Derivato: chi riceve almeno una playlist con il brano (studenti e gruppi). */
+  audience: string[];
+  createdBy: string;
+  keywords: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/** Playlist (ADR D29): elenco ordinato di brani, condiviso con studenti e gruppi. */
+export interface Playlist {
+  title: string;
+  description?: string;
+  /** Brani nell'ordine della playlist. */
+  songIds: string[];
+  studentIds: string[];
+  groupIds: string[];
+  /** Derivato: `studentIds` + `groupIds`, il campo che rules e query dello studente interrogano. */
+  audience: string[];
+  /** Note dei brani valide solo in questa playlist, per ID del brano. */
+  songNotes?: Record<string, PlaylistNote[]>;
+  createdBy: string;
+  keywords: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/** Nota di un brano dentro una playlist: per tutti (`groupIds` vuoto) o per alcuni gruppi, come i materiali. */
+export interface PlaylistNote {
+  id: string;
+  text: string;
+  groupIds: string[];
+}
+
+export const MAX_PLAYLIST_SONGS = 200;
+export const MAX_SONG_ITEMS = 50;
+export const MAX_SONG_NOTES = 20;
 
 /** Cartella di materiali (ADR D26), annidabile e condivisibile con singoli studenti e gruppi. */
 export interface MaterialFolder {
@@ -327,7 +403,7 @@ export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 export interface Attendance {
   lessonId: string;
   studentId: string;
-  /** Docente della lezione (ADR D29): ogni docente vede solo le sue presenze. */
+  /** Docente della lezione (ADR D34): ogni docente vede solo le sue presenze. */
   teacherId: string;
   lessonDate: Timestamp;
   status: AttendanceStatus;
@@ -354,7 +430,7 @@ export interface Installment {
 export interface Payment {
   studentId: string;
   studentName: string;
-  /** Docente a cui spetta la quota (ADR D29): solo lui la vede e la gestisce. */
+  /** Docente a cui spetta la quota (ADR D34): solo lui la vede e la gestisce. */
   teacherId: string;
   teacherName?: string;
   /** Costo da cui deriva la quota, con corso e materia. */

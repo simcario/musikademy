@@ -76,7 +76,7 @@ function AssignForm({ material, onDone }: { material: WithId<Material>; onDone: 
             <NativeSelect {...p} {...form.register("visibility")}>
               <option value="student">Solo studenti assegnati</option>
               <option value="course">Un corso</option>
-              {/* A tutta la scuola solo l'admin (ADR D29); un materiale già "per tutti" resta tale. */}
+              {/* A tutta la scuola solo l'admin (ADR D34); un materiale già "per tutti" resta tale. */}
               {(role === "admin" || material.visibility === "all") && <option value="all">Tutti gli studenti</option>}
             </NativeSelect>
           )}

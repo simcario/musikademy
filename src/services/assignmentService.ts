@@ -38,7 +38,7 @@ async function assignBatch(input: AssignmentInput, students: { id: string; name:
 
 export const assignmentService = {
   // ── Studente ──
-  /** `scope` dallo staff: il docente vede solo gli esercizi che ha assegnato (ADR D29). */
+  /** `scope` dallo staff: il docente vede solo gli esercizi che ha assegnato (ADR D34). */
   listForStudent: (studentId: string, scope?: StaffScope) =>
     list<Assignment>(
       COLLECTIONS.assignments,

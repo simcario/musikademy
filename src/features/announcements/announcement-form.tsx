@@ -47,7 +47,7 @@ export function AnnouncementFormDialog({
 
 function AnnouncementForm({ announcement, onDone }: { announcement?: WithId<Announcement> | null; onDone: () => void }) {
   const { uid, profile, role } = useSession();
-  // A tutta la scuola scrive solo l'admin; il docente ai suoi corsi e ai suoi studenti (ADR D29).
+  // A tutta la scuola scrive solo l'admin; il docente ai suoi corsi e ai suoi studenti (ADR D34).
   const isAdmin = role === "admin";
   const form = useForm<Values>({
     resolver: zodResolver(schema),

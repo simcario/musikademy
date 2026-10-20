@@ -1,4 +1,4 @@
-import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, orderBy, where, writeBatch } from "firebase/firestore";
+import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, orderBy, updateDoc, where, writeBatch } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
 import type { Material, MaterialFolder, Student, StudentGroup, WithId } from "@/types";
 import { COLLECTIONS, chunk, clean, col, list, ownedBy, ref, scopeCourses, timestamps, touched, type StaffScope } from "./base";
@@ -14,7 +14,7 @@ export interface GroupInput {
 
 /** Gruppi di studenti (ADR D26). L'appartenenza sta in `students.groupIds`: uno studente può stare in più gruppi. */
 export const groupService = {
-  /** L'admin li vede tutti; il docente quelli dei suoi corsi (ADR D29). */
+  /** L'admin li vede tutti; il docente quelli dei suoi corsi (ADR D34). */
   list: (scope: StaffScope) => {
     if (scope.admin) return list<StudentGroup>(COLLECTIONS.groups, orderBy("name"));
     const courses = scopeCourses(scope);
@@ -49,6 +49,10 @@ export const groupService = {
     await batch.commit();
     return groupRef.id;
   },
+
+  /** Gruppi di uno studente, dalla sua scheda: sostituisce l'elenco intero. */
+  setForStudent: (studentId: string, groupIds: string[]) =>
+    updateDoc(ref(COLLECTIONS.students, studentId), { groupIds: [...new Set(groupIds)], ...touched() }),
 
   /**
    * Elimina il gruppo e lo toglie da studenti, materiali e cartelle a cui era assegnato. Il docente

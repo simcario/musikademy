@@ -337,3 +337,23 @@
     transform: scaleX(0);
   }
 }
+
+/* Titoli lunghi che scorrono (components/shared/marquee). */
+@keyframes marquee {
+  0%,
+  15% {
+    transform: translateX(0);
+  }
+  85%,
+  100% {
+    transform: translateX(var(--marquee-shift));
+  }
+}
+.marquee {
+  animation: marquee var(--marquee-duration, 6s) ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    animation: none !important;
+  }
+}

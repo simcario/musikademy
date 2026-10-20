@@ -16,7 +16,7 @@ import { COLLECTIONS, chunk, col, list, ownedBy, ref, type StaffScope } from "./
 export const attendanceService = {
   /**
    * Storico presenze dello studente (una scuola privata ha decine di lezioni/anno per studente).
-   * `scope` dallo staff: il docente vede solo le presenze delle sue lezioni (ADR D29).
+   * `scope` dallo staff: il docente vede solo le presenze delle sue lezioni (ADR D34).
    */
   listForStudent: (studentId: string, scope?: StaffScope) =>
     list<Attendance>(

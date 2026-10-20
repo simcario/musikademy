@@ -35,7 +35,7 @@ export interface PaymentInput {
   fee?: WithId<Fee> | null;
 }
 
-/** Il docente che registra quote e costi: sono suoi, e solo lui li vede (ADR D29). */
+/** Il docente che registra quote e costi: sono suoi, e solo lui li vede (ADR D34). */
 export interface MoneyOwner {
   uid: string;
   name: string;
@@ -183,7 +183,7 @@ export const paymentService = {
       limit(200),
     ),
 
-  /** Quote del docente `uid`: ognuno, admin compreso, vede solo le proprie (ADR D29). */
+  /** Quote del docente `uid`: ognuno, admin compreso, vede solo le proprie (ADR D34). */
   page: (f: PaymentFilters, cursor: unknown | null, uid: string) => {
     const c: QueryConstraint[] = [where("teacherId", "==", uid)];
     if (f.studentId) c.push(where("studentId", "==", f.studentId));

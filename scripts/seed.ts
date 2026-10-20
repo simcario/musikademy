@@ -14,8 +14,7 @@ import { getStorage } from "firebase-admin/storage";
 import { cycleKey, cycleLabel } from "../src/utils/cycles";
 import { buildKeywords } from "../src/utils/keywords";
 import { initAdmin, usingEmulators } from "./lib/admin-env";
-
-const PASSWORD = "Musikademy2026!";
+import { createInviteLink } from "./lib/invite";
 
 function day(offset: number, h = 16, m = 30) {
   const d = new Date();
@@ -44,7 +43,7 @@ async function main() {
 
   async function account(email: string, name: string, surname: string, role: "admin" | "teacher" | "student") {
     const user = await auth.getUserByEmail(email).catch(() =>
-      auth.createUser({ email, password: PASSWORD, displayName: `${name} ${surname}`, emailVerified: true }),
+      auth.createUser({ email, displayName: `${name} ${surname}`, emailVerified: true }),
     );
     await auth.setCustomUserClaims(user.uid, { role });
     await db.doc(`users/${user.uid}`).set({
@@ -55,7 +54,7 @@ async function main() {
 
   // ── Persone ──
   const adminId = await account("admin@musikademy.test", "Marco", "Ferri", "admin");
-  // Seconda docente (ADR D29): insegna solo Pianoforte in Canto moderno, vede solo i suoi studenti e le sue quote.
+  // Seconda docente (ADR D34): insegna solo Pianoforte in Canto moderno, vede solo i suoi studenti e le sue quote.
   const teacherId = await account("sara@musikademy.test", "Sara", "Conti", "teacher");
 
   // ── Corsi e materie ──
@@ -104,7 +103,7 @@ async function main() {
     await db.doc(`studentNotes/${uid}`).set({ notes: "Nota privata demo: visibile solo ai docenti.", updatedAt: now, ...demo });
   }
 
-  // ── Costi per docente, studente e materia (ADR D29) ──
+  // ── Costi per docente, studente e materia (ADR D34) ──
   const fees = [
     { s: 0, teacher: adminId, teacherName: "Marco Ferri", course: 0, subject: 0, cycleAmount: 120, lessonPrice: 30, lessonsPerCycle: 4, start: -14, dueAt: "end" },
     { s: 0, teacher: teacherId, teacherName: "Sara Conti", course: 0, subject: 1, cycleAmount: 100, lessonPrice: 25, lessonsPerCycle: 4, start: -10, dueAt: "start" },
@@ -236,8 +235,15 @@ async function main() {
     publishedAt: day(-2, 9), keywords: buildKeywords("Saggio di fine corso Lirico"), createdAt: now, updatedAt: now, ...demo,
   });
 
-  console.log(`\n✓ Dati demo creati. Password per tutti: ${PASSWORD}`);
-  console.log("  admin@musikademy.test (admin) · sara@musikademy.test (docente) · elena@musikademy.test · luca@musikademy.test (studenti)\n");
+  // Accesso solo con Google (ADR D33): un link d'invito per ogni account demo.
+  console.log("\n✓ Dati demo creati. Collega un account Google aprendo il link d'invito:");
+  const people: [string, string][] = [
+    ["admin@musikademy.test (admin)", adminId],
+    ["sara@musikademy.test (docente di Pianoforte complementare)", teacherId],
+    ...studentIds.map((id, i): [string, string] => [`studente ${i + 1}`, id]),
+  ];
+  for (const [label, uid] of people) console.log(`  ${label}: ${await createInviteLink(db, uid)}`);
+  console.log("");
 }
 
 /** WAV PCM mono 8kHz di silenzio (file audio valido e leggerissimo). */

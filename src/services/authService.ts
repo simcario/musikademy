@@ -1,24 +1,19 @@
 import {
-  EmailAuthProvider,
   GoogleAuthProvider,
   browserLocalPersistence,
   getAdditionalUserInfo,
   inMemoryPersistence,
   linkWithPopup,
   onIdTokenChanged,
-  reauthenticateWithCredential,
-  sendPasswordResetEmail,
   setPersistence,
   signInWithCustomToken,
-  signInWithEmailAndPassword,
   signInWithPopup,
   signOut as fbSignOut,
-  updatePassword,
-  verifyBeforeUpdateEmail,
+  unlink,
   type User,
 } from "firebase/auth";
 import { firebaseAuth } from "@/lib/firebase/client";
-import { isRole } from "@/lib/auth/roles";
+import { isRole, type Access } from "@/lib/auth/roles";
 import type { Role } from "@/types";
 import { AppError } from "@/utils/errors";
 
@@ -28,15 +23,10 @@ function googleProvider() {
   return provider;
 }
 
-/** Accesso ai provider di autenticazione: email/password (staff) e Google (studenti, via invito). */
+/** Accesso solo con Google (ADR D33): ogni account collega il proprio Google tramite invito. */
 export const authService = {
   onChange(cb: (user: User | null) => void) {
     return onIdTokenChanged(firebaseAuth(), cb);
-  },
-
-  async signIn(email: string, password: string) {
-    const cred = await signInWithEmailAndPassword(firebaseAuth(), email.trim(), password);
-    return cred.user;
   },
 
   /**
@@ -61,9 +51,22 @@ export const authService = {
     return auth.currentUser;
   },
 
-  /** Utente con accesso tramite password (per mostrare o nascondere cambio email/password). */
-  hasPassword(user: User) {
-    return user.providerData.some((p) => p.providerId === "password");
+  /** Email dell'account Google collegato; `null` se non è ancora collegato (account precedenti con password). */
+  googleEmail(user: User): string | null {
+    const google = user.providerData.find((p) => p.providerId === "google.com");
+    return google ? (google.email ?? user.email ?? "") : null;
+  },
+
+  /**
+   * Collega Google all'account della sessione e toglie la password (account precedenti).
+   * Va chiamato direttamente dal click, altrimenti Safari blocca il popup.
+   */
+  async linkGoogle() {
+    const user = firebaseAuth().currentUser;
+    if (!user) throw new AppError("Sessione scaduta. Accedi di nuovo.");
+    await linkWithPopup(user, googleProvider());
+    if (user.providerData.some((p) => p.providerId === "password")) await unlink(user, "password");
+    await user.reload();
   },
 
   /**
@@ -123,32 +126,28 @@ export const authService = {
     await setPersistence(auth, browserLocalPersistence);
   },
 
-  sendPasswordReset(email: string) {
-    return sendPasswordResetEmail(firebaseAuth(), email.trim());
-  },
-
   /** Il ruolo proviene dal custom claim (ADR D1): non falsificabile dal client. */
   async roleOf(user: User, forceRefresh = false): Promise<Role | null> {
-    const token = await user.getIdTokenResult(forceRefresh);
-    const role = token.claims.role;
-    return isRole(role) ? role : null;
+    return (await this.accessOf(user, forceRefresh))?.role ?? null;
   },
 
-  async reauthenticate(password: string) {
-    const user = firebaseAuth().currentUser;
-    if (!user?.email) throw new AppError("Sessione scaduta. Accedi di nuovo.");
-    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
-  },
-
-  /** Invia un link di verifica al nuovo indirizzo; l'email cambia solo dopo la conferma. */
-  async changeEmail(newEmail: string, currentPassword: string) {
-    await this.reauthenticate(currentPassword);
-    await verifyBeforeUpdateEmail(firebaseAuth().currentUser!, newEmail.trim());
-  },
-
-  async changePassword(currentPassword: string, newPassword: string) {
-    await this.reauthenticate(currentPassword);
-    await updatePassword(firebaseAuth().currentUser!, newPassword);
+  /**
+   * Ruolo tecnico, ruolo dell'organizzazione e permessi (ADR D31), dai custom claim.
+   * `forceRefresh` rilegge il token dal server: serve a vedere subito un ruolo cambiato dall'admin.
+   * Senza rete si ripiega sul token salvato.
+   */
+  async accessOf(user: User, forceRefresh = false): Promise<Access | null> {
+    const token = await user.getIdTokenResult(forceRefresh).catch((e) => {
+      if (!forceRefresh) throw e;
+      return user.getIdTokenResult();
+    });
+    const { role, roleId, perms } = token.claims;
+    if (!isRole(role)) return null;
+    return {
+      role,
+      roleId: typeof roleId === "string" ? roleId : role,
+      perms: Array.isArray(perms) ? perms.filter((x): x is string => typeof x === "string") : null,
+    };
   },
 
   async idToken(): Promise<string> {

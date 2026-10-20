@@ -16,8 +16,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BrandLockup, UserAvatar } from "@/components/shared/brand";
 import { useSession } from "@/features/auth/auth-provider";
-import { ROLE_LABEL } from "@/lib/auth/roles";
+import { useMyRoleName } from "@/features/roles/hooks";
 import { startInstall, useInstallMode } from "@/lib/pwa";
+import { authService } from "@/services/authService";
 import { cn } from "@/lib/utils";
 import { fullName } from "@/utils/format";
 import { isActive, titleFor, type NavItem } from "./nav-config";
@@ -60,6 +61,7 @@ export function AppShell({ nav, home, profileHref, notificationsHref, onSearch, 
           brandSlot={brandSlot}
         />
         <main id="main" className="flex-1 pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-10">
+          <LinkGoogleNotice profileHref={profileHref} />
           {children}
         </main>
       </div>
@@ -110,7 +112,8 @@ function TopBar({
   onSearch?: () => void;
   brandSlot?: React.ReactNode;
 }) {
-  const { profile, role, signOut } = useSession();
+  const { profile, signOut } = useSession();
+  const roleName = useMyRoleName();
   const router = useRouter();
   const installMode = useInstallMode({ respectHidden: true });
   return (
@@ -160,7 +163,7 @@ function TopBar({
               <DropdownMenuGroup>
                 <DropdownMenuLabel>
                   <span className="block truncate font-semibold text-foreground">{fullName(profile)}</span>
-                  <span className="block text-xs font-normal">{role ? ROLE_LABEL[role] : ""}</span>
+                  <span className="block text-xs font-normal">{roleName}</span>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
@@ -252,5 +255,21 @@ function BottomNav({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+/** Account precedenti con password (ADR D33): finché la sessione è aperta possono ancora collegare Google. */
+function LinkGoogleNotice({ profileHref }: { profileHref: string }) {
+  const { user } = useSession();
+  const pathname = usePathname();
+  if (authService.googleEmail(user) !== null || pathname === profileHref) return null;
+  return (
+    <p role="status" className="mx-4 mt-4 rounded-lg bg-warning-soft p-3 text-sm text-warning md:mx-8">
+      L&apos;accesso con email e password non è più disponibile.{" "}
+      <Link href={profileHref} className="font-semibold underline">
+        Collega il tuo account Google dal profilo
+      </Link>{" "}
+      prima di uscire, altrimenti non potrai più entrare.
+    </p>
   );
 }

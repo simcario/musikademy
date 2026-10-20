@@ -63,7 +63,7 @@ export const lessonService = {
     return paginate<Lesson>(COLLECTIONS.lessons, c, cursor, 15);
   },
 
-  /** Prossima lezione; `scope` dallo staff (il docente vede solo le sue, ADR D29). */
+  /** Prossima lezione; `scope` dallo staff (il docente vede solo le sue, ADR D34). */
   async nextForStudent(studentId: string, scope?: StaffScope) {
     const [r] = await list<Lesson>(
       COLLECTIONS.lessons,

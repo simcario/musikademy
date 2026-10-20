@@ -9,6 +9,7 @@ import { LoadMore } from "@/components/shared/states";
 import { useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useDebounce } from "@/hooks/use-debounce";
 import { materialService } from "@/services/materialService";
+import { CreateMaterialButton } from "./material-form";
 import { EXERCISE_CATEGORY } from "@/types";
 import { CATEGORY_META } from "@/utils/status";
 
@@ -34,10 +35,9 @@ export function AssignMaterialsDialog({
 
   const assign = useStaffMutation(
     async () => {
-      const all = q.data?.pages.flatMap((p) => p.items) ?? [];
-      await Promise.all(
-        all.filter((m) => selected.includes(m.id)).map((m) => materialService.assignToStudents(m, [studentId])),
-      );
+      // Letti uno per uno: quelli appena creati potrebbero non essere ancora nella pagina caricata.
+      const chosen = await materialService.getMany(selected);
+      await Promise.all(chosen.map((m) => materialService.assignToStudents(m, [studentId])));
     },
     {
       success: `Materiali assegnati a ${studentName}`,
@@ -71,6 +71,14 @@ export function AssignMaterialsDialog({
           maxHeight="max-h-72"
         />
         <LoadMore hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onClick={() => q.fetchNextPage()} />
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">Non lo trovi? Caricalo ora: sarà selezionato appena pronto.</p>
+          <CreateMaterialButton
+            context={studentName}
+            className="shrink-0"
+            onCreated={(m) => setSelected((ids) => (ids.includes(m.id) ? ids : [...ids, m.id]))}
+          />
+        </div>
         <FormActions onCancel={() => onOpenChange(false)} submitting={assign.isPending} submitLabel="Assegna" />
       </form>
     </SidePanel>

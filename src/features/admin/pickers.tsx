@@ -8,7 +8,7 @@ import { useActiveStudents, useStaffScope } from "./hooks";
 type SelectProps = Omit<React.ComponentProps<typeof NativeSelect>, "children">;
 
 /**
- * Corsi attivi che chi usa l'area docente può scegliere (ADR D29): l'admin tutti, il docente
+ * Corsi attivi che chi usa l'area docente può scegliere (ADR D34): l'admin tutti, il docente
  * quelli a cui è abilitato. Con `teacherId` solo quelli di quel docente (es. l'admin che
  * programma una lezione per un altro docente).
  */

@@ -10,6 +10,10 @@ import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useStaffMutation, useStaffScope } from "@/features/admin/hooks";
 import { useSelectableCourses } from "@/features/admin/pickers";
+import { useSession } from "@/features/auth/auth-provider";
+import { useRolesOfKind } from "@/features/roles/hooks";
+import { NativeSelect } from "@/components/ui/native-select";
+import { can } from "@/lib/auth/roles";
 import type { InviteInfo } from "@/lib/auth/invite-token";
 import { studentService } from "@/services/studentService";
 import type { Student, WithId } from "@/types";
@@ -40,9 +44,9 @@ export function StudentFormDialog({
     <SidePanel
       open={open}
       onOpenChange={close}
-      title={created ? "Studente creato" : student ? "Modifica studente" : "Nuovo studente"}
+      title={created ? "Utente creato" : student ? "Modifica utente" : "Nuovo utente"}
       description={
-        created || student ? undefined : "Riceverai un link d'invito da inviare allo studente per accedere con Google."
+        created || student ? undefined : "Riceverai un link d'invito da inviare all'utente per accedere con Google."
       }
     >
       {created ? (
@@ -83,6 +87,13 @@ function StudentForm({
   const scope = useStaffScope();
   // I corsi che chi modifica non gestisce (di altri docenti) non sono in elenco: restano in `courseIds` come erano.
   const kept = (student?.courseIds ?? []).filter((id) => !courses.data.some((c) => c.id === id));
+  const roles = useRolesOfKind("member");
+  const staffRoles = useRolesOfKind("staff");
+  // Il ruolo si sceglie alla creazione; cambiarlo dopo cambia i permessi, quindi spetta all'amministratore,
+  // che può anche promuovere l'utente a un ruolo dello staff.
+  const { access } = useSession();
+  const roleEditable = !student || can(access, "roles:manage");
+  const canPromote = !!student && can(access, "roles:manage");
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
     defaultValues: {
@@ -90,6 +101,7 @@ function StudentForm({
       surname: student?.surname ?? "",
       email: student?.email ?? "",
       phone: student?.phone ?? "",
+      roleId: student?.roleId ?? "student",
       courseIds: student?.courseIds ?? [],
       enrollmentDate: toInputDate(student?.enrollmentDate ?? new Date()),
       notes: notes ?? "",
@@ -97,10 +109,12 @@ function StudentForm({
   });
   const { errors } = form.formState;
   const watch_courseIds = useWatch({ control: form.control, name: "courseIds" });
+  const watch_roleId = useWatch({ control: form.control, name: "roleId" });
+  const promoting = canPromote && !!staffRoles.data?.some((r) => r.id === watch_roleId);
 
   const save = useStaffMutation(
     async (v: StudentFormValues) => {
-      // Il docente vede solo gli studenti dei suoi corsi (ADR D29): senza, lo perderebbe di vista.
+      // Il docente vede solo gli studenti dei suoi corsi (ADR D34): senza, lo perderebbe di vista.
       if (!scope?.admin && !v.courseIds.some((id) => scope?.courseIds.includes(id))) {
         throw new AppError("Iscrivilo ad almeno uno dei tuoi corsi.");
       }
@@ -109,6 +123,7 @@ function StudentForm({
         surname: v.surname,
         email: v.email,
         phone: v.phone || "",
+        roleId: v.roleId,
         courseIds: v.courseIds,
         enrollmentDate: fromInputDate(v.enrollmentDate),
         notes: v.notes || "",
@@ -117,14 +132,17 @@ function StudentForm({
         await studentService.update(student.id, input);
         if ((v.notes ?? "") !== (notes ?? "")) await studentService.setNotes(student.id, v.notes ?? "");
         if (v.email !== student.email) await studentService.changeEmail(student.id, v.email);
+        // Per ultimo: dopo una promozione il profilo studente è archiviato.
+        if (v.roleId !== (student.roleId ?? "student")) await studentService.setRole(student.id, v.roleId);
         return null;
       }
       const res = await studentService.create(input);
       return { name: v.name, email: v.email, phone: v.phone || undefined, invite: res.invite };
     },
     {
-      success: () => (student ? "Studente aggiornato" : "Studente creato"),
-      invalidate: [["students"], ["studentNotes"]],
+      success: () =>
+        promoting ? "Utente promosso allo staff: varrà dal prossimo accesso" : student ? "Utente aggiornato" : "Utente creato",
+      invalidate: [["students"], ["studentNotes"], ["teachers"]],
       onSuccess: (r) => (r ? onCreated(r) : onSaved()),
     },
   );
@@ -147,9 +165,47 @@ function StudentForm({
           {(p) => <Input {...p} type="tel" {...form.register("phone")} />}
         </Field>
       </div>
-      <Field label="Data iscrizione" error={errors.enrollmentDate?.message} required>
-        {(p) => <Input {...p} type="date" {...form.register("enrollmentDate")} />}
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Ruolo"
+          error={errors.roleId?.message}
+          required
+          hint={
+            promoting
+              ? "Passerà allo staff: il profilo da studente resta archiviato con lo storico. Non si può annullare."
+              : roleEditable
+                ? student
+                  ? "Cambiandolo, l'utente dovrà accedere di nuovo."
+                  : undefined
+                : "Lo cambia l'amministratore."
+          }
+        >
+          {(p) => (
+            <NativeSelect {...p} {...form.register("roleId")} disabled={!roleEditable || roles.isPending}>
+              <optgroup label="Area personale">
+                {(roles.data ?? [{ id: "student", name: "Studente" }]).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </optgroup>
+              {canPromote && !!staffRoles.data?.length && (
+                <optgroup label="Promuovi allo staff">
+                  {staffRoles.data.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                      {r.id === "admin" ? " (accesso completo)" : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </NativeSelect>
+          )}
+        </Field>
+        <Field label="Data iscrizione" error={errors.enrollmentDate?.message} required>
+          {(p) => <Input {...p} type="date" {...form.register("enrollmentDate")} />}
+        </Field>
+      </div>
       <CheckList
         label={scope?.admin ? "Corsi" : "I tuoi corsi"}
         items={courses.data.map((c) => ({ id: c.id, label: c.name }))}
@@ -170,7 +226,7 @@ function StudentForm({
       <Field label="Note private (visibili solo ai docenti)" error={errors.notes?.message}>
         {(p) => <Textarea {...p} rows={3} {...form.register("notes")} />}
       </Field>
-      <FormActions onCancel={onCancel} submitting={save.isPending} submitLabel={student ? "Salva" : "Crea studente"} />
+      <FormActions onCancel={onCancel} submitting={save.isPending} submitLabel={student ? "Salva" : "Crea utente"} />
     </form>
   );
 }

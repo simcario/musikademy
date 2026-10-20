@@ -100,7 +100,7 @@ export function CourseForm({
 }
 
 /**
- * Materie del corso (ADR D29): per ognuna i docenti che la insegnano, scelti tra quelli abilitati
+ * Materie del corso (ADR D34): per ognuna i docenti che la insegnano, scelti tra quelli abilitati
  * al corso. Un docente abilitato al corso ma a nessuna materia non può fissare lezioni o costi
  * su una materia, solo sul corso se questo non ne ha.
  */

@@ -297,7 +297,7 @@ const KIND_LABEL: Record<WhatsAppMessageKind, string> = {
 };
 
 export function WhatsAppMessageLog() {
-  // Il docente vede i propri messaggi; le prove verso un numero libero sono dell'admin (ADR D29).
+  // Il docente vede i propri messaggi; le prove verso un numero libero sono dell'admin (ADR D34).
   const isAdmin = useSession().role === "admin";
   const q = useWhatsAppMessages(30);
   const [toDelete, setToDelete] = useState<WithId<WhatsAppMessage> | null>(null);

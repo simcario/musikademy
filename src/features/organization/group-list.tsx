@@ -112,7 +112,7 @@ export function GroupForm({
   const students = useActiveStudents();
   const courses = useCourses();
   const scope = useStaffScope();
-  // Il docente crea gruppi solo nei suoi corsi (ADR D29); i gruppi senza corso sono dell'admin.
+  // Il docente crea gruppi solo nei suoi corsi (ADR D34); i gruppi senza corso sono dell'admin.
   const courseOptions = (courses.data ?? []).filter((c) => scope?.admin || scope?.courseIds.includes(c.id));
   const current = group ? membersOf(group.id, students.data).map((s) => s.id) : [];
   const [name, setName] = useState(group?.name ?? "");

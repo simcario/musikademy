@@ -17,8 +17,8 @@ import { NO_COURSE, TABLE_HEAD, rowClass, usePanel } from "./panel";
  * si apre nel pannello laterale. `creating` è pilotato dalla pagina, che ha il pulsante "Nuovo corso".
  */
 export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; onCreatingChange: (o: boolean) => void }) {
-  const { role } = useSession();
-  const editable = can(role, "settings:manage");
+  const { access } = useSession();
+  const editable = can(access, "settings:manage");
   const panel = usePanel();
   const courses = useCourses();
   const groups = useGroups();
@@ -28,7 +28,7 @@ export function CoursesTab({ creating, onCreatingChange }: { creating: boolean; 
   if (courses.isPending || !scope) return <ListSkeleton rows={3} />;
   if (courses.isError) return <ErrorState error={courses.error} onRetry={() => courses.refetch()} />;
 
-  // Il docente vede i corsi a cui è abilitato (ADR D29); "Senza corso" è solo dell'admin.
+  // Il docente vede i corsi a cui è abilitato (ADR D34); "Senza corso" è solo dell'admin.
   const visible = scope.admin ? courses.data : courses.data.filter((c) => scope.courseIds.includes(c.id));
   const courseIds = new Set(courses.data.map((c) => c.id));
   const allGroups = groups.data ?? [];

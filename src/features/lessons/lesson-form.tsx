@@ -13,6 +13,7 @@ import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect, subjectsFor } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
+import { CreateMaterialButton } from "@/features/materials/material-form";
 import { useCourses, useTeachers } from "@/features/student-area/hooks";
 import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
@@ -77,7 +78,7 @@ function LessonForm({
   onDone: () => void;
 }) {
   const { uid, role } = useSession();
-  // L'admin programma lezioni anche per gli altri docenti; il docente solo a proprio nome (ADR D29).
+  // L'admin programma lezioni anche per gli altri docenti; il docente solo a proprio nome (ADR D34).
   const isAdmin = role === "admin";
   const students = useActiveStudents();
   const teachers = useTeachers();
@@ -144,8 +145,9 @@ function LessonForm({
         status: v.status,
       };
       // I materiali associati devono essere leggibili dallo studente (visibilità additiva, ADR D18).
+      // Letti uno per uno: quelli appena creati potrebbero non essere ancora nella pagina caricata.
       await Promise.all(
-        materialItems
+        (await materialService.getMany(materialIds))
           .filter((m) => materialIds.includes(m.id) && !m.studentIds?.includes(v.studentId))
           .map((m) => materialService.assignToStudents(m, [v.studentId])),
       );
@@ -262,9 +264,14 @@ function LessonForm({
         emptyText="Nessun materiale caricato."
         maxHeight="max-h-44"
       />
-      <p className="-mt-2 text-xs text-muted-foreground">
-        I materiali selezionati diventano visibili allo studente della lezione.
-      </p>
+      <div className="-mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">I materiali selezionati diventano visibili allo studente della lezione.</p>
+        <CreateMaterialButton
+          context="questa lezione"
+          className="shrink-0"
+          onCreated={(m) => setMaterialIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id]))}
+        />
+      </div>
       {onCopy && (
         <Button type="button" variant="outline" className="w-full" onClick={onCopy} disabled={save.isPending}>
           <Copy aria-hidden /> Copia per un altro studente o giorno

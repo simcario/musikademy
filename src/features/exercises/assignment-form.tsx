@@ -11,6 +11,7 @@ import { FormActions, SidePanel } from "@/components/shared/dialogs";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
+import { CreateMaterialButton } from "@/features/materials/material-form";
 import { useMaterialsByIds } from "@/features/student-area/hooks";
 import { ACCEPT_ATTR, checkFile } from "@/lib/files";
 import { assignmentService } from "@/services/assignmentService";
@@ -258,6 +259,17 @@ function AssignmentForm({
         emptyText="Nessun materiale caricato."
         maxHeight="max-h-44"
       />
+      <div className="-mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">Non è nella libreria? Crealo ora: sarà selezionato appena pronto.</p>
+        <CreateMaterialButton
+          context="questo esercizio"
+          className="shrink-0"
+          onCreated={(m) => {
+            const ids = form.getValues("materialIds");
+            if (!ids.includes(m.id)) form.setValue("materialIds", [...ids, m.id]);
+          }}
+        />
+      </div>
       <FormActions onCancel={onDone} submitting={save.isPending} submitLabel={assignment ? "Salva" : "Assegna"} />
     </form>
   );

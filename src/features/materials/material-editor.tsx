@@ -17,6 +17,7 @@ import type { MarkdownEditorApi } from "@/components/shared/markdown-editor";
 import { useScopeGetter, useStaffMutation, useStaffScope } from "@/features/admin/hooks";
 import { qk } from "@/hooks/query-keys";
 import { dirOf } from "@/lib/files";
+import { VIDEO_PROVIDER_LABEL, parseVideoUrl } from "@/lib/video";
 import { materialService } from "@/services/materialService";
 import { LIBRARY_CATEGORIES, LYRICS_CATEGORY, MATERIAL_CATEGORIES, type Material, type WithId } from "@/types";
 import { errorMessage } from "@/utils/errors";
@@ -59,6 +60,10 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
   const [contentDirty, setContentDirty] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Video online (ADR D30): il link si può cambiare.
+  const [link, setLink] = useState(material.externalUrl ?? "");
+  const linkDirty = !!material.externalUrl && link.trim() !== material.externalUrl;
+  const linkVideo = material.externalUrl ? parseVideoUrl(link) : null;
 
   // I Markdown caricati prima che il testo fosse copiato in Firestore si leggono dal file.
   const file = useQuery({
@@ -97,7 +102,7 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
   const save = useStaffMutation(
     async (v: Values) => {
       const content = contentDirty ? editor.current?.getMarkdown() : undefined;
-      await materialService.updateDetails(material, v, content);
+      await materialService.updateDetails(material, v, content, linkDirty ? link : undefined);
       // Le tracce associate ricevono il testo aggiornato; cambiando categoria l'associazione decade.
       const lyrics = v.category === LYRICS_CATEGORY;
       if (isMarkdown && (lyrics || linked.data?.length)) {
@@ -119,7 +124,7 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
 
   function requestClose() {
     if (save.isPending) return;
-    if (isDirty || contentDirty || pickedTracks) setConfirmClose(true);
+    if (isDirty || contentDirty || pickedTracks || linkDirty) setConfirmClose(true);
     else discard();
   }
 
@@ -135,12 +140,17 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
               <DialogTitle className="truncate text-base font-semibold">
                 {exercise ? "Modifica esercizio" : "Modifica materiale"}
               </DialogTitle>
-              <DialogDescription className="truncate text-xs">{material.fileName}</DialogDescription>
+              <DialogDescription className="truncate text-xs">{material.externalUrl ?? material.fileName}</DialogDescription>
             </div>
             <Button type="button" variant="outline" onClick={requestClose} disabled={save.isPending}>
               Annulla
             </Button>
-            <Button type="submit" disabled={save.isPending || (isMarkdown && (original === undefined || linked.isPending))}>
+            <Button
+              type="submit"
+              disabled={
+                save.isPending || (isMarkdown && (original === undefined || linked.isPending)) || (!!material.externalUrl && !linkVideo)
+              }
+            >
               {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
               Salva
             </Button>
@@ -148,6 +158,16 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
             <aside className="shrink-0 space-y-4 border-b border-border bg-popover p-4 lg:w-80 lg:overflow-y-auto lg:border-r lg:border-b-0">
+              {material.externalUrl && (
+                <Field
+                  label="Link del video"
+                  required
+                  error={linkVideo ? undefined : "Incolla il link completo del video (https://…)"}
+                  hint={linkVideo ? `Riconosciuto: ${VIDEO_PROVIDER_LABEL[linkVideo.provider]}` : undefined}
+                >
+                  {(p) => <Input {...p} type="url" inputMode="url" value={link} onChange={(ev) => setLink(ev.target.value)} />}
+                </Field>
+              )}
               <Field label="Titolo" error={errors.title?.message} required>
                 {(p) => <Input {...p} {...form.register("title")} />}
               </Field>
@@ -190,7 +210,9 @@ function Editor({ material, exercise, onClose }: { material: WithId<Material>; e
             </aside>
 
             <div className="flex min-h-0 flex-1 flex-col bg-surface-low">
-              {!isMarkdown ? (
+              {material.externalUrl ? (
+                <OnlinePreview url={linkVideo ? link : material.externalUrl} title={material.title} />
+              ) : !isMarkdown ? (
                 <Preview material={material} />
               ) : file.isError ? (
                 <Centered>
@@ -239,6 +261,34 @@ function Spinner() {
   return (
     <Centered>
       <Loader2 className="size-6 animate-spin text-primary" aria-label="Caricamento" />
+    </Centered>
+  );
+}
+
+/** Anteprima di un video online: player incorporato, file video o semplice link. */
+function OnlinePreview({ url, title }: { url: string; title: string }) {
+  const video = parseVideoUrl(url);
+  if (video?.embedUrl) {
+    return (
+      <iframe
+        src={video.embedUrl}
+        title={title}
+        allow="encrypted-media; fullscreen; picture-in-picture"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        className="min-h-[50vh] w-full flex-1 border-0 bg-black"
+      />
+    );
+  }
+  if (video?.provider === "file") {
+    return <video src={video.url} controls playsInline preload="metadata" className="min-h-0 w-full flex-1 bg-black object-contain" />;
+  }
+  return (
+    <Centered>
+      <div className="space-y-3 p-6 text-center">
+        <FileText className="mx-auto size-10 text-muted-foreground" aria-hidden />
+        <p className="text-sm text-muted-foreground">Anteprima non disponibile: lo studente aprirà il link in una nuova scheda.</p>
+      </div>
     </Centered>
   );
 }
