@@ -70,7 +70,7 @@ export function initials(p: { name?: string; surname?: string } | null | undefin
   return ((p?.name?.[0] ?? "") + (p?.surname?.[0] ?? "")).toUpperCase() || "?";
 }
 
-/** "2026-09-26" per <input type="date"> */
+/** "2026-09-26", il valore di `DateInput` */
 export function toInputDate(value: DateLike): string {
   const d = toDate(value);
   return d ? format(d, "yyyy-MM-dd") : "";

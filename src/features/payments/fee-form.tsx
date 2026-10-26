@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarPlus, Pencil, Plus, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
+import { DateInput } from "@/components/shared/date-time-input";
 import { Field } from "@/components/shared/form";
 import { ErrorState, ListSkeleton } from "@/components/shared/states";
 import { useMoneyOwner, useMyFees, useStaffMutation, useStaffScope } from "@/features/admin/hooks";
@@ -291,7 +292,7 @@ function FeeForm({
             : undefined
         }
       >
-        {(p) => <Input {...p} type="date" {...form.register("startDate")} />}
+        {(p) => <Controller control={form.control} name="startDate" render={({ field }) => <DateInput {...p} {...field} />} />}
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Costo a lezione (€)" error={errors.lessonPrice?.message}>

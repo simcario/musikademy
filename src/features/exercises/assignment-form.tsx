@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUp, Paperclip, X } from "lucide-react";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
+import { DateInput } from "@/components/shared/date-time-input";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { useSession } from "@/features/auth/auth-provider";
@@ -184,7 +185,7 @@ function AssignmentForm({
       </Field>
       {interactive && <InteractiveSettings value={interactive} onChange={setInteractive} />}
       <Field label="Scadenza" error={errors.dueDate?.message}>
-        {(p) => <Input {...p} type="date" {...form.register("dueDate")} />}
+        {(p) => <Controller control={form.control} name="dueDate" render={({ field }) => <DateInput {...p} {...field} clearable />} />}
       </Field>
       {!assignment && (
         <div className="space-y-1">

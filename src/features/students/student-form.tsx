@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
+import { DateInput } from "@/components/shared/date-time-input";
 import { CheckList, Field } from "@/components/shared/form";
 import { useStaffMutation, useStaffScope } from "@/features/admin/hooks";
 import { useSelectableCourses } from "@/features/admin/pickers";
@@ -203,7 +204,7 @@ function StudentForm({
           )}
         </Field>
         <Field label="Data iscrizione" error={errors.enrollmentDate?.message} required>
-          {(p) => <Input {...p} type="date" {...form.register("enrollmentDate")} />}
+          {(p) => <Controller control={form.control} name="enrollmentDate" render={({ field }) => <DateInput {...p} {...field} />} />}
         </Field>
       </div>
       <CheckList

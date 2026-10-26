@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   AlarmClock,
@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/shared/dialogs";
+import { TimeInput } from "@/components/shared/date-time-input";
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/shared/states";
 import { Pill } from "@/components/shared/status-badge";
@@ -250,7 +251,7 @@ function ReminderForm({ settings, editable }: { settings: WhatsAppSettings; edit
             )}
           </Field>
           <Field label="Orario di invio" error={errors.reminderTime?.message} hint="Ora italiana." required>
-            {(p) => <Input {...p} type="time" {...form.register("reminderTime")} />}
+            {(p) => <Controller control={form.control} name="reminderTime" render={({ field }) => <TimeInput {...p} {...field} />} />}
           </Field>
         </div>
         <Field

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormActions, SidePanel } from "@/components/shared/dialogs";
+import { DateInput, TimeInput } from "@/components/shared/date-time-input";
 import { CheckList, Field } from "@/components/shared/form";
 import { useActiveStudents, useMaterialsPage, useStaffMutation } from "@/features/admin/hooks";
 import { CourseSelect, subjectsFor } from "@/features/admin/pickers";
@@ -106,7 +107,6 @@ function LessonForm({
     },
   });
   const { errors } = form.formState;
-  const startField = form.register("startTime");
   const [teacherId, courseId, studentId] = useWatch({ control: form.control, name: ["teacherId", "courseId", "studentId"] });
   const course = courses.data?.find((c) => c.id === courseId);
   // Materie del corso insegnate dal docente della lezione; senza materie si scrive a mano.
@@ -215,24 +215,30 @@ function LessonForm({
       </Field>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Data" error={errors.date?.message} required>
-          {(p) => <Input {...p} type="date" {...form.register("date")} />}
+          {(p) => <Controller control={form.control} name="date" render={({ field }) => <DateInput {...p} {...field} />} />}
         </Field>
         <Field label="Inizio" error={errors.startTime?.message}>
           {(p) => (
-            <Input
-              {...p}
-              type="time"
-              step={300}
-              {...startField}
-              onChange={(e) => {
-                onStartChange(e.target.value);
-                return startField.onChange(e);
-              }}
+            <Controller
+              control={form.control}
+              name="startTime"
+              render={({ field }) => (
+                <TimeInput
+                  {...p}
+                  {...field}
+                  minuteStep={5}
+                  clearable
+                  onChange={(v) => {
+                    onStartChange(v);
+                    field.onChange(v);
+                  }}
+                />
+              )}
             />
           )}
         </Field>
         <Field label="Fine" error={errors.endTime?.message}>
-          {(p) => <Input {...p} type="time" step={300} {...form.register("endTime")} />}
+          {(p) => <Controller control={form.control} name="endTime" render={({ field }) => <TimeInput {...p} {...field} minuteStep={5} clearable />} />}
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

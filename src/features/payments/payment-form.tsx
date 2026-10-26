@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog, FormActions, SidePanel } from "@/components/shared/dialogs";
+import { DateInput } from "@/components/shared/date-time-input";
 import { Field } from "@/components/shared/form";
 import { cn } from "@/lib/utils";
 import { useActiveStudents, useMoneyOwner, useMyFees, useStaffMutation } from "@/features/admin/hooks";
@@ -183,7 +184,7 @@ function PaymentForm({
           {(p) => <Input {...p} inputMode="decimal" placeholder="120" {...form.register("amount")} />}
         </Field>
         <Field label="Scadenza" error={errors.dueDate?.message} required>
-          {(p) => <Input {...p} type="date" {...form.register("dueDate")} />}
+          {(p) => <Controller control={form.control} name="dueDate" render={({ field }) => <DateInput {...p} {...field} />} />}
         </Field>
       </div>
 
@@ -206,7 +207,7 @@ function PaymentForm({
               {(p) => <Input {...p} inputMode="decimal" placeholder="30" {...form.register("payNowAmount")} />}
             </Field>
             <Field label="Data" error={errors.payNowDate?.message}>
-              {(p) => <Input {...p} type="date" {...form.register("payNowDate")} />}
+              {(p) => <Controller control={form.control} name="payNowDate" render={({ field }) => <DateInput {...p} {...field} clearable />} />}
             </Field>
           </div>
           {!!payNowAmount && (
@@ -318,7 +319,7 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
               {(p) => <Input {...p} inputMode="decimal" {...form.register("amount")} />}
             </Field>
             <Field label="Data" error={errors.date?.message} required>
-              {(p) => <Input {...p} type="date" {...form.register("date")} />}
+              {(p) => <Controller control={form.control} name="date" render={({ field }) => <DateInput {...p} {...field} />} />}
             </Field>
           </div>
           <Field label="Metodo" error={errors.method?.message} required>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { SidePanel } from "@/components/shared/dialogs";
+import { DateInput } from "@/components/shared/date-time-input";
 import { CheckList, Field } from "@/components/shared/form";
 import { WizardActions, WizardProgress } from "@/components/shared/wizard";
 import { useActiveStudents, useStaffMutation } from "@/features/admin/hooks";
@@ -63,7 +64,7 @@ function Wizard({ entry, onClose }: { entry: InteractiveCatalogEntry; onClose: (
           <Field label="Titolo" error={touched ? titleError : undefined} required>
             {(p) => <Input {...p} value={title} maxLength={140} onChange={(e) => setTitle(e.target.value)} />}
           </Field>
-          <Field label="Scadenza">{(p) => <Input {...p} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />}</Field>
+          <Field label="Scadenza">{(p) => <DateInput {...p} value={dueDate} onChange={setDueDate} clearable />}</Field>
           <div className="space-y-1">
             <CheckList
               label="Studenti"

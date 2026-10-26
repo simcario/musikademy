@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ConfirmDialog, FormActions, SidePanel } from "@/components/shared/dialogs";
+import { DateInput } from "@/components/shared/date-time-input";
 import { Field } from "@/components/shared/form";
 import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/shared/states";
 import { PaymentBadge } from "@/components/shared/status-badge";
@@ -204,7 +205,7 @@ function GenerateCyclesDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         }}
       >
         <Field label="Cicli in corso al" required>
-          {(p) => <Input {...p} type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />}
+          {(p) => <DateInput {...p} value={date} onChange={(v) => v && setDate(v)} />}
         </Field>
         {students.isPending || fees.isPending ? (
           <p className="text-sm text-muted-foreground">Caricamento costi…</p>
