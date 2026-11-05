@@ -1,12 +1,21 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
+import { Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Field } from "@/components/shared/form";
 import { cn } from "@/lib/utils";
 import {
+  CHORD_COMPLEXITIES,
   MEASURE_DIFFICULTIES,
   SCALE_TYPES,
+  type Chord,
+  type ChordComplexity,
+  type ChordQuality,
+  type ChordTimingExercise,
+  type EarNotesExercise,
+  type ProgressionsExercise,
   type Clef,
   type InteractiveExercise,
   type IntervalsExercise,
@@ -15,6 +24,8 @@ import {
   type StaffNotesExercise,
 } from "@/types";
 import { InteractiveIcon, catalogEntry } from "./catalog";
+import { COMPLEXITY_META, QUALITY_META, ROOT_NAMES, allowedAt, chordLabel } from "./chords";
+import { PROGRESSION_LEVELS } from "./ear";
 import { LEVEL_LABEL } from "./intervals";
 import { SCALE_META } from "./scales";
 import { CLEF_LABEL } from "./staff";
@@ -114,6 +125,90 @@ const DIFFICULTY: Record<MeasureDifficulty, { label: string; hint: string }> = {
 export interface SettingsStep {
   title: string;
   content: React.ReactNode;
+  /** Se presente, il passo non si supera finché non è risolto. */
+  error?: string;
+}
+
+const MAX_CHORDS = 12;
+
+/** Scelta degli accordi, nell'ordine in cui verranno suonati: fondamentale + qualità tra quelle della complessità. */
+function ChordPicker({ value, onChange }: { value: ChordTimingExercise; onChange: (v: ChordTimingExercise) => void }) {
+  const meta = COMPLEXITY_META[value.complexity];
+  const [root, setRoot] = useState(meta.roots[0]);
+  const [quality, setQuality] = useState<ChordQuality>(meta.qualities[0]);
+  const validRoot = meta.roots.includes(root) ? root : meta.roots[0];
+  const validQuality = meta.qualities.includes(quality) ? quality : meta.qualities[0];
+  const set = (chords: Chord[]) => onChange({ ...value, chords });
+
+  return (
+    <div className="space-y-3">
+      <fieldset className="space-y-1.5">
+        <legend className="text-[13px] font-medium">Accordi da suonare, in ordine</legend>
+        {value.chords.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nessun accordo: aggiungine almeno uno.</p>
+        ) : (
+          <ol className="flex flex-wrap gap-2">
+            {value.chords.map((c, i) => (
+              <li key={`${i}-${c.root}-${c.quality}`}>
+                <span className="inline-flex min-h-10 items-center gap-1 rounded-full border border-border bg-card pr-1 pl-3 text-sm font-semibold">
+                  <span className="text-xs text-muted-foreground tabular-nums">{i + 1}.</span> {chordLabel(c)}
+                  <button
+                    type="button"
+                    onClick={() => set(value.chords.filter((_, j) => j !== i))}
+                    aria-label={`Togli ${chordLabel(c)}`}
+                    className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </fieldset>
+      <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+        <Field label="Fondamentale">
+          {(p) => (
+            <NativeSelect {...p} value={validRoot} onChange={(e) => setRoot(Number(e.target.value))}>
+              {meta.roots.map((r) => (
+                <option key={r} value={r}>
+                  {ROOT_NAMES[r]}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+        <Field label="Tipo">
+          {(p) => (
+            <NativeSelect {...p} value={validQuality} onChange={(e) => setQuality(e.target.value as ChordQuality)}>
+              {meta.qualities.map((q) => (
+                <option key={q} value={q}>
+                  {QUALITY_META[q].label}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={value.chords.length >= MAX_CHORDS}
+          onClick={() => set([...value.chords, { root: validRoot, quality: validQuality }])}
+        >
+          <Plus aria-hidden /> Aggiungi
+        </Button>
+      </div>
+      <Choice<ChordTimingExercise["order"]>
+        label="Ordine"
+        value={value.order}
+        onChange={(order) => onChange({ ...value, order })}
+        options={[
+          { value: "sequence", label: "In questo ordine", hint: "La sequenza si ripete: ideale per una progressione." },
+          { value: "random", label: "A caso", hint: "Un accordo a caso ogni volta, mai due uguali di fila." },
+        ]}
+      />
+    </div>
+  );
 }
 
 /**
@@ -344,7 +439,149 @@ export function settingsSteps(value: InteractiveExercise, onChange: (v: Interact
           ),
         },
       ];
+
+    case "chord-timing":
+      return [
+        {
+          title: "Complessità",
+          content: (
+            <Choice<ChordComplexity>
+              label="Quali accordi si possono usare?"
+              value={value.complexity}
+              // Cambiando complessità restano solo gli accordi ammessi.
+              onChange={(complexity) => onChange({ ...value, complexity, chords: value.chords.filter((c) => allowedAt(c, complexity)) })}
+              options={CHORD_COMPLEXITIES.map((c) => ({ value: c, label: COMPLEXITY_META[c].label, hint: COMPLEXITY_META[c].hint }))}
+            />
+          ),
+        },
+        {
+          title: "Accordi",
+          content: <ChordPicker value={value} onChange={onChange} />,
+          error: value.chords.length ? undefined : "Aggiungi almeno un accordo",
+        },
+        {
+          title: "Tempo",
+          content: (
+            <>
+              <Choice<string>
+                label="Ogni quanti battiti cambia l'accordo?"
+                value={String(value.beatsPerChord)}
+                onChange={(v) => onChange({ ...value, beatsPerChord: Number(v) as ChordTimingExercise["beatsPerChord"] })}
+                options={[
+                  { value: "4", label: "Ogni 4 battiti", hint: "Un accordo per battuta." },
+                  { value: "2", label: "Ogni 2 battiti", hint: "Due accordi per battuta." },
+                  { value: "1", label: "A ogni battito", hint: "Il cambio più rapido." },
+                ]}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <NumberSelect
+                  label="Velocità del metronomo"
+                  value={value.bpm}
+                  options={[50, 60, 72, 80, 92, 100, 120]}
+                  unit="BPM"
+                  onChange={(bpm) => onChange({ ...value, bpm: bpm ?? value.bpm })}
+                />
+                <NumberSelect
+                  label="Accordi da suonare"
+                  value={value.changes}
+                  options={[8, 12, 16, 24, 32]}
+                  unit="accordi"
+                  onChange={(changes) => onChange({ ...value, changes: changes ?? value.changes })}
+                />
+              </div>
+            </>
+          ),
+        },
+      ];
+
+    case "ear-notes":
+      return [
+        {
+          title: "Impostazioni",
+          content: (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Scala">
+                  {(p) => (
+                    <NativeSelect {...p} value={value.scale} onChange={(e) => onChange({ ...value, scale: e.target.value as EarNotesExercise["scale"] })}>
+                      <option value="major">Maggiore</option>
+                      <option value="minor">Minore</option>
+                      <option value="mixed">Maggiore o minore, a caso</option>
+                    </NativeSelect>
+                  )}
+                </Field>
+                <Field label="Tonica">
+                  {(p) => (
+                    <NativeSelect {...p} value={value.tonic} onChange={(e) => onChange({ ...value, tonic: e.target.value as EarNotesExercise["tonic"] })}>
+                      <option value="fixed">Sempre Do</option>
+                      <option value="random">A caso a ogni domanda</option>
+                    </NativeSelect>
+                  )}
+                </Field>
+              </div>
+              <NumberSelect
+                label="Domande"
+                value={value.rounds}
+                options={[5, 10, 15, 20]}
+                unit="domande"
+                onChange={(rounds) => onChange({ ...value, rounds: rounds ?? value.rounds })}
+              />
+            </>
+          ),
+        },
+      ];
+
+    case "ear-progressions":
+      return [
+        {
+          title: "Impostazioni",
+          content: (
+            <>
+              <Choice<ProgressionsExercise["level"]>
+                label="Quali accordi possono comparire?"
+                value={value.level}
+                onChange={(level) => onChange({ ...value, level })}
+                options={(Object.keys(PROGRESSION_LEVELS) as ProgressionsExercise["level"][]).map((l) => ({
+                  value: l,
+                  label: PROGRESSION_LEVELS[l].label,
+                  hint: PROGRESSION_LEVELS[l].hint,
+                }))}
+              />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Accordi">
+                  {(p) => (
+                    <NativeSelect {...p} value={value.length} onChange={(e) => onChange({ ...value, length: Number(e.target.value) as 3 | 4 })}>
+                      <option value={3}>3 accordi</option>
+                      <option value={4}>4 accordi</option>
+                    </NativeSelect>
+                  )}
+                </Field>
+                <Field label="Tonalità">
+                  {(p) => (
+                    <NativeSelect {...p} value={value.key} onChange={(e) => onChange({ ...value, key: e.target.value as ProgressionsExercise["key"] })}>
+                      <option value="fixed">Do maggiore</option>
+                      <option value="random">A caso</option>
+                    </NativeSelect>
+                  )}
+                </Field>
+                <NumberSelect
+                  label="Progressioni"
+                  value={value.rounds}
+                  options={[5, 8, 10, 15]}
+                  unit="domande"
+                  onChange={(rounds) => onChange({ ...value, rounds: rounds ?? value.rounds })}
+                />
+              </div>
+            </>
+          ),
+        },
+      ];
   }
+}
+
+/** Primo errore delle impostazioni, per bloccare l'assegnazione (es. nessun accordo scelto). */
+export function settingsError(value: InteractiveExercise) {
+  return settingsSteps(value, () => {}).find((s) => s.error)?.error;
 }
 
 /** Tutte le impostazioni in un unico riquadro, per il form di assegnazione e di modifica. */

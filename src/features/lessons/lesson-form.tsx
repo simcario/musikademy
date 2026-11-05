@@ -16,6 +16,8 @@ import { CourseSelect, subjectsFor } from "@/features/admin/pickers";
 import { useSession } from "@/features/auth/auth-provider";
 import { CreateMaterialButton } from "@/features/materials/material-form";
 import { useCourses, useTeachers } from "@/features/student-area/hooks";
+import { Timestamp } from "firebase/firestore";
+import { LessonPaymentDialog, useCanRecordPayment, type PayableLesson } from "@/features/payments/lesson-payments";
 import { lessonService } from "@/services/lessonService";
 import { materialService } from "@/services/materialService";
 import { EXERCISE_CATEGORY, type Lesson, type WithId } from "@/types";
@@ -39,6 +41,8 @@ export function LessonFormDialog({
 }) {
   // Dalla modifica si può passare alla copia senza chiudere il dialog.
   const [copying, setCopying] = useState<WithId<Lesson> | null>(null);
+  // Lezione appena segnata come svolta: si chiede se è stata pagata.
+  const [paymentFor, setPaymentFor] = useState<PayableLesson | null>(null);
   const source = copyFrom ?? copying;
   const editing = source ? null : lesson;
   const close = (o: boolean) => {
@@ -46,22 +50,28 @@ export function LessonFormDialog({
     onOpenChange(o);
   };
   return (
-    <SidePanel
-      open={open}
-      onOpenChange={close}
-      title={editing ? "Modifica lezione" : source ? "Copia lezione" : "Nuova lezione"}
-      description={source ? "Stessi contenuti: scegli studente, giorno e orario della nuova lezione." : undefined}
-      wide
-    >
-      <LessonForm
-        key={source ? `copy-${source.id}` : (editing?.id ?? "new")}
-        lesson={editing}
-        copyFrom={source}
-        defaults={defaults}
-        onCopy={editing ? () => setCopying(editing) : undefined}
-        onDone={() => close(false)}
-      />
-    </SidePanel>
+    <>
+      <SidePanel
+        open={open}
+        onOpenChange={close}
+        title={editing ? "Modifica lezione" : source ? "Copia lezione" : "Nuova lezione"}
+        description={source ? "Stessi contenuti: scegli studente, giorno e orario della nuova lezione." : undefined}
+        wide
+      >
+        <LessonForm
+          key={source ? `copy-${source.id}` : (editing?.id ?? "new")}
+          lesson={editing}
+          copyFrom={source}
+          defaults={defaults}
+          onCopy={editing ? () => setCopying(editing) : undefined}
+          onDone={(saved) => {
+            close(false);
+            if (saved) setPaymentFor(saved);
+          }}
+        />
+      </SidePanel>
+      <LessonPaymentDialog lesson={paymentFor} onOpenChange={(o) => !o && setPaymentFor(null)} />
+    </>
   );
 }
 
@@ -76,9 +86,11 @@ function LessonForm({
   copyFrom?: WithId<Lesson> | null;
   defaults?: { studentId?: string; date?: Date };
   onCopy?: () => void;
-  onDone: () => void;
+  /** `saved` = lezione appena segnata come svolta, di cui chiedere il pagamento. */
+  onDone: (saved?: PayableLesson) => void;
 }) {
   const { uid, role } = useSession();
+  const canPay = useCanRecordPayment();
   // L'admin programma lezioni anche per gli altri docenti; il docente solo a proprio nome (ADR D34).
   const isAdmin = role === "admin";
   const students = useActiveStudents();
@@ -151,10 +163,13 @@ function LessonForm({
           .filter((m) => materialIds.includes(m.id) && !m.studentIds?.includes(v.studentId))
           .map((m) => materialService.assignToStudents(m, [v.studentId])),
       );
+      let id = lesson?.id;
       if (lesson) await lessonService.update(lesson.id, input);
-      else await lessonService.create(input);
+      else id = await lessonService.create(input);
+      const completedNow = v.status === "completed" && lesson?.status !== "completed";
+      return completedNow && id && canPay(input) ? { ...input, id, date: Timestamp.fromDate(input.date) } : undefined;
     },
-    { success: lesson ? "Lezione aggiornata" : copyFrom ? "Lezione copiata" : "Lezione creata", invalidate: [["lessons"], ["stats"], ["materials"]], onSuccess: onDone },
+    { success: lesson ? "Lezione aggiornata" : copyFrom ? "Lezione copiata" : "Lezione creata", invalidate: [["lessons"], ["stats"], ["materials"]], onSuccess: (saved) => onDone(saved) },
   );
 
   return (
@@ -283,7 +298,7 @@ function LessonForm({
           <Copy aria-hidden /> Copia per un altro studente o giorno
         </Button>
       )}
-      <FormActions onCancel={onDone} submitting={save.isPending} submitLabel={lesson ? "Salva" : "Crea lezione"} />
+      <FormActions onCancel={() => onDone()} submitting={save.isPending} submitLabel={lesson ? "Salva" : "Crea lezione"} />
     </form>
   );
 }

@@ -83,6 +83,8 @@ function Wizard({ entry, onClose }: { entry: InteractiveCatalogEntry; onClose: (
     },
   ];
   const last = index === steps.length - 1;
+  const [stepTouched, setStepTouched] = useState(false);
+  const stepError = (steps[index] as { error?: string }).error;
 
   function submit() {
     setTouched(true);
@@ -95,13 +97,22 @@ function Wizard({ entry, onClose }: { entry: InteractiveCatalogEntry; onClose: (
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        if (stepError) return setStepTouched(true);
+        setStepTouched(false);
         if (last) submit();
         else setIndex(index + 1);
       }}
     >
       <WizardProgress steps={steps.map((s) => s.title)} index={index} />
 
-      <div className="min-h-48 space-y-3">{steps[index].content}</div>
+      <div className="min-h-48 space-y-3">
+        {steps[index].content}
+        {stepTouched && stepError && (
+          <p role="alert" className="text-xs font-medium text-danger">
+            {stepError}
+          </p>
+        )}
+      </div>
 
       <WizardActions
         index={index}

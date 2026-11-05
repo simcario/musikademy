@@ -370,13 +370,67 @@ export interface IntervalsExercise {
   timeLimit: number | null;
 }
 
+/** Qualità degli accordi (sigle in features/exercises/interactive/chords). */
+export const CHORD_QUALITIES = ["major", "minor", "dom7", "maj7", "min7", "dim", "sus4"] as const;
+export type ChordQuality = (typeof CHORD_QUALITIES)[number];
+
+/** Accordo: fondamentale (classe di altezza, 0 = Do … 11 = Si) e qualità. */
+export interface Chord {
+  root: number;
+  quality: ChordQuality;
+}
+
+export const CHORD_COMPLEXITIES = ["easy", "medium", "hard"] as const;
+/** Complessità: quali accordi si possono scegliere (facile = triadi maggiori e minori sui tasti bianchi). */
+export type ChordComplexity = (typeof CHORD_COMPLEXITIES)[number];
+
+/** Accordi a tempo: lo studente suona gli accordi sul metronomo, il microfono misura la precisione dell'attacco. */
+export interface ChordTimingExercise {
+  kind: "chord-timing";
+  complexity: ChordComplexity;
+  /** Accordi da suonare, nell'ordine scelto dal docente. */
+  chords: Chord[];
+  /** `sequence` = nell'ordine di `chords`, ripetuto; `random` = a caso, mai due uguali di fila. */
+  order: "sequence" | "random";
+  /** Ogni quanti quarti cambia l'accordo. */
+  beatsPerChord: 1 | 2 | 4;
+  bpm: number;
+  /** Quanti accordi suonare in una sessione. */
+  changes: number;
+}
+
+/** Riconoscimento a orecchio: il sistema suona 5 note di una scala, poi una di esse; lo studente la indovina. */
+export interface EarNotesExercise {
+  kind: "ear-notes";
+  /** Le prime cinque note della scala maggiore, minore o un tipo a caso ogni volta. */
+  scale: "major" | "minor" | "mixed";
+  /** `fixed` = sempre da Do; `random` = tonica a caso a ogni domanda. */
+  tonic: "fixed" | "random";
+  rounds: number;
+}
+
+/** Indovina la progressione: il sistema suona una progressione di accordi e ne propone quattro. */
+export interface ProgressionsExercise {
+  kind: "ear-progressions";
+  /** Gradi usati: base (I IV V vi), intermedio (+ ii iii), avanzato (+ vii° e V7). */
+  level: "basic" | "intermediate" | "advanced";
+  /** Accordi per progressione. */
+  length: 3 | 4;
+  /** `fixed` = sempre in Do maggiore; `random` = tonalità a caso. */
+  key: "fixed" | "random";
+  rounds: number;
+}
+
 /** Esercizi interattivi disponibili (catalogo in features/exercises/interactive). */
 export type InteractiveExercise =
   | PianoKeysExercise
   | ScalesExercise
   | StaffNotesExercise
   | StaffMeasureExercise
-  | IntervalsExercise;
+  | IntervalsExercise
+  | ChordTimingExercise
+  | EarNotesExercise
+  | ProgressionsExercise;
 export type InteractiveKind = InteractiveExercise["kind"];
 
 export interface Assignment {
@@ -424,6 +478,8 @@ export interface Installment {
   date: Timestamp;
   method: PaymentMethod;
   notes?: string;
+  /** Lezioni pagate con questo versamento (dello stesso docente). */
+  lessonIds?: string[];
 }
 
 /** Quota dovuta dallo studente, saldabile con uno o più versamenti (ADR D21). */
@@ -443,6 +499,11 @@ export interface Payment {
   /** Somma dei versamenti, denormalizzata per le aggregazioni. Assente sui documenti precedenti. */
   paidAmount?: number;
   installments?: Installment[];
+  /**
+   * Lezioni pagate dai versamenti: unione dei `lessonIds` dei versamenti, denormalizzata perché
+   * l'elenco lezioni sappia quali sono pagate (`array-contains-any`) senza leggere tutte le quote.
+   */
+  lessonIds?: string[];
   /** Primo giorno (`YYYY-MM-DD`) del ciclo di 4 settimane delle quote generate. */
   period?: string;
   dueDate: Timestamp;

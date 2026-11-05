@@ -20,7 +20,7 @@ import { AppError } from "@/utils/errors";
 import { cycleDueDate, cycleFee, cycleKey, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { feeId, feeLabel } from "@/utils/fees";
 import { paidAmountOf, remainingOf, storedPaymentStatus } from "@/utils/status";
-import { COLLECTIONS, clean, col, list, paginate, ref, timestamps, touched } from "./base";
+import { COLLECTIONS, chunk, clean, col, list, paginate, ref, timestamps, touched } from "./base";
 
 /** Dati della quota (il dovuto). I versamenti si gestiscono a parte. */
 export interface PaymentInput {
@@ -57,6 +57,8 @@ export interface InstallmentInput {
   date: Date;
   method: PaymentMethod;
   notes?: string;
+  /** Lezioni pagate con il versamento. */
+  lessonIds?: string[];
 }
 
 export interface PaymentFilters {
@@ -85,6 +87,7 @@ function toInstallment(input: InstallmentInput): Installment {
     date: Timestamp.fromDate(input.date),
     method: input.method,
     notes: input.notes || undefined,
+    lessonIds: input.lessonIds?.length ? [...new Set(input.lessonIds)] : undefined,
   }) as Installment;
 }
 
@@ -95,6 +98,7 @@ function settle(amount: number, installments: Installment[], cancelled: boolean)
   return {
     installments,
     paidAmount: paid,
+    lessonIds: [...new Set(installments.flatMap((i) => i.lessonIds ?? []))],
     status: (cancelled ? "cancelled" : storedPaymentStatus(amount, paid)) as PaymentStatus,
     paidDate: last?.date ?? null,
     method: last?.method ?? null,
@@ -182,6 +186,24 @@ export const paymentService = {
       orderBy("dueDate", "desc"),
       limit(200),
     ),
+
+  /**
+   * Quali di queste lezioni sono pagate da una quota del docente `uid`: lezione → quota.
+   * Le lezioni degli altri docenti non risultano mai pagate (le loro quote non si leggono, ADR D34).
+   */
+  async paidLessons(lessonIds: string[], uid: string): Promise<Map<string, WithId<Payment>>> {
+    const map = new Map<string, WithId<Payment>>();
+    for (const ids of chunk([...new Set(lessonIds)])) {
+      if (!ids.length) continue;
+      const rows = await list<Payment>(
+        COLLECTIONS.payments,
+        where("teacherId", "==", uid),
+        where("lessonIds", "array-contains-any", ids),
+      );
+      rows.forEach((p) => p.lessonIds?.forEach((id) => ids.includes(id) && map.set(id, p)));
+    }
+    return map;
+  },
 
   /** Quote del docente `uid`: ognuno, admin compreso, vede solo le proprie (ADR D34). */
   page: (f: PaymentFilters, cursor: unknown | null, uid: string) => {
@@ -312,6 +334,7 @@ export const paymentService = {
           amount: cents(fee.cycleAmount),
           paidAmount: 0,
           installments: [],
+          lessonIds: [],
           period: cycleKey(starts[i]),
           dueDate: Timestamp.fromDate(cycleDueDate(starts[i], fee.dueAt)),
           status: "pending",

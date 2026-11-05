@@ -20,7 +20,8 @@ import { materialService } from "@/services/materialService";
 import type { Assignment, InteractiveExercise, WithId } from "@/types";
 import { formatFileSize, fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { CATEGORY_META } from "@/utils/status";
-import { InteractiveSettings } from "./interactive/interactive-settings";
+import { AppError } from "@/utils/errors";
+import { InteractiveSettings, settingsError } from "./interactive/interactive-settings";
 
 export const assignmentFormSchema = z.object({
   title: z.string().trim().min(1, "Inserisci un titolo").max(140),
@@ -144,6 +145,8 @@ function AssignmentForm({
 
   const save = useStaffMutation(
     async (v: Values) => {
+      const invalid = interactive && settingsError(interactive);
+      if (invalid) throw new AppError(invalid);
       const targetIds = assignment ? [assignment.studentId] : v.studentIds;
       const uploadedIds = await uploadAttachments(v.title, targetIds);
       // I materiali collegati devono essere leggibili dagli studenti (visibilità additiva, ADR D18).

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { LessonPaymentPrompt, useCanRecordPayment } from "@/features/payments/lesson-payments";
 import { Ban, CircleAlert, CircleCheck, CircleX, ClipboardPen, RotateCcw, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SidePanel } from "@/components/shared/dialogs";
@@ -15,6 +17,8 @@ import { ATTENDANCE_META } from "@/utils/status";
 
 interface PickerProps {
   lesson: WithId<Lesson>;
+  /** Dopo la registrazione andata a buon fine. */
+  onRecorded?: (status: AttendanceStatus) => void;
   current?: WithId<Attendance>;
   /** Id lezioni della query `useAttendanceMap` da aggiornare in modo ottimistico. */
   lessonIds: string[];
@@ -60,7 +64,7 @@ export function AttendanceButton({
 }
 
 /** Selettore rapido della presenza di una lezione (pagina lezioni e dashboard). */
-export function AttendancePicker({ lesson, current, lessonIds }: PickerProps) {
+export function AttendancePicker({ lesson, current, lessonIds, onRecorded }: PickerProps) {
   const qc = useQueryClient();
   const key = qk.attendance({ lessons: lessonIds });
   const record = useMutation({
@@ -74,6 +78,7 @@ export function AttendancePicker({ lesson, current, lessonIds }: PickerProps) {
       qc.setQueryData(key, next);
       return { prev };
     },
+    onSuccess: (_r, status) => onRecorded?.(status),
     onError: (e, _s, ctx) => {
       qc.setQueryData(key, ctx?.prev);
       toast.error(errorMessage(e));
@@ -119,11 +124,22 @@ export function AttendanceDialog({
   current,
   lessonIds,
   onOpenChange,
-}: Omit<PickerProps, "lesson"> & { lesson: WithId<Lesson> | null; onOpenChange: (open: boolean) => void }) {
+}: Omit<PickerProps, "lesson" | "onRecorded"> & { lesson: WithId<Lesson> | null; onOpenChange: (open: boolean) => void }) {
+  const canPay = useCanRecordPayment();
+  // Lezione appena segnata come svolta: si chiede se lo studente l'ha pagata.
+  const [askPayment, setAskPayment] = useState<WithId<Lesson> | null>(null);
+  const close = (o: boolean) => {
+    if (!o) setAskPayment(null);
+    onOpenChange(o);
+  };
+  const onRecorded = (status: AttendanceStatus) => {
+    if (lesson && status !== "cancelled" && lesson.status !== "completed" && canPay(lesson)) setAskPayment(lesson);
+  };
+  const asking = !!lesson && askPayment?.id === lesson.id;
   return (
     <SidePanel
       open={!!lesson}
-      onOpenChange={onOpenChange}
+      onOpenChange={close}
       title="Presenza"
       description={
         lesson ? `${lesson.studentName} · ${formatDate(lesson.date, "EEEE d MMMM")} · ${lesson.startTime ?? "—"}` : undefined
@@ -131,10 +147,15 @@ export function AttendanceDialog({
     >
       {lesson && (
         <div className="space-y-3">
-          <AttendancePicker lesson={lesson} current={current} lessonIds={lessonIds} />
+          <AttendancePicker lesson={lesson} current={current} lessonIds={lessonIds} onRecorded={onRecorded} />
           <p className="text-center text-xs text-muted-foreground">
             {ATTENDANCE_STATUSES.map((s) => `${ATTENDANCE_META[s].glyph} ${ATTENDANCE_META[s].label}`).join(" · ")}
           </p>
+          {asking && (
+            <div className="border-t border-border pt-4">
+              <LessonPaymentPrompt lesson={lesson} onDone={() => close(false)} />
+            </div>
+          )}
         </div>
       )}
     </SidePanel>

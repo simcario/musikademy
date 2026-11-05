@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheckBig, Mic, Play, RotateCcw } from "lucide-react";
+import { CircleCheckBig, Headphones, Mic, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LevelMeter } from "./mic-setup";
 
@@ -63,6 +63,19 @@ export function GameFooter({ level, onClose }: { level: number; onClose: () => v
       <div className="flex-1">
         <LevelMeter level={level} />
       </div>
+      <Button variant="ghost" size="sm" onClick={onClose}>
+        Termina
+      </Button>
+    </div>
+  );
+}
+
+/** Piede degli esercizi d'ascolto, che non usano il microfono. */
+export function ListenFooter({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground">
+      <Headphones className="size-4 shrink-0" aria-hidden />
+      <p className="flex-1 text-xs">Meglio con le cuffie o con il volume alto.</p>
       <Button variant="ghost" size="sm" onClick={onClose}>
         Termina
       </Button>

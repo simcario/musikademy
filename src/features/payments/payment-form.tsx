@@ -25,6 +25,7 @@ import {
 } from "./schemas";
 import { formatCurrency, formatDate, fromInputDate, fullName, toInputDate } from "@/utils/format";
 import { PaymentProgress } from "./payment-progress";
+import { LessonChecklist, lessonsInPeriod, useUnpaidLessons, type PayableLesson } from "./lesson-payments";
 import { cycleFee, cycleLabel, cycleStartAt } from "@/utils/cycles";
 import { PAYMENT_METHOD_LABEL, paidAmountOf, remainingOf } from "@/utils/status";
 
@@ -97,6 +98,9 @@ function PaymentForm({
   const studentFees = (fees.data ?? []).filter((f) => f.studentId === studentId);
   const selectedFee = studentFees.find((f) => f.id === feeId) ?? null;
   const selectedCycle = cycleFee(selectedFee);
+  // Lezioni pagate con l'incasso immediato (solo nuova quota).
+  const lessons = useUnpaidLessons(payment ? "" : studentId, selectedFee ?? undefined);
+  const [payNowLessons, setPayNowLessons] = useState<string[]>([]);
 
   // Nuova quota: propone descrizione e importo dal costo scelto (materia).
   const applyFee = (id: string) => {
@@ -130,7 +134,12 @@ function PaymentForm({
       if (payment) return paymentService.update(payment.id, input);
       const payNow =
         v.payNowAmount && v.payNowDate && v.payNowMethod
-          ? { amount: parseAmount(v.payNowAmount), date: fromInputDate(v.payNowDate), method: v.payNowMethod }
+          ? {
+              amount: parseAmount(v.payNowAmount),
+              date: fromInputDate(v.payNowDate),
+              method: v.payNowMethod,
+              lessonIds: payNowLessons.filter((id) => lessons.unpaid.some((l) => l.id === id)),
+            }
           : undefined;
       return paymentService.create(input, owner, payNow);
     },
@@ -219,6 +228,9 @@ function PaymentForm({
               )}
             </Field>
           )}
+          {!!payNowAmount && !!studentId && (
+            <LessonChecklist lessons={lessons.unpaid} selected={payNowLessons} onChange={setPayNowLessons} loading={lessons.isPending} />
+          )}
         </fieldset>
       )}
 
@@ -263,6 +275,17 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
   });
   const { errors } = form.formState;
   const amount = useWatch({ control: form.control, name: "amount" });
+  // Lezioni pagate dal versamento: per le quote a cicli si propongono quelle del ciclo non ancora pagate.
+  const lessons = useUnpaidLessons(payment.studentId, fee);
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const lessonIds = picked ?? lessonsInPeriod(lessons.unpaid, payment.period);
+  const pickLessons = (ids: string[]) => {
+    setPicked(ids);
+    if (lessonPrice && ids.length) {
+      const value = Math.min(remaining, Math.round(ids.length * lessonPrice * 100) / 100);
+      form.setValue("amount", amountToInput(value), { shouldValidate: true });
+    }
+  };
 
   const save = useStaffMutation(
     (v: InstallmentFormValues) =>
@@ -271,6 +294,7 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
         date: fromInputDate(v.date),
         method: v.method,
         notes: v.notes || undefined,
+        lessonIds,
       }),
     {
       success: (_r, v) => (parseAmount(v.amount) >= remaining ? "Quota saldata" : `Versamento di ${formatCurrency(parseAmount(v.amount))} registrato`),
@@ -280,10 +304,10 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
   );
 
   // Scorciatoie: n lezioni al costo impostato, oppure il saldo.
-  const quick: { label: string; amount: number }[] = [];
+  const quick: { label: string; amount: number; lessons?: number }[] = [];
   if (lessonPrice && lessonPrice < remaining) {
     for (let n = 1; n * lessonPrice < remaining && n <= 3; n++) {
-      quick.push({ label: `${n} ${n === 1 ? "lezione" : "lezioni"}`, amount: Math.round(n * lessonPrice * 100) / 100 });
+      quick.push({ label: `${n} ${n === 1 ? "lezione" : "lezioni"}`, amount: Math.round(n * lessonPrice * 100) / 100, lessons: n });
     }
   }
   quick.push({ label: "Saldo", amount: remaining });
@@ -302,7 +326,11 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
                   key={q.label}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => form.setValue("amount", amountToInput(q.amount), { shouldValidate: true })}
+                  onClick={() => {
+                    form.setValue("amount", amountToInput(q.amount), { shouldValidate: true });
+                    // "n lezioni" segna le prime n lezioni ancora da pagare.
+                    if (q.lessons) setPicked(lessons.unpaid.slice(0, q.lessons).map((l) => l.id));
+                  }}
                   className={cn(
                     "inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors",
                     active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border hover:bg-muted",
@@ -329,6 +357,7 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
               </NativeSelect>
             )}
           </Field>
+          <LessonChecklist lessons={lessons.unpaid} selected={lessonIds} onChange={pickLessons} loading={lessons.isPending} />
           <Field label="Nota" error={errors.notes?.message}>
             {(p) => <Input {...p} placeholder="Es. lezione del 3 ottobre" {...form.register("notes")} />}
           </Field>
@@ -339,12 +368,13 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
           {payment.status === "cancelled" ? "Quota annullata: nessun versamento dovuto." : "Quota saldata."}
         </p>
       )}
-      <InstallmentHistory payment={payment} />
+      <InstallmentHistory payment={payment} lessons={lessons.all} />
     </div>
   );
 }
 
-function InstallmentHistory({ payment }: { payment: WithId<Payment> }) {
+function InstallmentHistory({ payment, lessons }: { payment: WithId<Payment>; lessons: PayableLesson[] }) {
+  const lessonDate = new Map(lessons.map((l) => [l.id, formatDate(l.date, "d MMM")]));
   const [toDelete, setToDelete] = useState<Installment | null>(null);
   const remove = useStaffMutation((i: Installment) => paymentService.removeInstallment(payment.id, i.id), {
     success: "Versamento eliminato",
@@ -365,6 +395,11 @@ function InstallmentHistory({ payment }: { payment: WithId<Payment> }) {
                 {formatDate(i.date, "d MMM yyyy")} · {PAYMENT_METHOD_LABEL[i.method]}
                 {i.notes && ` · ${i.notes}`}
               </p>
+              {!!i.lessonIds?.length && (
+                <p className="truncate text-xs text-muted-foreground">
+                  {i.lessonIds.length === 1 ? "Lezione" : "Lezioni"}: {i.lessonIds.map((id) => lessonDate.get(id) ?? "—").join(", ")}
+                </p>
+              )}
             </div>
             <button
               type="button"

@@ -44,10 +44,6 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
   // Il dialog versamenti legge la quota dalla lista, così resta aggiornato dopo ogni modifica.
   const paying = rows.find((p) => p.id === payingId) ?? null;
 
-  const markPaid = useStaffMutation((p: WithId<Payment>) => paymentService.markPaid(p.id, p.method ?? "cash"), {
-    success: "Quota saldata",
-    invalidate: INVALIDATE,
-  });
   const remove = useStaffMutation((p: WithId<Payment>) => paymentService.remove(p.id), {
     success: "Quota eliminata",
     invalidate: INVALIDATE,
@@ -126,7 +122,7 @@ export function StaffPaymentList({ studentId, showFilters = true }: { studentId?
                         <DropdownMenuItem className="min-h-10" onClick={() => setPayingId(p.id)}>
                           <HandCoins aria-hidden /> Registra versamento
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="min-h-10" onClick={() => markPaid.mutate(p)}>
+                        <DropdownMenuItem className="min-h-10" onClick={() => setPayingId(p.id)}>
                           <CheckCircle2 aria-hidden /> Salda {formatCurrency(rest)}
                         </DropdownMenuItem>
                       </>

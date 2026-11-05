@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { BookOpen, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
+import { BadgeEuro, BookOpen, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,6 +15,8 @@ import { EmptyState, ErrorState, ListSkeleton, LoadMore } from "@/components/sha
 import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { useAttendanceMap, useLessonsPage, useStaffMutation } from "@/features/admin/hooks";
 import { AttendanceButton, AttendanceDialog } from "@/features/attendance/attendance-picker";
+import { StudentSelect } from "@/features/admin/pickers";
+import { LessonPaidBadge, LessonPaymentDialog, useCanRecordPayment, usePaidLessons } from "@/features/payments/lesson-payments";
 import { lessonService } from "@/services/lessonService";
 import type { Lesson, LessonStatus, WithId } from "@/types";
 import { formatDate } from "@/utils/format";
@@ -34,15 +36,28 @@ export function StaffLessonList({
   toolbar?: ReactNode;
 }) {
   const [status, setStatus] = useState<LessonStatus | "all">("all");
+  const [filterStudent, setFilterStudent] = useState("");
+  const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
+  const [payFor, setPayFor] = useState<WithId<Lesson> | null>(null);
   const [editing, setEditing] = useState<WithId<Lesson> | null>(null);
   const [copying, setCopying] = useState<WithId<Lesson> | null>(null);
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<WithId<Lesson> | null>(null);
   const [assignFor, setAssignFor] = useState<WithId<Lesson> | null>(null);
-  const q = useLessonsPage({ studentId, status });
-  const lessons = q.data?.pages.flatMap((p) => p.items) ?? [];
-  const ids = lessons.map((l) => l.id);
+  const q = useLessonsPage({ studentId: studentId ?? (filterStudent || undefined), status });
+  const loaded = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const ids = loaded.map((l) => l.id);
   const att = useAttendanceMap(ids);
+  // Pagamento: solo per le proprie lezioni (le quote sono del docente, ADR D34).
+  const canPay = useCanRecordPayment();
+  const payable = loaded.filter((l) => canPay(l) && l.status !== "cancelled");
+  const paid = usePaidLessons(payable.map((l) => l.id), payable.length > 0);
+  const isPaid = (l: WithId<Lesson>) => !!paid.data?.has(l.id);
+  // Il filtro sul pagamento agisce sulle lezioni caricate (le pagine successive con "Carica altre").
+  const lessons =
+    paidFilter === "all"
+      ? loaded
+      : loaded.filter((l) => canPay(l) && l.status !== "cancelled" && (paidFilter === "paid") === isPaid(l));
   const [attFor, setAttFor] = useState<WithId<Lesson> | null>(null);
 
   const cancel = useStaffMutation((l: WithId<Lesson>) => lessonService.setStatus(l.id, "cancelled"), {
@@ -57,8 +72,27 @@ export function StaffLessonList({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {toolbar}
+        {!studentId && (
+          <StudentSelect
+            value={filterStudent}
+            onChange={(e) => setFilterStudent(e.target.value)}
+            placeholder="Tutti gli studenti"
+            aria-label="Filtra per studente"
+            className="min-w-0 flex-1 sm:w-52 sm:flex-none"
+          />
+        )}
+        <NativeSelect
+          value={paidFilter}
+          onChange={(e) => setPaidFilter(e.target.value as "all" | "paid" | "unpaid")}
+          aria-label="Filtra per pagamento"
+          className="min-w-0 flex-1 sm:w-44 sm:flex-none"
+        >
+          <option value="all">Pagate e da pagare</option>
+          <option value="paid">Solo pagate</option>
+          <option value="unpaid">Solo da pagare</option>
+        </NativeSelect>
         <NativeSelect
           value={status}
           onChange={(e) => setStatus(e.target.value as LessonStatus | "all")}
@@ -98,6 +132,9 @@ export function StaffLessonList({
                   <p className="truncate text-sm text-muted-foreground">
                     {l.startTime ?? "—"} · {showStudent ? l.title : l.teacherName}
                   </p>
+                  {canPay(l) && l.status !== "cancelled" && paid.isSuccess && (isPaid(l) || l.status === "completed") && (
+                    <LessonPaidBadge paid={isPaid(l)} />
+                  )}
                 </button>
                 <div className="hidden sm:block">
                   {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
@@ -120,6 +157,11 @@ export function StaffLessonList({
                     <DropdownMenuItem className="min-h-10" onClick={() => setAssignFor(l)}>
                       <BookOpen aria-hidden /> Assegna esercizio
                     </DropdownMenuItem>
+                    {canPay(l) && l.status !== "cancelled" && !isPaid(l) && (
+                      <DropdownMenuItem className="min-h-10" onClick={() => setPayFor(l)}>
+                        <BadgeEuro aria-hidden /> Registra pagamento
+                      </DropdownMenuItem>
+                    )}
                     {l.status !== "cancelled" && (
                       <DropdownMenuItem className="min-h-10" onClick={() => cancel.mutate(l)}>
                         <XCircle aria-hidden /> Annulla lezione
@@ -151,6 +193,7 @@ export function StaffLessonList({
         lessonIds={ids}
         onOpenChange={(o) => !o && setAttFor(null)}
       />
+      <LessonPaymentDialog lesson={payFor} onOpenChange={(o) => !o && setPayFor(null)} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}

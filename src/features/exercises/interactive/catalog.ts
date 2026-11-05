@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
-import { ArrowUpDown, Gamepad2, ListMusic, Music, Piano, TrendingUp } from "lucide-react";
+import { ArrowUpDown, AudioLines, Ear, Gamepad2, ListMusic, Music, Piano, Timer, TrendingUp } from "lucide-react";
+import { DEFAULT_CHORDS } from "./chords";
 import type { InteractiveExercise, InteractiveKind } from "@/types";
 
 /** Icona che contraddistingue ovunque un esercizio interattivo. */
@@ -17,6 +18,8 @@ export interface InteractiveCatalogEntry {
   defaults: InteractiveExercise;
   /** L'assegnazione avviene con la procedura guidata, un passo per ogni scelta. */
   wizard?: boolean;
+  /** Esercizio d'ascolto: si risponde toccando lo schermo, il microfono non serve. */
+  listening?: boolean;
 }
 
 const SETUP = "Tieni il dispositivo vicino al pianoforte.";
@@ -72,6 +75,36 @@ export const INTERACTIVE_CATALOG: InteractiveCatalogEntry[] = [
     instructions: `${SETUP} Dopo il **3-2-1** compaiono una nota di partenza e un intervallo: suona la nota di arrivo, in qualunque ottava.`,
     icon: ArrowUpDown,
     defaults: { kind: "intervals", level: "seconds_thirds", direction: "up", accidentals: false, rounds: 10, timeLimit: 15 },
+  },
+  {
+    kind: "chord-timing",
+    title: "Accordi a tempo",
+    summary:
+      "Lo studente suona gli accordi scelti sul metronomo, cambiando accordo ogni 4, 2 o 1 battito. Il microfono misura quanto ogni attacco è preciso e una barra mostra la precisione. Scegli complessità, accordi e velocità con la procedura guidata.",
+    instructions: `${SETUP} Il metronomo conta una battuta (4-3-2-1), poi suona gli accordi che compaiono, attaccando ogni nuovo accordo **esattamente sul clic**. La barra mostra la tua precisione. Con le cuffie la misura è più precisa.`,
+    icon: Timer,
+    defaults: { kind: "chord-timing", complexity: "easy", chords: DEFAULT_CHORDS, order: "sequence", beatsPerChord: 4, bpm: 72, changes: 16 },
+    wizard: true,
+  },
+  {
+    kind: "ear-notes",
+    title: "Indovina la nota",
+    summary:
+      "Il sistema suona le prime cinque note di una scala e poi una di esse: lo studente indovina quale ha sentito. Esercizio d'ascolto, non serve il microfono.",
+    instructions: "Ascolta le prime **cinque note** della scala, poi una di esse: scegli quale hai sentito. Puoi riascoltare quante volte vuoi. Meglio con le cuffie.",
+    icon: Ear,
+    defaults: { kind: "ear-notes", scale: "major", tonic: "fixed", rounds: 10 },
+    listening: true,
+  },
+  {
+    kind: "ear-progressions",
+    title: "Indovina la progressione",
+    summary:
+      "Il sistema suona una progressione di accordi e ne propone quattro: lo studente sceglie quella che ha sentito. Esercizio d'ascolto, non serve il microfono.",
+    instructions: "Ascolta la progressione di accordi, poi scegli quella giusta tra le **quattro proposte**. Dopo la risposta puoi ascoltare anche le altre. Meglio con le cuffie.",
+    icon: AudioLines,
+    defaults: { kind: "ear-progressions", level: "basic", length: 4, key: "fixed", rounds: 8 },
+    listening: true,
   },
 ];
 

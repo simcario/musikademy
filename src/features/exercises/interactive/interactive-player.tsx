@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pill } from "@/components/shared/status-badge";
 import type { InteractiveExercise } from "@/types";
-import { InteractiveIcon } from "./catalog";
+import { InteractiveIcon, catalogEntry } from "./catalog";
+import { ChordTimingGame } from "./chord-timing-game";
+import { EarNotesGame } from "./ear-notes-game";
+import { ProgressionsGame } from "./progressions-game";
 import { IntervalsGame } from "./intervals-game";
 import { MeasureGame } from "./measure-game";
 import { MicSetup } from "./mic-setup";
@@ -43,10 +46,19 @@ export function InteractivePlayerDialog({
       <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto p-0 shadow-dialog sm:max-w-lg">
         <DialogHeader className="border-b border-border px-5 pt-5 pb-4">
           <DialogTitle className="pr-8 text-lg leading-snug font-semibold">{session?.title}</DialogTitle>
-          <DialogDescription>Esercizio interattivo con il microfono</DialogDescription>
+          <DialogDescription>
+            {session && catalogEntry(session.exercise.kind)?.listening ? "Esercizio d'ascolto" : "Esercizio interattivo con il microfono"}
+          </DialogDescription>
         </DialogHeader>
         <div className="px-5 py-4">
-          {session && <InteractivePlayer exercise={session.exercise} onClose={onClose} onComplete={onComplete} />}
+          {session &&
+            (session.exercise.kind === "ear-notes" ? (
+              <EarNotesGame exercise={session.exercise} onClose={onClose} onComplete={onComplete} />
+            ) : session.exercise.kind === "ear-progressions" ? (
+              <ProgressionsGame exercise={session.exercise} onClose={onClose} onComplete={onComplete} />
+            ) : (
+              <InteractivePlayer exercise={session.exercise} onClose={onClose} onComplete={onComplete} />
+            ))}
         </div>
       </DialogContent>
     </Dialog>
@@ -81,6 +93,7 @@ function InteractivePlayer({
       {exercise.kind === "staff-notes" && <StaffNotesGame exercise={exercise} {...game} />}
       {exercise.kind === "staff-measure" && <MeasureGame exercise={exercise} {...game} />}
       {exercise.kind === "intervals" && <IntervalsGame exercise={exercise} {...game} />}
+      {exercise.kind === "chord-timing" && <ChordTimingGame exercise={exercise} {...game} />}
       <Button variant="ghost" size="sm" onClick={mic.reconfigure} className="text-muted-foreground">
         <Settings2 aria-hidden /> Cambia microfono
       </Button>
