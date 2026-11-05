@@ -502,8 +502,14 @@ export interface Payment {
   /**
    * Lezioni pagate dai versamenti: unione dei `lessonIds` dei versamenti, denormalizzata perché
    * l'elenco lezioni sappia quali sono pagate (`array-contains-any`) senza leggere tutte le quote.
+   * Include anche `linkedLessonIds`.
    */
   lessonIds?: string[];
+  /**
+   * Lezioni segnate come pagate da questa quota senza un nuovo versamento: tipicamente lezioni
+   * registrate prima che i versamenti indicassero le lezioni, il cui incasso è già nella quota.
+   */
+  linkedLessonIds?: string[];
   /** Primo giorno (`YYYY-MM-DD`) del ciclo di 4 settimane delle quote generate. */
   period?: string;
   dueDate: Timestamp;

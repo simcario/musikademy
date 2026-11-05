@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeEuro, Loader2 } from "lucide-react";
+import { BadgeEuro, CircleCheck, Loader2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -159,18 +159,44 @@ export function LessonPaidBadge({ paid }: { paid: boolean }) {
   );
 }
 
+/** Cosa apre il pannello: la domanda "ha pagato?" o direttamente "segna come pagata" su una quota esistente. */
+export type LessonPaymentMode = "ask" | "link";
+
 /** Pannello "La lezione è stata pagata?" aperto da elenco, calendario e modifica lezione. */
-export function LessonPaymentDialog({ lesson, onOpenChange }: { lesson: PayableLesson | null; onOpenChange: (o: boolean) => void }) {
+export function LessonPaymentDialog({
+  lesson,
+  mode = "ask",
+  onOpenChange,
+}: {
+  lesson: PayableLesson | null;
+  mode?: LessonPaymentMode;
+  onOpenChange: (o: boolean) => void;
+}) {
   return (
     <SidePanel
       open={!!lesson}
       onOpenChange={onOpenChange}
-      title="Pagamento della lezione"
+      title={mode === "link" ? "Segna come pagata" : "Pagamento della lezione"}
       description={lesson ? `${lesson.studentName} · ${lessonLabel(lesson)}` : undefined}
     >
-      {lesson && <LessonPaymentPrompt key={lesson.id} lesson={lesson} onDone={() => onOpenChange(false)} />}
+      {lesson && <LessonPaymentPrompt key={`${lesson.id}-${mode}`} lesson={lesson} mode={mode} onDone={() => onOpenChange(false)} />}
     </SidePanel>
   );
+}
+
+/** Quote dello studente in ordine di pertinenza: stessa materia della lezione, ciclo che la contiene, poi le più vecchie. */
+function rankPayments(payments: WithId<Payment>[], lesson: PayableLesson, fee?: WithId<Fee>) {
+  const lessonTime = lesson.date.toMillis();
+  return payments
+    .filter((p) => p.status !== "cancelled")
+    .map((p) => {
+      const sameFee = !!fee && p.feeId === fee.id;
+      const inCycle =
+        !!p.period && lessonTime >= fromInputDate(p.period).getTime() && lessonTime < addDays(fromInputDate(p.period), CYCLE_DAYS).getTime();
+      return { p, rank: (sameFee ? 2 : 0) + (inCycle ? 1 : 0) };
+    })
+    .sort((a, b) => b.rank - a.rank || a.p.dueDate.toMillis() - b.p.dueDate.toMillis())
+    .map((x) => x.p);
 }
 
 const NEW_PAYMENT = "new";
@@ -179,11 +205,19 @@ const NEW_PAYMENT = "new";
  * Domanda dopo che la lezione è stata segnata come svolta: lo studente ha pagato?
  * Sì → versamento su una quota aperta (proposta quella della materia e del ciclo della lezione) o su una nuova quota.
  */
-export function LessonPaymentPrompt({ lesson, onDone }: { lesson: PayableLesson; onDone: () => void }) {
+export function LessonPaymentPrompt({
+  lesson,
+  mode = "ask",
+  onDone,
+}: {
+  lesson: PayableLesson;
+  mode?: LessonPaymentMode;
+  onDone: () => void;
+}) {
   const owner = useMoneyOwner();
   const payments = useStudentPayments(lesson.studentId);
   const fees = useMyFees(lesson.studentId);
-  const [answer, setAnswer] = useState<"ask" | "yes">("ask");
+  const [answer, setAnswer] = useState<"ask" | "yes" | "link">(mode);
 
   const ownFees = fees.data ?? [];
   const fee =
@@ -199,16 +233,17 @@ export function LessonPaymentPrompt({ lesson, onDone }: { lesson: PayableLesson;
     );
   }
 
-  if (paidBy) {
+  if (paidBy) return <LessonPaidInfo lesson={lesson} payment={paidBy} onDone={onDone} />;
+
+  if (answer === "link") {
     return (
-      <div className="space-y-4">
-        <p className="rounded-xl bg-success-soft p-3 text-sm font-medium text-success">
-          Lezione già pagata con la quota «{paidBy.description}».
-        </p>
-        <Button className="w-full" onClick={onDone}>
-          Chiudi
-        </Button>
-      </div>
+      <LessonLinkForm
+        lesson={lesson}
+        fee={fee}
+        payments={payments.data ?? []}
+        onPayInstead={() => setAnswer("yes")}
+        onDone={onDone}
+      />
     );
   }
 
@@ -232,6 +267,9 @@ export function LessonPaymentPrompt({ lesson, onDone }: { lesson: PayableLesson;
           </Button>
           <Button onClick={() => setAnswer("yes")}>Sì, ha pagato</Button>
         </div>
+        <Button variant="ghost" className="w-full" onClick={() => setAnswer("link")}>
+          <CircleCheck aria-hidden /> Già pagata con una quota registrata
+        </Button>
       </div>
     );
   }
@@ -251,18 +289,8 @@ function LessonPaymentForm({
   onDone: () => void;
 }) {
   const owner = useMoneyOwner();
-  const lessonTime = lesson.date.toMillis();
   // Quote aperte: prima quella della materia della lezione e del ciclo che la contiene, poi le più vecchie.
-  const open = payments
-    .filter((p) => p.status !== "cancelled" && remainingOf(p) > 0)
-    .map((p) => {
-      const sameFee = !!fee && p.feeId === fee.id;
-      const inCycle =
-        !!p.period && lessonTime >= fromInputDate(p.period).getTime() && lessonTime < addDays(fromInputDate(p.period), CYCLE_DAYS).getTime();
-      return { p, rank: (sameFee ? 2 : 0) + (inCycle ? 1 : 0) };
-    })
-    .sort((a, b) => b.rank - a.rank || a.p.dueDate.toMillis() - b.p.dueDate.toMillis())
-    .map((x) => x.p);
+  const open = rankPayments(payments, lesson, fee).filter((p) => remainingOf(p) > 0);
   const best = open.find((p) => !fee || !p.feeId || p.feeId === fee.id);
 
   const [target, setTarget] = useState(best?.id ?? NEW_PAYMENT);
@@ -357,6 +385,136 @@ function LessonPaymentForm({
         <Button type="submit" disabled={save.isPending}>
           {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
           Registra pagamento
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** La lezione risulta pagata: da quale quota, con la possibilità di correggere un collegamento sbagliato. */
+function LessonPaidInfo({ lesson, payment, onDone }: { lesson: PayableLesson; payment: WithId<Payment>; onDone: () => void }) {
+  const unlink = useStaffMutation(() => paymentService.unlinkLesson(payment.id, lesson.id), {
+    success: "Lezione segnata come non pagata",
+    invalidate: INVALIDATE,
+    onSuccess: onDone,
+  });
+  return (
+    <div className="space-y-4">
+      <p className="rounded-xl bg-success-soft p-3 text-sm font-medium text-success">
+        Lezione pagata con la quota «{payment.description}».
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" disabled={unlink.isPending} onClick={() => unlink.mutate(undefined)}>
+          {unlink.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Undo2 aria-hidden />} Non è pagata
+        </Button>
+        <Button onClick={onDone}>Chiudi</Button>
+      </div>
+      <p className="text-xs text-muted-foreground">«Non è pagata» toglie solo il collegamento: gli importi incassati sulla quota restano.</p>
+    </div>
+  );
+}
+
+const paymentOptionLabel = (p: WithId<Payment>) => {
+  const rest = remainingOf(p);
+  const n = p.lessonIds?.length ?? 0;
+  return `${p.description} · ${rest > 0 ? `residuo ${formatCurrency(rest)}` : "saldata"}${n ? ` · ${n} ${n === 1 ? "lezione" : "lezioni"}` : ""}`;
+};
+
+/**
+ * "Segna come pagata": collega la lezione (e, volendo, altre lezioni dello studente) a una quota
+ * già registrata, senza nuovo versamento. Serve per le lezioni tenute prima che i versamenti
+ * indicassero le lezioni pagate, o pagate con una quota saldata in un'unica volta.
+ */
+function LessonLinkForm({
+  lesson,
+  fee,
+  payments,
+  onPayInstead,
+  onDone,
+}: {
+  lesson: PayableLesson;
+  fee?: WithId<Fee>;
+  payments: WithId<Payment>[];
+  onPayInstead: () => void;
+  onDone: () => void;
+}) {
+  const ranked = rankPayments(payments, lesson, fee);
+  const [target, setTarget] = useState(ranked[0]?.id ?? "");
+  const chosen = ranked.find((p) => p.id === target);
+  const { unpaid, isPending } = useUnpaidLessons(lesson.studentId, fee);
+  const choices: PayableLesson[] = unpaid.some((l) => l.id === lesson.id) ? unpaid : [lesson, ...unpaid];
+  const [selected, setSelected] = useState<string[]>([lesson.id]);
+  const inCycle = lessonsInPeriod(choices, chosen?.period);
+
+  const link = useStaffMutation(() => paymentService.linkLessons(target, selected), {
+    success: selected.length === 1 ? "Lezione segnata come pagata" : `${selected.length} lezioni segnate come pagate`,
+    invalidate: INVALIDATE,
+    onSuccess: onDone,
+  });
+
+  if (ranked.length === 0) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Non ci sono quote registrate per {lesson.studentName}. Registra il pagamento: verrà creata una quota per questa lezione.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" onClick={onDone}>
+            Annulla
+          </Button>
+          <Button onClick={onPayInstead}>
+            <BadgeEuro aria-hidden /> Registra pagamento
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (chosen && selected.length) link.mutate(undefined);
+      }}
+      noValidate
+    >
+      <p className="text-sm text-muted-foreground">
+        Collega la lezione a una quota già registrata: nessun nuovo incasso, l&apos;importo resta quello della quota.
+      </p>
+      <Field
+        label="Pagata con la quota"
+        hint={chosen ? `Incassato ${formatCurrency(chosen.paidAmount ?? 0)} di ${formatCurrency(chosen.amount)}` : undefined}
+      >
+        {(p) => (
+          <NativeSelect {...p} value={target} onChange={(e) => setTarget(e.target.value)}>
+            {ranked.map((q) => (
+              <option key={q.id} value={q.id}>
+                {paymentOptionLabel(q)}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
+      </Field>
+      <LessonChecklist
+        lessons={choices}
+        selected={selected}
+        onChange={setSelected}
+        loading={isPending}
+        label="Lezioni pagate con questa quota"
+      />
+      {inCycle.length > 0 && !inCycle.every((id) => selected.includes(id)) && (
+        <Button type="button" variant="outline" size="sm" onClick={() => setSelected([...new Set([...selected, ...inCycle])])}>
+          Aggiungi le lezioni del ciclo ({inCycle.length})
+        </Button>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" onClick={onDone} disabled={link.isPending}>
+          Annulla
+        </Button>
+        <Button type="submit" disabled={link.isPending || !chosen || selected.length === 0}>
+          {link.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <CircleCheck aria-hidden />}
+          Segna come pagata
         </Button>
       </div>
     </form>

@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Trash2 } from "lucide-react";
+import { Check, CircleCheck, Loader2, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -369,7 +370,73 @@ function InstallmentForm({ payment, onDone }: { payment: WithId<Payment>; onDone
         </p>
       )}
       <InstallmentHistory payment={payment} lessons={lessons.all} />
+      <LinkedLessons payment={payment} lessons={lessons.all} unpaid={lessons.unpaid} />
     </div>
+  );
+}
+
+/**
+ * Lezioni pagate dalla quota senza un versamento dedicato (es. quote registrate prima che i
+ * versamenti indicassero le lezioni): si collegano qui, l'incassato non cambia.
+ */
+function LinkedLessons({ payment, lessons, unpaid }: { payment: WithId<Payment>; lessons: PayableLesson[]; unpaid: PayableLesson[] }) {
+  const [adding, setAdding] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const lessonDate = new Map(lessons.map((l) => [l.id, formatDate(l.date, "d MMM")]));
+  const linked = payment.linkedLessonIds ?? [];
+  const link = useStaffMutation(() => paymentService.linkLessons(payment.id, picked), {
+    success: picked.length === 1 ? "Lezione collegata alla quota" : `${picked.length} lezioni collegate alla quota`,
+    invalidate: INVALIDATE,
+    onSuccess: () => {
+      setAdding(false);
+      setPicked([]);
+    },
+  });
+  const unlink = useStaffMutation((lessonId: string) => paymentService.unlinkLesson(payment.id, lessonId), {
+    success: "Lezione scollegata",
+    invalidate: INVALIDATE,
+  });
+  if (payment.status === "cancelled") return null;
+  return (
+    <section className="space-y-2">
+      <h3 className="text-[13px] font-semibold text-muted-foreground">Lezioni già pagate con questa quota</h3>
+      {linked.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {linked.map((id) => (
+            <li key={id} className="inline-flex items-center gap-1 rounded-full bg-success-soft py-0.5 pr-0.5 pl-2.5 text-xs font-semibold text-success">
+              {lessonDate.get(id) ?? "Lezione"}
+              <button
+                type="button"
+                aria-label={`Scollega la lezione del ${lessonDate.get(id) ?? ""}`}
+                disabled={unlink.isPending}
+                onClick={() => unlink.mutate(id)}
+                className="flex size-6 items-center justify-center rounded-full hover:bg-success/15"
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {adding ? (
+        <div className="space-y-2">
+          <LessonChecklist lessons={unpaid} selected={picked} onChange={setPicked} label="Lezioni da segnare come pagate" />
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)} disabled={link.isPending}>
+              Annulla
+            </Button>
+            <Button type="button" size="sm" disabled={!picked.length || link.isPending} onClick={() => link.mutate(undefined)}>
+              {link.isPending && <Loader2 className="animate-spin" aria-hidden />} Segna come pagate
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" onClick={() => setAdding(true)}>
+          <CircleCheck aria-hidden /> Collega lezioni già pagate
+        </Button>
+      )}
+      <p className="text-xs text-muted-foreground">Per le lezioni pagate prima: nessun nuovo incasso, l&apos;importo della quota non cambia.</p>
+    </section>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { BadgeEuro, BookOpen, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
+import { BadgeEuro, BookOpen, CircleCheck, CalendarDays, CalendarPlus, Copy, MoreVertical, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import { AttendanceBadge, LessonBadge } from "@/components/shared/status-badge";
 import { useAttendanceMap, useLessonsPage, useStaffMutation } from "@/features/admin/hooks";
 import { AttendanceButton, AttendanceDialog } from "@/features/attendance/attendance-picker";
 import { StudentSelect } from "@/features/admin/pickers";
-import { LessonPaidBadge, LessonPaymentDialog, useCanRecordPayment, usePaidLessons } from "@/features/payments/lesson-payments";
+import { LessonPaidBadge, LessonPaymentDialog, useCanRecordPayment, usePaidLessons, type LessonPaymentMode } from "@/features/payments/lesson-payments";
 import { lessonService } from "@/services/lessonService";
 import type { Lesson, LessonStatus, WithId } from "@/types";
 import { formatDate } from "@/utils/format";
@@ -38,7 +38,7 @@ export function StaffLessonList({
   const [status, setStatus] = useState<LessonStatus | "all">("all");
   const [filterStudent, setFilterStudent] = useState("");
   const [paidFilter, setPaidFilter] = useState<"all" | "paid" | "unpaid">("all");
-  const [payFor, setPayFor] = useState<WithId<Lesson> | null>(null);
+  const [payFor, setPayFor] = useState<{ lesson: WithId<Lesson>; mode: LessonPaymentMode } | null>(null);
   const [editing, setEditing] = useState<WithId<Lesson> | null>(null);
   const [copying, setCopying] = useState<WithId<Lesson> | null>(null);
   const [creating, setCreating] = useState(false);
@@ -127,15 +127,28 @@ export function StaffLessonList({
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase">{formatDate(l.date, "MMM")}</p>
                   <p className="text-lg leading-none font-bold">{formatDate(l.date, "d")}</p>
                 </div>
-                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(l)}>
-                  <p className="truncate font-semibold">{showStudent ? l.studentName : l.title}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {l.startTime ?? "—"} · {showStudent ? l.title : l.teacherName}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <button type="button" className="block w-full min-w-0 text-left" onClick={() => setEditing(l)}>
+                    <p className="truncate font-semibold">{showStudent ? l.studentName : l.title}</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {l.startTime ?? "—"} · {showStudent ? l.title : l.teacherName}
+                    </p>
+                  </button>
                   {canPay(l) && l.status !== "cancelled" && paid.isSuccess && (isPaid(l) || l.status === "completed") && (
-                    <LessonPaidBadge paid={isPaid(l)} />
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <LessonPaidBadge paid={isPaid(l)} />
+                      {!isPaid(l) && (
+                        <button
+                          type="button"
+                          className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-brand-ink hover:bg-indigo-soft"
+                          onClick={() => setPayFor({ lesson: l, mode: "link" })}
+                        >
+                          <CircleCheck className="size-3.5" aria-hidden /> Segna come pagata
+                        </button>
+                      )}
+                    </div>
                   )}
-                </button>
+                </div>
                 <div className="hidden sm:block">
                   {a ? <AttendanceBadge status={a.status} /> : <LessonBadge status={l.status} />}
                 </div>
@@ -157,11 +170,20 @@ export function StaffLessonList({
                     <DropdownMenuItem className="min-h-10" onClick={() => setAssignFor(l)}>
                       <BookOpen aria-hidden /> Assegna esercizio
                     </DropdownMenuItem>
-                    {canPay(l) && l.status !== "cancelled" && !isPaid(l) && (
-                      <DropdownMenuItem className="min-h-10" onClick={() => setPayFor(l)}>
-                        <BadgeEuro aria-hidden /> Registra pagamento
+                    {canPay(l) && l.status !== "cancelled" && paid.isSuccess && (isPaid(l) ? (
+                      <DropdownMenuItem className="min-h-10" onClick={() => setPayFor({ lesson: l, mode: "ask" })}>
+                        <BadgeEuro aria-hidden /> Pagamento
                       </DropdownMenuItem>
-                    )}
+                      ) : (
+                      <>
+                        <DropdownMenuItem className="min-h-10" onClick={() => setPayFor({ lesson: l, mode: "link" })}>
+                          <CircleCheck aria-hidden /> Segna come pagata
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="min-h-10" onClick={() => setPayFor({ lesson: l, mode: "ask" })}>
+                          <BadgeEuro aria-hidden /> Registra pagamento
+                        </DropdownMenuItem>
+                      </>
+                      ))}
                     {l.status !== "cancelled" && (
                       <DropdownMenuItem className="min-h-10" onClick={() => cancel.mutate(l)}>
                         <XCircle aria-hidden /> Annulla lezione
@@ -193,7 +215,7 @@ export function StaffLessonList({
         lessonIds={ids}
         onOpenChange={(o) => !o && setAttFor(null)}
       />
-      <LessonPaymentDialog lesson={payFor} onOpenChange={(o) => !o && setPayFor(null)} />
+      <LessonPaymentDialog lesson={payFor?.lesson ?? null} mode={payFor?.mode} onOpenChange={(o) => !o && setPayFor(null)} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}

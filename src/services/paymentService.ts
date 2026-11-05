@@ -92,13 +92,13 @@ function toInstallment(input: InstallmentInput): Installment {
 }
 
 /** Campi derivati dai versamenti: incassato, stato, data e metodo dell'ultimo versamento. */
-function settle(amount: number, installments: Installment[], cancelled: boolean) {
+function settle(amount: number, installments: Installment[], cancelled: boolean, linked: string[] = []) {
   const paid = cents(installments.reduce((s, i) => s + i.amount, 0));
   const last = [...installments].sort((a, b) => a.date.toMillis() - b.date.toMillis()).at(-1);
   return {
     installments,
     paidAmount: paid,
-    lessonIds: [...new Set(installments.flatMap((i) => i.lessonIds ?? []))],
+    lessonIds: [...new Set([...installments.flatMap((i) => i.lessonIds ?? []), ...linked])],
     status: (cancelled ? "cancelled" : storedPaymentStatus(amount, paid)) as PaymentStatus,
     paidDate: last?.date ?? null,
     method: last?.method ?? null,
@@ -284,7 +284,7 @@ export const paymentService = {
         amount,
         dueDate: Timestamp.fromDate(input.dueDate),
         notes: input.notes ?? "",
-        ...settle(amount, installments, !!input.cancelled),
+        ...settle(amount, installments, !!input.cancelled, p.linkedLessonIds),
       };
     }),
 
@@ -292,20 +292,41 @@ export const paymentService = {
     mutate(id, (p) => {
       if (p.status === "cancelled") throw new AppError("La quota è annullata: riattivala prima di registrare versamenti.");
       if (cents(input.amount) > remainingOf(p)) throw new AppError("Il versamento supera il residuo da pagare.");
-      return settle(p.amount, [...installmentsOf(p), toInstallment(input)], false);
+      return settle(p.amount, [...installmentsOf(p), toInstallment(input)], false, p.linkedLessonIds);
     }),
 
   removeInstallment: (id: string, installmentId: string) =>
     mutate(id, (p) =>
-      settle(p.amount, installmentsOf(p).filter((i) => i.id !== installmentId), p.status === "cancelled"),
+      settle(p.amount, installmentsOf(p).filter((i) => i.id !== installmentId), p.status === "cancelled", p.linkedLessonIds),
     ),
+
+  /**
+   * Segna le lezioni come pagate da questa quota senza registrare denaro: per le lezioni il cui
+   * incasso è già nella quota (es. quote create prima che i versamenti indicassero le lezioni).
+   */
+  linkLessons: (id: string, lessonIds: string[]) =>
+    mutate(id, (p) => {
+      if (p.status === "cancelled") throw new AppError("La quota è annullata: scegline un'altra.");
+      const linked = [...new Set([...(p.linkedLessonIds ?? []), ...lessonIds])];
+      return { linkedLessonIds: linked, ...settle(p.amount, installmentsOf(p), false, linked) };
+    }),
+
+  /** La lezione non risulta più pagata da questa quota (né collegata, né nei versamenti); gli importi restano. */
+  unlinkLesson: (id: string, lessonId: string) =>
+    mutate(id, (p) => {
+      const linked = (p.linkedLessonIds ?? []).filter((l) => l !== lessonId);
+      const installments = installmentsOf(p).map((i) =>
+        i.lessonIds?.includes(lessonId) ? clean({ ...i, lessonIds: i.lessonIds.filter((l) => l !== lessonId) }) as Installment : i,
+      );
+      return { linkedLessonIds: linked, ...settle(p.amount, installments, p.status === "cancelled", linked) };
+    }),
 
   /** Salda il residuo con un unico versamento in data odierna. */
   markPaid: (id: string, method: PaymentMethod) =>
     mutate(id, (p) => {
       const rest = remainingOf(p);
       if (rest <= 0) return {};
-      return settle(p.amount, [...installmentsOf(p), toInstallment({ amount: rest, date: new Date(), method })], false);
+      return settle(p.amount, [...installmentsOf(p), toInstallment({ amount: rest, date: new Date(), method })], false, p.linkedLessonIds);
     }),
 
   /**
